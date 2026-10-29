@@ -1,6 +1,8 @@
 // Fenêtre de fili-file: barre d'outils (précédent, suivant, chemin), barre latérale, liste, barre d'état.
 // Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin, Ctrl+H fichiers cachés, F5 relire,
-// Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
+// Ctrl+C / Ctrl+X / Ctrl+V copier, couper, coller, F2 renommer, Ctrl+Maj+N nouveau dossier, Suppr ou Ctrl+Retour
+// arrière corbeille, Ctrl+Z annuler, Ctrl+A tout sélectionner, Échap annule la copie en cours,
+// Ctrl+Maj+Suppr vide la corbeille, Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
 import QtQuick
 import Fili.Files
 
@@ -44,6 +46,34 @@ Window {
     Shortcut { sequence: "Ctrl+R"; onActivated: win.show(folder.refresh(files.currentIndex)) }
     Shortcut { sequences: ["Ctrl+W", "Ctrl+Q"]; onActivated: Qt.quit() }
 
+    // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
+    readonly property bool typing: files.editing || pathBar.editing || confirm.visible
+    function trashSelection() {
+        const row = folder.trash(files.targetsText(), files.currentIndex);
+        files.reloaded();
+        win.show(row);
+    }
+    function newFolder() {
+        const row = folder.newFolder();
+        if (row >= 0) {
+            files.select(row);
+            files.startRename();
+        }
+    }
+    function putBack() {
+        win.show(folder.putBack(files.targetsText(), files.currentIndex));
+    }
+    Shortcut { sequence: "Ctrl+C"; enabled: !win.typing; onActivated: folder.copy(files.targetsText()) }
+    Shortcut { sequence: "Ctrl+X"; enabled: !win.typing; onActivated: folder.cut(files.targetsText()) }
+    Shortcut { sequence: "Ctrl+V"; enabled: !win.typing; onActivated: folder.paste() }
+    Shortcut { sequence: "Ctrl+A"; enabled: !win.typing; onActivated: files.selectAll() }
+    Shortcut { sequence: "Ctrl+Z"; enabled: !win.typing; onActivated: folder.undo() }
+    Shortcut { sequence: "F2"; enabled: !win.typing; onActivated: files.startRename() }
+    Shortcut { sequence: "Ctrl+Shift+N"; enabled: !win.typing; onActivated: win.newFolder() }
+    Shortcut { sequences: ["Delete", "Ctrl+Backspace"]; enabled: !win.typing; onActivated: win.trashSelection() }
+    Shortcut { sequence: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onActivated: confirm.visible = true }
+    Shortcut { sequence: "Escape"; enabled: !win.typing && folder.busy; onActivated: folder.cancel() }
+
     // Boutons précédent/suivant de la souris, partout dans la fenêtre
     MouseArea {
         anchors.fill: parent
@@ -72,9 +102,23 @@ Window {
                 onClicked: win.show(folder.forward())
             }
         }
+        Row {
+            id: trashTools
+            anchors { right: parent.right; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            spacing: 2
+            visible: folder.inTrash
+            TextButton {
+                label: Fili.tr("Put back")
+                onClicked: win.putBack()
+            }
+            TextButton {
+                label: Fili.tr("Empty Trash")
+                onClicked: confirm.visible = true
+            }
+        }
         PathBar {
             id: pathBar
-            anchors { left: nav.right; leftMargin: FiliTheme.space2; right: parent.right; rightMargin: FiliTheme.space3; top: parent.top; bottom: parent.bottom }
+            anchors { left: nav.right; leftMargin: FiliTheme.space2; right: trashTools.visible ? trashTools.left : parent.right; rightMargin: FiliTheme.space3; top: parent.top; bottom: parent.bottom }
             path: folder.path
             onOpen: p => win.open(p)
             onDone: {
@@ -97,6 +141,7 @@ Window {
         width: FiliTheme.sidebarWidth
         current: folder.path
         onOpen: p => win.open(p)
+        onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
     }
     Rectangle {
         id: sideLine
@@ -112,6 +157,13 @@ Window {
         windowActive: win.active
         onOpenRow: row => win.show(folder.activate(row))
         onGoUp: win.show(folder.up())
+        onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
+    }
+    Connections {
+        target: folder
+        function onReloaded() {
+            files.reloaded();
+        }
     }
 
     // Barre d'état: nombre d'éléments et espace libre, ou l'erreur de la dernière action
@@ -128,6 +180,7 @@ Window {
         }
         Text {
             anchors { fill: parent; leftMargin: FiliTheme.space3; rightMargin: FiliTheme.space3 }
+            visible: !folder.busy
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideMiddle
@@ -135,6 +188,108 @@ Window {
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeSmall
             color: folder.error ? FiliTheme.cendre : FiliTheme.brume2
+        }
+        // Opération en cours: nom, avancement, annulation
+        Row {
+            anchors.centerIn: parent
+            visible: folder.busy
+            spacing: FiliTheme.space3
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: folder.job
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.sizeSmall
+                color: FiliTheme.brume2
+            }
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 140
+                height: 4
+                radius: 2
+                color: FiliTheme.nuit3
+                Rectangle {
+                    width: parent.width * Math.max(0.05, folder.progress)
+                    height: parent.height
+                    radius: 2
+                    color: FiliTheme.voile
+                }
+            }
+            TextButton {
+                label: Fili.tr("Cancel")
+                height: statusbar.height - 2
+                onClicked: folder.cancel()
+            }
+        }
+    }
+
+    // Confirmation avant de vider la corbeille (suppression définitive): Entrée vide, Échap annule
+    Rectangle {
+        id: confirm
+        anchors.fill: parent
+        visible: false
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        focus: visible
+        onVisibleChanged: if (visible) forceActiveFocus(); else files.focusList()
+        Keys.onPressed: e => {
+            if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
+                folder.emptyTrash();
+                visible = false;
+            } else if (e.key === Qt.Key_Escape)
+                visible = false;
+            else
+                return;
+            e.accepted = true;
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: confirm.visible = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 340
+            height: card.implicitHeight + 2 * FiliTheme.space4
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            Column {
+                id: card
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
+                spacing: FiliTheme.space3
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: Fili.tr("Empty the Trash?")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.brume
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: Fili.tr("Its items will be deleted permanently. This cannot be undone.")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
+                }
+                Row {
+                    anchors.right: parent.right
+                    spacing: FiliTheme.space2
+                    TextButton {
+                        label: Fili.tr("Cancel")
+                        onClicked: confirm.visible = false
+                    }
+                    TextButton {
+                        label: Fili.tr("Empty Trash")
+                        primary: true
+                        onClicked: {
+                            folder.emptyTrash();
+                            confirm.visible = false;
+                        }
+                    }
+                }
+            }
         }
     }
 }

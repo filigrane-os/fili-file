@@ -6,6 +6,8 @@ mod fs;
 #[path = "../../bar-stats/src/i18n.rs"]
 mod i18n;
 mod icons;
+mod ops;
+mod watch;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 

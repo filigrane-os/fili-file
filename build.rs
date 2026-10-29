@@ -10,6 +10,7 @@ fn main() {
                 "qml/PathBar.qml",
                 "qml/FileList.qml",
                 "qml/IconButton.qml",
+                "qml/TextButton.qml",
                 "qml/FocusRing.qml",
                 "qml/KineticScroll.qml",
             ])

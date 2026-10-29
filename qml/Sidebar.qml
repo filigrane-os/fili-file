@@ -7,6 +7,7 @@ Rectangle {
     id: side
     property string current
     signal open(string path)
+    signal dropped(string urls, string dest, bool copy)
 
     color: FiliTheme.nuitProfond
 
@@ -50,8 +51,8 @@ Rectangle {
             width: ListView.view.width - 2 * FiliTheme.space2
             height: FiliTheme.sideRowHeight
             radius: FiliTheme.radiusControl
-            color: sel || area.containsMouse ? FiliTheme.nuit3 : "transparent"
-            border.width: list.activeFocus && Fili.keyNav && ListView.isCurrentItem ? 1 : 0
+            color: sel || area.containsMouse || drop.containsDrag ? FiliTheme.nuit3 : "transparent"
+            border.width: drop.containsDrag || (list.activeFocus && Fili.keyNav && ListView.isCurrentItem) ? 1 : 0
             border.color: FiliTheme.voile
 
             Image {
@@ -70,6 +71,14 @@ Rectangle {
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.sizeList
                 color: row.sel ? FiliTheme.voile : FiliTheme.brume
+            }
+            DropArea {
+                id: drop
+                anchors.fill: parent
+                onDropped: d => {
+                    side.dropped(d.urls.map(u => u.toString()).join("\n"), row.path, d.proposedAction === Qt.CopyAction);
+                    d.acceptProposedAction();
+                }
             }
             MouseArea {
                 id: area

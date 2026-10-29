@@ -1,5 +1,6 @@
 // Objets exposés au QML (module Fili.Files): FolderModel, la liste du dossier affiché (navigation, historique, tri,
-// ouverture); Fili, l'environnement (thème suivi en direct, traductions, lieux de la barre latérale).
+// ouverture, mise à jour en direct par inotify, opérations: copier/couper/coller en arrière-plan, corbeille,
+// renommage, annulation); Fili, l'environnement (thème suivi en direct, traductions, lieux de la barre latérale).
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++Qt" {
@@ -31,10 +32,20 @@ pub mod qobject {
         #[qproperty(bool, can_forward, cxx_name = "canForward", READ, NOTIFY = changed)]
         #[qproperty(QString, status, READ, NOTIFY = changed)]
         #[qproperty(QString, error, READ, NOTIFY = changed)]
+        #[qproperty(bool, busy, READ, NOTIFY = changed)]
+        // Avancement de l'opération en cours (0 à 1), -1 tant que le total n'est pas connu
+        #[qproperty(f64, progress, READ, NOTIFY = changed)]
+        #[qproperty(QString, job, READ, NOTIFY = changed)]
+        #[qproperty(bool, in_trash, cxx_name = "inTrash", READ, NOTIFY = changed)]
+        #[qproperty(bool, can_paste, cxx_name = "canPaste", READ, NOTIFY = changed)]
+        #[qproperty(bool, can_undo, cxx_name = "canUndo", READ, NOTIFY = changed)]
         type FolderModel = super::FolderModelRust;
 
         #[qsignal]
         fn changed(self: Pin<&mut FolderModel>);
+        // Le contenu du dossier a changé sur le disque (ou après une opération): la vue remet sa sélection en place
+        #[qsignal]
+        fn reloaded(self: Pin<&mut FolderModel>);
 
         // Les déplacements rendent la ligne à sélectionner ensuite (-1: rien n'a changé)
         #[qinvokable]
@@ -59,6 +70,60 @@ pub mod qobject {
         fn quicklook(self: &FolderModel, row: i32);
         #[qinvokable]
         fn find(self: &FolderModel, prefix: &QString) -> i32;
+        #[qinvokable]
+        #[cxx_name = "pathAt"]
+        fn path_at(self: &FolderModel, row: i32) -> QString;
+        // Ligne portant ce nom (-1: absent)
+        #[qinvokable]
+        #[cxx_name = "rowOf"]
+        fn find_name(self: &FolderModel, name: &QString) -> i32;
+        #[qinvokable]
+        fn has(self: &FolderModel, path: &QString) -> bool;
+        // Opérations: les chemins sont séparés par des retours à la ligne; les rendus sont la ligne à sélectionner
+        // ensuite (-1: aucune). Les erreurs vont dans la barre d'état (error).
+        #[qinvokable]
+        fn uris(self: &FolderModel, paths: &QString) -> QString;
+        #[qinvokable]
+        fn copy(self: Pin<&mut FolderModel>, paths: &QString);
+        #[qinvokable]
+        fn cut(self: Pin<&mut FolderModel>, paths: &QString);
+        #[qinvokable]
+        fn paste(self: Pin<&mut FolderModel>);
+        #[qinvokable]
+        #[cxx_name = "dropItems"]
+        fn drop_items(self: Pin<&mut FolderModel>, urls: &QString, dest: &QString, copy: bool);
+        #[qinvokable]
+        fn trash(self: Pin<&mut FolderModel>, paths: &QString, row: i32) -> i32;
+        #[qinvokable]
+        #[cxx_name = "putBack"]
+        fn put_back(self: Pin<&mut FolderModel>, paths: &QString, row: i32) -> i32;
+        #[qinvokable]
+        #[cxx_name = "emptyTrash"]
+        fn empty_trash(self: Pin<&mut FolderModel>);
+        #[qinvokable]
+        fn rename(self: Pin<&mut FolderModel>, path: &QString, name: &QString) -> i32;
+        #[qinvokable]
+        #[cxx_name = "newFolder"]
+        fn new_folder(self: Pin<&mut FolderModel>) -> i32;
+        #[qinvokable]
+        fn undo(self: Pin<&mut FolderModel>);
+        #[qinvokable]
+        fn cancel(self: Pin<&mut FolderModel>);
+    }
+
+    unsafe extern "RustQt" {
+        #[inherit]
+        #[cxx_name = "beginInsertRows"]
+        unsafe fn begin_insert_rows(self: Pin<&mut FolderModel>, parent: &QModelIndex, first: i32, last: i32);
+        #[inherit]
+        #[cxx_name = "endInsertRows"]
+        unsafe fn end_insert_rows(self: Pin<&mut FolderModel>);
+        #[inherit]
+        #[cxx_name = "beginRemoveRows"]
+        unsafe fn begin_remove_rows(self: Pin<&mut FolderModel>, parent: &QModelIndex, first: i32, last: i32);
+        #[inherit]
+        #[cxx_name = "endRemoveRows"]
+        unsafe fn end_remove_rows(self: Pin<&mut FolderModel>);
     }
 
     unsafe extern "RustQt" {
@@ -108,20 +173,26 @@ pub mod qobject {
 
     impl cxx_qt::Initialize for Fili {}
     impl cxx_qt::Threading for Fili {}
+    impl cxx_qt::Initialize for FolderModel {}
+    impl cxx_qt::Threading for FolderModel {}
 }
 
-use crate::{fs, i18n, icons};
+use crate::{fs, i18n, icons, ops, watch::Watcher};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 use qobject::*;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env,
     os::unix::process::CommandExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    time::{SystemTime, UNIX_EPOCH},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 const ROLE_NAME: i32 = 256;
@@ -172,24 +243,7 @@ fn special() -> &'static HashMap<String, &'static str> {
     })
 }
 
-fn percent_decode(s: &str) -> String {
-    let hex = |c: u8| (c as char).to_digit(16).map(|d| d as u8);
-    let b = s.as_bytes();
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'%'
-            && let (Some(h), Some(l)) = (b.get(i + 1).copied().and_then(hex), b.get(i + 2).copied().and_then(hex))
-        {
-            out.push(h * 16 + l);
-            i += 3;
-            continue;
-        }
-        out.push(b[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
+use ops::decode as percent_decode;
 
 // Chemin absolu nettoyé (~, file://, ., ..), sans suivre les liens: le chemin affiché reste celui parcouru
 fn normalize(p: &str, base: &str) -> PathBuf {
@@ -264,12 +318,50 @@ pub struct FolderModelRust {
     can_forward: bool,
     status: QString,
     error: QString,
+    busy: bool,
+    progress: f64,
+    job: QString,
+    in_trash: bool,
+    can_paste: bool,
+    can_undo: bool,
     dir: String,
     all: Vec<fs::Entry>,
     rows: Vec<fs::Entry>,
     history_back: Vec<String>,
     history_forward: Vec<String>,
     now: i64,
+    clipboard: Vec<String>,
+    clip_cut: bool,
+    undo: Vec<Undo>,
+    cancel: Arc<AtomicBool>,
+    watcher: Option<Watcher>,
+}
+
+// Ce que Ctrl+Z défait (le plus récent en dernier, 20 au plus)
+enum Undo {
+    // (ancien chemin, nouveau chemin)
+    Rename(PathBuf, PathBuf),
+    Trash(Vec<ops::Trashed>),
+    // Éléments créés (copies, nouveau dossier, éléments remis en place): défaire = les mettre à la corbeille
+    Created(Vec<PathBuf>),
+    // (origine, destination)
+    Moved(Vec<(PathBuf, PathBuf)>),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    Copy,
+    Move,
+    // Déplacer sur le même volume, copier sinon (glisser-déposer)
+    Auto,
+}
+
+fn paths_of(list: &QString) -> Vec<String> {
+    list.to_string().split('\n').filter(|p| !p.is_empty()).map(String::from).collect()
+}
+
+fn base(p: &str) -> String {
+    Path::new(p).file_name().map_or(p.to_string(), |n| n.to_string_lossy().into_owned())
 }
 
 impl FolderModel {
@@ -281,22 +373,93 @@ impl FolderModel {
         self.rows.iter().position(|e| e.name == name).map_or(0, |i| i as i32)
     }
 
-    // Filtre (cachés) et tri de la liste courante, sans relire le disque
-    fn rebuild(mut self: Pin<&mut Self>) {
+    // Liste courante filtrée (cachés) et triée, sans relire le disque
+    fn filtered(&self) -> Vec<fs::Entry> {
         let (hidden, key, desc) = (self.show_hidden, fs::Key::from(self.sort_key), self.sort_desc);
         let mut rows: Vec<fs::Entry> = self.all.iter().filter(|e| hidden || !e.hidden()).cloned().collect();
         fs::sort(&mut rows, key, desc);
+        rows
+    }
+
+    fn set_status(mut self: Pin<&mut Self>) {
+        let n = self.rows.len();
         let free = fs::free(Path::new(&self.dir)).map(fs::size);
         let status = match free {
-            Some(f) => i18n::trf("%1, %2 available", &[&fs::count(rows.len()), &f]),
-            None => fs::count(rows.len()),
+            Some(f) => i18n::trf("%1, %2 available", &[&fs::count(n), &f]),
+            None => fs::count(n),
         };
-        unsafe { self.as_mut().begin_reset_model() };
         let mut r = self.as_mut().rust_mut();
-        r.rows = rows;
         r.status = QString::from(&status);
         r.now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+    }
+
+    // Remplace la liste (nouveau dossier, tri, cachés): la vue repart de zéro
+    fn rebuild(mut self: Pin<&mut Self>) {
+        let rows = self.filtered();
+        unsafe { self.as_mut().begin_reset_model() };
+        self.as_mut().rust_mut().rows = rows;
+        self.as_mut().set_status();
         unsafe { self.as_mut().end_reset_model() };
+    }
+
+    // Même dossier relu: seules les lignes ajoutées, retirées ou modifiées bougent, la vue garde sa position
+    fn apply(mut self: Pin<&mut Self>) {
+        type Key = (String, u64, i64, bool);
+        let key = |e: &fs::Entry| -> Key { (e.path.clone(), e.size, e.mtime, e.is_dir) };
+        let new = self.filtered();
+        let new_keys: HashSet<Key> = new.iter().map(key).collect();
+        let old_keys: HashSet<Key> = self.rows.iter().map(key).collect();
+        let changes = self.rows.iter().filter(|e| !new_keys.contains(&key(e))).count()
+            + new.iter().filter(|e| !old_keys.contains(&key(e))).count();
+        if changes > 200 {
+            unsafe { self.as_mut().begin_reset_model() };
+            self.as_mut().rust_mut().rows = new;
+            unsafe { self.as_mut().end_reset_model() };
+        } else {
+            let none = QModelIndex::default();
+            for i in (0..self.rows.len()).rev() {
+                if !new_keys.contains(&key(&self.rows[i])) {
+                    unsafe { self.as_mut().begin_remove_rows(&none, i as i32, i as i32) };
+                    self.as_mut().rust_mut().rows.remove(i);
+                    unsafe { self.as_mut().end_remove_rows() };
+                }
+            }
+            // Les lignes restantes sont dans l'ordre de new: insérer les manquantes à leur place
+            for (i, e) in new.iter().enumerate() {
+                if self.rows.get(i).is_none_or(|o| key(o) != key(e)) {
+                    unsafe { self.as_mut().begin_insert_rows(&none, i as i32, i as i32) };
+                    self.as_mut().rust_mut().rows.insert(i, e.clone());
+                    unsafe { self.as_mut().end_insert_rows() };
+                }
+            }
+        }
+        self.as_mut().set_status();
+        self.as_mut().changed();
+    }
+
+    // Relit le dossier affiché sur place; false si on ne peut plus le lire
+    fn reload_rows(mut self: Pin<&mut Self>) -> bool {
+        match fs::list(Path::new(&self.dir)) {
+            Ok(all) => {
+                self.as_mut().rust_mut().all = all;
+                self.as_mut().apply();
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    // Changement vu par inotify: relecture, ou, si le dossier a disparu, le plus proche dossier qui existe
+    fn live_reload(mut self: Pin<&mut Self>) {
+        if self.dir.is_empty() {
+            return;
+        }
+        if !self.as_mut().reload_rows() {
+            let mut p = PathBuf::from(&self.dir);
+            while !p.is_dir() && p.pop() {}
+            self.as_mut().navigate(p, None);
+        }
+        self.as_mut().reloaded();
     }
 
     // Charge dir; select: nom à sélectionner. Échec: le dossier affiché ne change pas, l'erreur va dans la barre d'état
@@ -307,6 +470,10 @@ impl FolderModel {
                 let mut r = self.as_mut().rust_mut();
                 r.all = all;
                 r.path = QString::from(&dir);
+                r.in_trash = Path::new(&dir) == ops::trash_files();
+                if let Some(w) = &r.watcher {
+                    w.watch(Path::new(&dir));
+                }
                 r.dir = dir;
                 r.error = QString::default();
                 self.as_mut().rebuild();
@@ -476,6 +643,327 @@ impl FolderModel {
         self.rows.iter().position(|e| fs::starts_with(&e.name, &p)).map_or(-1, |i| i as i32)
     }
 
+    pub fn path_at(&self, row: i32) -> QString {
+        QString::from(self.row(row).map_or("", |e| e.path.as_str()))
+    }
+
+    pub fn find_name(&self, name: &QString) -> i32 {
+        let n = name.to_string();
+        self.rows.iter().position(|e| e.name == n).map_or(-1, |i| i as i32)
+    }
+
+    pub fn has(&self, path: &QString) -> bool {
+        let p = path.to_string();
+        self.rows.iter().any(|e| e.path == p)
+    }
+
+    pub fn uris(&self, paths: &QString) -> QString {
+        let list: Vec<String> = paths_of(paths).iter().map(|p| format!("file://{}", ops::encode(p))).collect();
+        QString::from(&list.join("\r\n"))
+    }
+
+    fn fail(mut self: Pin<&mut Self>, msg: String) {
+        self.as_mut().rust_mut().error = QString::from(&msg);
+        self.as_mut().changed();
+    }
+
+    fn push_undo(mut self: Pin<&mut Self>, u: Undo) {
+        let mut r = self.as_mut().rust_mut();
+        r.undo.push(u);
+        if r.undo.len() > 20 {
+            r.undo.remove(0);
+        }
+        r.can_undo = true;
+    }
+
+    // Après une opération synchrone: relire le dossier; rend la ligne portant name, sinon la plus proche de near
+    fn settle(mut self: Pin<&mut Self>, name: Option<&str>, near: i32) -> i32 {
+        self.as_mut().reload_rows();
+        self.as_mut().changed();
+        match name.map(|n| self.find_name(&QString::from(n))) {
+            Some(r) if r >= 0 => r,
+            _ if self.rows.is_empty() => -1,
+            _ => near.clamp(0, self.rows.len() as i32 - 1),
+        }
+    }
+
+    pub fn copy(mut self: Pin<&mut Self>, paths: &QString) {
+        let list = paths_of(paths);
+        let mut r = self.as_mut().rust_mut();
+        r.can_paste = !list.is_empty();
+        r.clipboard = list;
+        r.clip_cut = false;
+        self.as_mut().changed();
+    }
+
+    pub fn cut(mut self: Pin<&mut Self>, paths: &QString) {
+        if self.in_trash {
+            return self.fail(i18n::tr("Items in the Trash cannot be cut").into());
+        }
+        self.as_mut().copy(paths);
+        self.as_mut().rust_mut().clip_cut = true;
+    }
+
+    pub fn paste(mut self: Pin<&mut Self>) {
+        if self.in_trash {
+            return self.fail(i18n::tr("Nothing can be pasted into the Trash").into());
+        }
+        let (items, dir) = (self.clipboard.clone(), self.dir.clone());
+        let mode = if self.clip_cut { Mode::Move } else { Mode::Copy };
+        if self.clip_cut {
+            let mut r = self.as_mut().rust_mut();
+            r.clipboard.clear();
+            r.can_paste = false;
+        }
+        self.start_job(items, dir, mode);
+    }
+
+    // Glisser-déposer: copie si demandé, sinon déplacement sur le même volume et copie sur un autre. Sur la
+    // corbeille: mise à la corbeille. Depuis la corbeille: copie.
+    pub fn drop_items(mut self: Pin<&mut Self>, urls: &QString, dest: &QString, copy: bool) {
+        let items: Vec<String> =
+            paths_of(&QString::from(&urls.to_string().replace('\r', ""))).iter().map(|u| normalize(u, "/").to_string_lossy().into_owned()).collect();
+        let dest = normalize(&dest.to_string(), "/");
+        if dest == ops::trash_files() {
+            let list = QString::from(&items.join("\n"));
+            self.as_mut().trash(&list, 0);
+            return;
+        }
+        if !dest.is_dir() {
+            return;
+        }
+        let mode = if copy || self.in_trash { Mode::Copy } else { Mode::Auto };
+        self.start_job(items, dest.to_string_lossy().into_owned(), mode);
+    }
+
+    // Copie ou déplacement en arrière-plan: avancement dans la barre d'état, annulation (Échap) qui retire la copie
+    // en cours; ce qui est déjà fini reste (et Ctrl+Z le défait).
+    fn start_job(mut self: Pin<&mut Self>, items: Vec<String>, dest: String, mode: Mode) {
+        if items.is_empty() {
+            return;
+        }
+        if self.busy {
+            return self.fail(i18n::tr("Another operation is in progress").into());
+        }
+        let what = if items.len() == 1 { base(&items[0]) } else { fs::count(items.len()) };
+        let label = if mode == Mode::Copy { i18n::trf("Copying %1", &[&what]) } else { i18n::trf("Moving %1", &[&what]) };
+        let cancel = Arc::new(AtomicBool::new(false));
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.busy = true;
+            r.progress = -1.0;
+            r.job = QString::from(&label);
+            r.error = QString::default();
+            r.cancel = cancel.clone();
+        }
+        self.as_mut().changed();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let dest = PathBuf::from(dest);
+            let total = items.iter().map(|p| ops::tree_size(Path::new(p))).sum::<u64>().max(1);
+            let (mut done, mut last) = (0u64, Instant::now());
+            let (mut moved, mut created, mut error) = (Vec::new(), Vec::new(), None);
+            for item in &items {
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                let src = Path::new(item);
+                let parent = src.parent().unwrap_or(Path::new("/"));
+                let as_move = match mode {
+                    Mode::Copy => false,
+                    Mode::Move => true,
+                    Mode::Auto => ops::same_volume(parent, &dest),
+                };
+                if as_move && parent == dest {
+                    continue;
+                }
+                if dest.starts_with(src) {
+                    error = Some(i18n::trf("Cannot put “%1” inside itself", &[&base(item)]));
+                    break;
+                }
+                let mut progress = |n: u64| {
+                    done += n;
+                    if last.elapsed().as_millis() > 100 {
+                        last = Instant::now();
+                        let f = done as f64 / total as f64;
+                        let _ = qt.queue(move |mut m| {
+                            m.as_mut().rust_mut().progress = f;
+                            m.as_mut().changed();
+                        });
+                    }
+                    !cancel.load(Ordering::Relaxed)
+                };
+                let r = if as_move { ops::move_into(src, &dest, &mut progress) } else { ops::copy_into(src, &dest, &mut progress) };
+                match r {
+                    Ok(dst) if as_move => moved.push((src.to_path_buf(), dst)),
+                    Ok(dst) => created.push(dst),
+                    Err(e) if ops::is_cancel(&e) => break,
+                    Err(e) => {
+                        let (name, why) = (base(item), fs::error(&e));
+                        error = Some(if as_move {
+                            i18n::trf("Cannot move “%1”: %2", &[&name, &why])
+                        } else {
+                            i18n::trf("Cannot copy “%1”: %2", &[&name, &why])
+                        });
+                        break;
+                    }
+                }
+            }
+            let _ = qt.queue(move |mut m| {
+                {
+                    let mut r = m.as_mut().rust_mut();
+                    r.busy = false;
+                    r.progress = 0.0;
+                    r.job = QString::default();
+                    r.error = QString::from(&error.unwrap_or_default());
+                }
+                if !moved.is_empty() {
+                    m.as_mut().push_undo(Undo::Moved(moved));
+                }
+                if !created.is_empty() {
+                    m.as_mut().push_undo(Undo::Created(created));
+                }
+                m.as_mut().reload_rows();
+                m.as_mut().changed();
+                m.as_mut().reloaded();
+            });
+        });
+    }
+
+    pub fn cancel(self: Pin<&mut Self>) {
+        self.cancel.store(true, Ordering::Relaxed);
+    }
+
+    pub fn trash(mut self: Pin<&mut Self>, paths: &QString, row: i32) -> i32 {
+        if self.in_trash {
+            self.as_mut().fail(i18n::tr("These items are already in the Trash").into());
+            return -1;
+        }
+        self.as_mut().rust_mut().error = QString::default();
+        let (mut done, mut error) = (Vec::new(), None);
+        for p in paths_of(paths) {
+            match ops::trash(Path::new(&p)) {
+                Ok(t) => done.push(t),
+                Err(e) => {
+                    error = Some(i18n::trf("Cannot move “%1” to the Trash: %2", &[&base(&p), &fs::error(&e)]));
+                    break;
+                }
+            }
+        }
+        if !done.is_empty() {
+            self.as_mut().push_undo(Undo::Trash(done));
+        }
+        let row = self.as_mut().settle(None, row);
+        if let Some(msg) = error {
+            self.as_mut().fail(msg);
+        }
+        row
+    }
+
+    pub fn put_back(mut self: Pin<&mut Self>, paths: &QString, row: i32) -> i32 {
+        self.as_mut().rust_mut().error = QString::default();
+        let (mut done, mut error) = (Vec::new(), None);
+        for p in paths_of(paths) {
+            match ops::restore(Path::new(&p)) {
+                Ok(dst) => done.push(dst),
+                Err(e) => {
+                    error = Some(i18n::trf("Cannot put back “%1”: %2", &[&base(&p), &fs::error(&e)]));
+                    break;
+                }
+            }
+        }
+        if !done.is_empty() {
+            self.as_mut().push_undo(Undo::Created(done));
+        }
+        let row = self.as_mut().settle(None, row);
+        if let Some(msg) = error {
+            self.as_mut().fail(msg);
+        }
+        row
+    }
+
+    pub fn empty_trash(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().error = QString::default();
+        let result = ops::empty_trash();
+        {
+            // Plus rien à défaire dans la corbeille
+            let mut r = self.as_mut().rust_mut();
+            r.undo.retain(|u| !matches!(u, Undo::Trash(_)));
+            r.can_undo = !r.undo.is_empty();
+        }
+        self.as_mut().settle(None, 0);
+        if let Err(e) = result {
+            self.as_mut().fail(i18n::trf("Cannot empty the Trash: %1", &[&fs::error(&e)]));
+        }
+    }
+
+    pub fn rename(mut self: Pin<&mut Self>, path: &QString, name: &QString) -> i32 {
+        let (path, name) = (path.to_string(), name.to_string());
+        self.as_mut().rust_mut().error = QString::default();
+        if self.in_trash {
+            self.as_mut().fail(i18n::tr("Items in the Trash cannot be renamed").into());
+            return -1;
+        }
+        match ops::rename(Path::new(&path), &name) {
+            Ok(dst) => {
+                if dst != Path::new(&path) {
+                    self.as_mut().push_undo(Undo::Rename(PathBuf::from(&path), dst));
+                }
+                self.as_mut().settle(Some(&name), 0)
+            }
+            Err(e) => {
+                let msg = match e.kind() {
+                    std::io::ErrorKind::AlreadyExists => i18n::trf("“%1” already exists", &[&name]),
+                    std::io::ErrorKind::InvalidInput => i18n::tr("This name is not valid").into(),
+                    _ => i18n::trf("Cannot rename “%1”: %2", &[&base(&path), &fs::error(&e)]),
+                };
+                self.as_mut().fail(msg);
+                -1
+            }
+        }
+    }
+
+    pub fn new_folder(mut self: Pin<&mut Self>) -> i32 {
+        self.as_mut().rust_mut().error = QString::default();
+        if self.in_trash {
+            self.as_mut().fail(i18n::tr("Nothing can be created in the Trash").into());
+            return -1;
+        }
+        match ops::new_folder(Path::new(&self.dir)) {
+            Ok(p) => {
+                self.as_mut().push_undo(Undo::Created(vec![p.clone()]));
+                let name = base(&p.to_string_lossy());
+                self.as_mut().settle(Some(&name), 0)
+            }
+            Err(e) => {
+                let dir = base(&self.dir);
+                self.as_mut().fail(i18n::trf("Cannot create a folder in “%1”: %2", &[&dir, &fs::error(&e)]));
+                -1
+            }
+        }
+    }
+
+    pub fn undo(mut self: Pin<&mut Self>) {
+        let Some(u) = self.as_mut().rust_mut().undo.pop() else { return };
+        self.as_mut().rust_mut().can_undo = !self.undo.is_empty();
+        self.as_mut().rust_mut().error = QString::default();
+        let result = match u {
+            Undo::Rename(old, new) => {
+                if ops::exists(&old) { Err(std::io::Error::from(std::io::ErrorKind::AlreadyExists)) } else { std::fs::rename(&new, &old) }
+            }
+            Undo::Trash(items) => items.iter().rev().try_for_each(|t| ops::restore(&t.trashed).map(|_| ())),
+            Undo::Created(paths) => paths.iter().try_for_each(|p| ops::trash(p).map(|_| ())),
+            Undo::Moved(pairs) => pairs.iter().rev().try_for_each(|(src, dst)| {
+                ops::move_into(dst, src.parent().unwrap_or(Path::new("/")), &mut |_| true).map(|_| ())
+            }),
+        };
+        self.as_mut().settle(None, 0);
+        self.as_mut().reloaded();
+        if let Err(e) = result {
+            self.as_mut().fail(i18n::trf("Cannot undo: %1", &[&fs::error(&e)]));
+        }
+    }
+
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
         let Some(e) = self.row(index.row()) else { return QVariant::default() };
         match role {
@@ -512,6 +1000,15 @@ impl FolderModel {
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
         self.rows.len() as i32
+    }
+}
+
+impl cxx_qt::Initialize for FolderModel {
+    fn initialize(mut self: Pin<&mut Self>) {
+        let qt = self.qt_thread();
+        self.as_mut().rust_mut().watcher = Watcher::new(move || {
+            let _ = qt.queue(|m| m.live_reload());
+        });
     }
 }
 
@@ -600,6 +1097,14 @@ impl Fili {
             items.push((places, label, p.clone(), icons::folder(&p, special())));
             seen.push(p);
         }
+        let _ = ops::ensure_trash(&ops::home_trash());
+        let full = !ops::trash_is_empty();
+        items.push((
+            places,
+            i18n::tr("Trash").to_string(),
+            ops::trash_files().to_string_lossy().into_owned(),
+            icons::named(if full { "user-trash-full" } else { "user-trash" }),
+        ));
         items.push((devices, i18n::tr("Computer").to_string(), "/".into(), icons::named("drive-harddisk")));
         let body: Vec<String> = items
             .iter()
