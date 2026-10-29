@@ -7,7 +7,10 @@ Item {
     id: bar
     property string path
     property bool editing: false
+    property int fontSize: FiliTheme.size
     signal open(string path)
+    // Clic droit sur un segment: chemin complet et position dans la fenêtre
+    signal context(string path, real x, real y)
     signal done()
 
     function edit() {
@@ -66,7 +69,7 @@ Item {
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: label.implicitWidth + 2 * FiliTheme.space2
-                height: 22
+                height: Math.min(22, bar.height)
                 radius: FiliTheme.radiusControl
                 color: area.containsMouse && !crumb.last ? FiliTheme.nuit3 : "transparent"
                 Text {
@@ -74,7 +77,7 @@ Item {
                     anchors.centerIn: parent
                     text: crumb.modelData.name
                     font.family: FiliTheme.font
-                    font.pixelSize: FiliTheme.size
+                    font.pixelSize: bar.fontSize
                     font.weight: crumb.last ? FiliTheme.weightAccent : Font.Normal
                     color: crumb.last ? FiliTheme.brume : FiliTheme.brume2
                 }
@@ -82,7 +85,14 @@ Item {
                     id: area
                     anchors.fill: parent
                     hoverEnabled: true
-                    onClicked: bar.open(crumb.modelData.path)
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: e => {
+                        if (e.button === Qt.RightButton) {
+                            const p = area.mapToItem(null, e.x, e.y);
+                            bar.context(crumb.modelData.path, p.x, p.y);
+                        } else
+                            bar.open(crumb.modelData.path);
+                    }
                 }
             }
         }

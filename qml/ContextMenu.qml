@@ -25,7 +25,9 @@ Item {
         current = -1;
         subOpen = false;
         panel.x = Math.max(FiliTheme.space1, Math.min(x, menu.width - menuWidth - FiliTheme.space1));
-        panel.y = Math.max(FiliTheme.space1, Math.min(y, menu.height - panel.height - FiliTheme.space1));
+        // Hauteur connue d'avance (le Repeater n'a pas encore créé ses lignes); trop bas: le menu s'ouvre vers le haut
+        const h = list.reduce((a, i) => a + (i.separator ? 9 : menu.itemHeight), 0) + 2 * FiliTheme.space1;
+        panel.y = Math.max(FiliTheme.space1, y + h > menu.height ? y - h : y);
         visible = true;
         forceActiveFocus();
     }

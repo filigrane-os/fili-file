@@ -88,6 +88,9 @@ pub mod qobject {
         fn find_name(self: &FolderModel, name: &QString) -> i32;
         #[qinvokable]
         fn has(self: &FolderModel, path: &QString) -> bool;
+        // Description de la sélection pour la barre d'état (un élément: nom et taille ou contenu)
+        #[qinvokable]
+        fn describe(self: &FolderModel, paths: &QString) -> QString;
         #[qinvokable]
         #[cxx_name = "pathIsDir"]
         fn path_is_dir(self: &FolderModel, path: &QString) -> bool;
@@ -195,6 +198,19 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "volumeError"]
         fn volume_error(self: Pin<&mut Fili>, message: &QString);
+        // Favoris de l'utilisateur (signets GTK) et presse-papiers (wl-copy)
+        #[qinvokable]
+        #[cxx_name = "addFavorite"]
+        fn add_favorite(self: Pin<&mut Fili>, path: &QString);
+        #[qinvokable]
+        #[cxx_name = "removeFavorite"]
+        fn remove_favorite(self: Pin<&mut Fili>, path: &QString);
+        #[qinvokable]
+        #[cxx_name = "isFavorite"]
+        fn is_favorite(self: &Fili, path: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "copyText"]
+        fn copy_text(self: &Fili, text: &QString);
         #[qinvokable]
         #[cxx_name = "mountVolume"]
         fn mount_volume(self: Pin<&mut Fili>, dev: &QString);
@@ -253,30 +269,77 @@ fn home() -> String {
     env::var("HOME").unwrap_or_else(|_| "/".into())
 }
 
-// Dossiers personnels XDG (user-dirs.dirs) -> nom d'icône Papirus
+// Dossiers personnels XDG (user-dirs.dirs, à défaut ~/Desktop, ~/Documents...) -> nom d'icône Papirus
 fn xdg_dirs() -> Vec<(String, &'static str)> {
     let home = home();
     let config = env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
     let text = std::fs::read_to_string(format!("{config}/user-dirs.dirs")).unwrap_or_default();
-    let icons = [
-        ("XDG_DESKTOP_DIR", "user-desktop"),
-        ("XDG_DOCUMENTS_DIR", "folder-documents"),
-        ("XDG_DOWNLOAD_DIR", "folder-download"),
-        ("XDG_MUSIC_DIR", "folder-music"),
-        ("XDG_PICTURES_DIR", "folder-pictures"),
-        ("XDG_VIDEOS_DIR", "folder-videos"),
+    let dirs = [
+        ("XDG_DESKTOP_DIR", "Desktop", "user-desktop"),
+        ("XDG_DOCUMENTS_DIR", "Documents", "folder-documents"),
+        ("XDG_DOWNLOAD_DIR", "Downloads", "folder-download"),
+        ("XDG_MUSIC_DIR", "Music", "folder-music"),
+        ("XDG_PICTURES_DIR", "Pictures", "folder-pictures"),
+        ("XDG_VIDEOS_DIR", "Videos", "folder-videos"),
     ];
     let mut out = Vec::new();
-    for (key, icon) in icons {
+    for (key, fallback, icon) in dirs {
         let v = text.lines().find_map(|l| l.strip_prefix(key)?.strip_prefix('=')).map(|v| v.trim().trim_matches('"'));
-        if let Some(v) = v {
-            let p = v.replace("$HOME", &home);
-            if p != home && Path::new(&p).is_dir() {
-                out.push((p, icon));
-            }
+        let p = v.map_or_else(|| format!("{home}/{fallback}"), |v| v.replace("$HOME", &home));
+        if p != home && Path::new(&p).is_dir() {
+            out.push((p, icon));
         }
     }
     out
+}
+
+// Favoris par défaut, dans l'ordre du Finder: Applications, Bureau, Documents, Téléchargements, dossier personnel,
+// puis Images, Musique, Vidéos. (chemin, nom d'icône)
+fn default_favorites() -> Vec<(String, &'static str)> {
+    let home = home();
+    let xdg = xdg_dirs();
+    let by_icon = |icon: &str| xdg.iter().find(|(_, i)| *i == icon).cloned();
+    let mut out = Vec::new();
+    let apps = format!("{home}/Applications");
+    if Path::new(&apps).is_dir() {
+        out.push((apps, "folder-applications"));
+    }
+    for icon in ["user-desktop", "folder-documents", "folder-download"] {
+        out.extend(by_icon(icon));
+    }
+    out.push((home.clone(), "user-home"));
+    for icon in ["folder-pictures", "folder-music", "folder-videos"] {
+        out.extend(by_icon(icon));
+    }
+    out
+}
+
+fn bookmarks_file() -> PathBuf {
+    let config = env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{}/.config", home()));
+    PathBuf::from(config).join("gtk-3.0/bookmarks")
+}
+
+// Favoris de l'utilisateur: signets GTK (partagés avec le sélecteur de fichiers), « file:///chemin libellé »
+fn bookmarks() -> Vec<(String, String)> {
+    let text = std::fs::read_to_string(bookmarks_file()).unwrap_or_default();
+    text.lines()
+        .filter_map(|line| {
+            let (uri, label) = line.split_once(' ').unwrap_or((line, ""));
+            Some((percent_decode(uri.strip_prefix("file://")?), label.to_string()))
+        })
+        .collect()
+}
+
+fn write_bookmarks(list: &[(String, String)]) -> std::io::Result<()> {
+    let file = bookmarks_file();
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut text = String::new();
+    for (p, label) in list {
+        text.push_str(&format!("file://{}{}{}\n", ops::encode(p), if label.is_empty() { "" } else { " " }, label));
+    }
+    std::fs::write(file, text)
 }
 
 // Dossiers spéciaux pour les icônes de la liste
@@ -774,6 +837,29 @@ impl FolderModel {
     pub fn has(&self, path: &QString) -> bool {
         let p = path.to_string();
         self.rows.iter().any(|e| e.path == p)
+    }
+
+    pub fn describe(&self, paths: &QString) -> QString {
+        let list = paths_of(paths);
+        let entries: Vec<&fs::Entry> = list.iter().filter_map(|p| self.rows.iter().find(|e| e.path == *p)).collect();
+        let text = match entries.as_slice() {
+            [] => return QString::default(),
+            [e] => {
+                let what = if e.is_dir {
+                    let n = std::fs::read_dir(&e.path).map_or(0, |d| d.count());
+                    fs::count(n)
+                } else {
+                    fs::size(e.size)
+                };
+                i18n::trf("%1 — %2", &[&e.name, &what])
+            }
+            many => {
+                let total: u64 = many.iter().filter(|e| !e.is_dir).map(|e| e.size).sum();
+                let head = i18n::trf("%1 of %2 selected", &[&many.len(), &self.rows.len()]);
+                if total > 0 { i18n::trf("%1, %2", &[&head, &fs::size(total)]) } else { head }
+            }
+        };
+        QString::from(&text)
     }
 
     pub fn path_is_dir(&self, path: &QString) -> bool {
@@ -1414,6 +1500,40 @@ impl Fili {
         });
     }
 
+    pub fn add_favorite(mut self: Pin<&mut Self>, path: &QString) {
+        let p = normalize(&path.to_string(), "/").to_string_lossy().into_owned();
+        let mut list = bookmarks();
+        if !Path::new(&p).is_dir() || default_favorites().iter().any(|(d, _)| *d == p) || list.iter().any(|(b, _)| *b == p) {
+            return;
+        }
+        list.push((p, String::new()));
+        if write_bookmarks(&list).is_ok() {
+            self.as_mut().places_changed();
+        }
+    }
+
+    pub fn remove_favorite(mut self: Pin<&mut Self>, path: &QString) {
+        let p = path.to_string();
+        let list: Vec<(String, String)> = bookmarks().into_iter().filter(|(b, _)| *b != p).collect();
+        if write_bookmarks(&list).is_ok() {
+            self.as_mut().places_changed();
+        }
+    }
+
+    pub fn is_favorite(&self, path: &QString) -> bool {
+        let p = path.to_string();
+        default_favorites().iter().any(|(d, _)| *d == p) || bookmarks().iter().any(|(b, _)| *b == p)
+    }
+
+    // Presse-papiers Wayland par wl-copy (qui reste en arrière-plan tant que le texte est la sélection)
+    pub fn copy_text(&self, text: &QString) {
+        let text = text.to_string();
+        let child = Command::new("wl-copy").arg("--").arg(text).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+        if let Ok(mut child) = child {
+            std::thread::spawn(move || child.wait());
+        }
+    }
+
     pub fn tr(&self, text: &QString) -> QString {
         QString::from(i18n::tr(&text.to_string()))
     }
@@ -1421,32 +1541,25 @@ impl Fili {
     pub fn places(&self) -> QString {
         let home = home();
         let (places, devices) = (i18n::tr("Favorites"), i18n::tr("Locations"));
-        let mut seen = vec![home.clone()];
-        // (section, nom, chemin, nom d'icône)
-        let mut items: Vec<(&str, String, String, &str, String)> = vec![(
-            places,
-            Path::new(&home).file_name().map_or("~".into(), |n| n.to_string_lossy().into_owned()),
-            home.clone(),
-            "user-home",
-            String::new(),
-        )];
         let name = |p: &str| Path::new(p).file_name().map_or(p.to_string(), |n| n.to_string_lossy().into_owned());
-        for (p, icon) in xdg_dirs() {
-            items.push((places, name(&p), p.clone(), icon, String::new()));
+        // (section, nom, chemin, nom d'icône, volume)
+        let mut items: Vec<(&str, String, String, &str, String)> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+        for (p, icon) in default_favorites() {
+            let label = if p == home { name(&home) } else { name(&p) };
+            items.push((places, label, p.clone(), icon, String::new()));
             seen.push(p);
         }
-        // Signets GTK (partagés avec Thunar et le sélecteur de fichiers): « file:///chemin libellé »
-        let config = env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
-        for line in std::fs::read_to_string(format!("{config}/gtk-3.0/bookmarks")).unwrap_or_default().lines() {
-            let (uri, label) = line.split_once(' ').unwrap_or((line, ""));
-            let Some(rest) = uri.strip_prefix("file://") else { continue };
-            let p = percent_decode(rest);
+        // Favoris ajoutés par l'utilisateur (retirables)
+        let mut removable: Vec<String> = Vec::new();
+        for (p, label) in bookmarks() {
             if seen.contains(&p) || !Path::new(&p).is_dir() {
                 continue;
             }
-            let label = if label.is_empty() { name(&p) } else { label.to_string() };
+            let label = if label.is_empty() { name(&p) } else { label };
             let icon = if label.to_lowercase().contains("icloud") { "folder-cloud" } else { "folder" };
             items.push((places, label, p.clone(), icon, String::new()));
+            removable.push(p.clone());
             seen.push(p);
         }
         items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "computer", String::new()));
@@ -1461,11 +1574,12 @@ impl Fili {
             .iter()
             .map(|(s, n, p, i, dev)| {
                 format!(
-                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"mono\":{},\"monoLight\":{}}}",
+                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"removable\":{},\"mono\":{},\"monoLight\":{}}}",
                     json(s),
                     json(n),
                     json(p),
                     json(dev),
+                    removable.contains(p),
                     json(&icons::symbolic(i, true)),
                     json(&icons::symbolic(i, false))
                 )

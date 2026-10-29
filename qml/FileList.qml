@@ -34,6 +34,8 @@ Rectangle {
             view.ready = r;
         }
     }
+    // Description de la sélection (barre d'état), vide si rien n'est sélectionné
+    readonly property string info: Object.keys(selected).length > 0 ? folder.describe(Object.keys(selected).join("\n")) : ""
     property int renaming: -1
     readonly property bool editing: renaming >= 0
 

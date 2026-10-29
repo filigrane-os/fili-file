@@ -47,6 +47,6 @@ QtObject {
     readonly property int sideRowHeight: 28
     readonly property int iconSize: 16
     readonly property int toolbarHeight: 38
-    readonly property int statusHeight: 22
+    readonly property int statusHeight: 28
     readonly property int sidebarWidth: 200
 }

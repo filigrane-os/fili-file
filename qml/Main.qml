@@ -106,6 +106,11 @@ Window {
             list.push({ id: "paste", label: Fili.tr("Paste"), hint: "Ctrl+V", enabled: folder.canPaste });
         if (t.length > 0) {
             list.push({ separator: true });
+            list.push({ id: "copyfilepath", label: Fili.tr("Copy Full Path") });
+            if (one && folder.pathIsDir(t[0]) && !Fili.isFavorite(t[0])) {
+                menuPath = t[0];
+                list.push({ id: "addfav", label: Fili.tr("Add to Favorites") });
+            }
             if (!trash)
                 list.push({ id: "rename", label: Fili.tr("Rename"), hint: "F2", enabled: one });
             if (trash)
@@ -128,9 +133,31 @@ Window {
         }
         menu.open(p.x, p.y, list);
     }
+    // Menu d'un chemin (segment du fil d'Ariane ou lieu de la barre latérale)
+    property string menuPath: ""
+    function openPathMenu(path, x, y, crumb, removable) {
+        menuPath = path;
+        const list = [{ id: "gopath", label: Fili.tr("Open") }, { separator: true }];
+        if (removable)
+            list.push({ id: "remfav", label: Fili.tr("Remove from Favorites") });
+        else if (crumb && !Fili.isFavorite(path))
+            list.push({ id: "addfav", label: Fili.tr("Add to Favorites") });
+        list.push({ id: "copypath", label: Fili.tr("Copy Full Path") });
+        menu.open(x, y, list);
+    }
     function menuAction(id) {
         const t = files.targetsText();
-        if (id === "open")
+        if (id === "gopath")
+            win.open(menuPath);
+        else if (id === "copypath")
+            Fili.copyText(menuPath);
+        else if (id === "copyfilepath")
+            Fili.copyText(files.targets().join("\n"));
+        else if (id === "addfav")
+            Fili.addFavorite(menuPath);
+        else if (id === "remfav")
+            Fili.removeFavorite(menuPath);
+        else if (id === "open")
             win.show(folder.activate(files.currentIndex));
         else if (id.startsWith("app:"))
             folder.openWith(id.slice(4), files.targets()[0]);
@@ -266,15 +293,15 @@ Window {
                 onClicked: confirm.visible = true
             }
         }
-        PathBar {
-            id: pathBar
-            anchors { left: nav.right; leftMargin: FiliTheme.space3; right: trashTools.visible ? trashTools.left : search.left; rightMargin: FiliTheme.space3; top: parent.top; bottom: parent.bottom }
-            path: folder.path
-            onOpen: p => win.open(p)
-            onDone: {
-                editing = false;
-                files.focusList();
-            }
+        // Titre: nom du dossier affiché (le chemin complet est dans la barre d'état)
+        Text {
+            anchors { left: nav.right; leftMargin: FiliTheme.space4; right: trashTools.visible ? trashTools.left : search.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            text: win.title
+            elide: Text.ElideMiddle
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.size
+            font.weight: FiliTheme.weightAccent
+            color: FiliTheme.brume
         }
     }
     Rectangle {
@@ -292,6 +319,7 @@ Window {
         current: folder.path
         onOpen: p => win.open(p)
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
+        onContext: (path, removable, x, y) => win.openPathMenu(path, x, y, false, removable)
     }
     Rectangle {
         id: sideLine
@@ -333,16 +361,44 @@ Window {
             height: 1
             color: FiliTheme.nuit4
         }
+        // Fil d'Ariane à gauche (clic: y aller, clic droit: menu), information sur la sélection à droite; une erreur,
+        // un message ou une opération en cours prennent toute la barre
+        readonly property bool message: folder.busy || folder.error !== "" || win.notice !== ""
+        PathBar {
+            id: pathBar
+            anchors { left: parent.left; leftMargin: FiliTheme.space2; top: parent.top; topMargin: 1; bottom: parent.bottom }
+            width: parent.width * 0.6
+            visible: !statusbar.message || editing
+            fontSize: FiliTheme.sizeSmall
+            path: folder.path
+            onOpen: p => win.open(p)
+            onContext: (p, x, y) => win.openPathMenu(p, x, y, true)
+            onDone: {
+                editing = false;
+                files.focusList();
+            }
+        }
+        Text {
+            anchors { left: pathBar.right; leftMargin: FiliTheme.space3; right: parent.right; rightMargin: FiliTheme.space3; top: parent.top; topMargin: 1; bottom: parent.bottom }
+            visible: !statusbar.message && !pathBar.editing
+            verticalAlignment: Text.AlignVCenter
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideMiddle
+            text: files.info || folder.status
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.sizeSmall
+            color: FiliTheme.brume2
+        }
         Text {
             anchors { fill: parent; leftMargin: FiliTheme.space3; rightMargin: FiliTheme.space3 }
-            visible: !folder.busy
+            visible: statusbar.message && !folder.busy
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideMiddle
-            text: folder.error || win.notice || folder.status
+            text: folder.error || win.notice
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeSmall
-            color: folder.error || win.notice ? FiliTheme.cendre : FiliTheme.brume2
+            color: FiliTheme.cendre
         }
         // Opération en cours: nom, avancement, annulation
         Row {

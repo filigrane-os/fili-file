@@ -10,6 +10,8 @@ Rectangle {
     property string current
     signal open(string path)
     signal dropped(string urls, string dest, bool copy)
+    // Clic droit sur un lieu: ses données et la position dans la fenêtre
+    signal context(string path, bool removable, real x, real y)
 
     color: FiliTheme.nuitProfond
 
@@ -37,6 +39,16 @@ Rectangle {
         keyNavigationEnabled: true
         activeFocusOnTab: true
         highlightMoveDuration: 0
+        // Déposer un dossier entre les lieux (ou dans le vide): l'ajouter aux favoris
+        DropArea {
+            z: -1
+            width: list.width
+            height: Math.max(list.height, list.contentHeight)
+            onDropped: d => {
+                d.urls.forEach(u => Fili.addFavorite(u.toString()));
+                d.acceptProposedAction();
+            }
+        }
         section.property: "section"
         section.delegate: Text {
             required property string section
@@ -56,6 +68,7 @@ Rectangle {
             required property string name
             required property string path
             required property string dev
+            required property bool removable
             required property string mono
             required property string monoLight
             required property int index
@@ -118,7 +131,15 @@ Rectangle {
                 id: area
                 anchors.fill: parent
                 hoverEnabled: true
-                onClicked: {
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                onClicked: e => {
+                    if (e.button === Qt.RightButton) {
+                        if (row.path !== "") {
+                            const p = area.mapToItem(null, e.x, e.y);
+                            side.context(row.path, row.removable, p.x, p.y);
+                        }
+                        return;
+                    }
                     Fili.keyNav = false;
                     list.currentIndex = row.index;
                     if (row.path === "")
