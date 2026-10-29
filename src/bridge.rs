@@ -237,6 +237,13 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setColumns"]
         fn set_columns(self: &Fili, keys: &QString);
+        // Vue de la liste de fichiers: "list" ou "grid", gardée dans l'état de l'utilisateur
+        #[qinvokable]
+        #[cxx_name = "viewMode"]
+        fn view_mode(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "setViewMode"]
+        fn set_view_mode(self: &Fili, mode: &QString);
         #[qinvokable]
         #[cxx_name = "pathExists"]
         fn path_exists(self: &Fili, path: &QString) -> bool;
@@ -1471,6 +1478,11 @@ pub struct FiliRust {
     key_nav: bool,
 }
 
+fn view_file() -> PathBuf {
+    let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
+    PathBuf::from(state).join("filigrane/fili-file-view")
+}
+
 fn columns_file() -> PathBuf {
     let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
     PathBuf::from(state).join("filigrane/fili-file-columns")
@@ -1634,6 +1646,19 @@ impl Fili {
             let _ = std::fs::create_dir_all(dir);
         }
         let _ = std::fs::write(file, keys.to_string());
+    }
+
+    pub fn view_mode(&self) -> QString {
+        let text = std::fs::read_to_string(view_file()).unwrap_or_default();
+        QString::from(if text.trim() == "grid" { "grid" } else { "list" })
+    }
+
+    pub fn set_view_mode(&self, mode: &QString) {
+        let file = view_file();
+        if let Some(dir) = file.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(file, mode.to_string());
     }
 
     pub fn path_exists(&self, path: &QString) -> bool {

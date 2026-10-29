@@ -2,7 +2,7 @@
 // Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin, Ctrl+F recherche dans le dossier, Ctrl+H fichiers cachés, F5 relire,
 // Ctrl+C / Ctrl+X / Ctrl+V copier, couper, coller, F2 renommer, Ctrl+Maj+N nouveau dossier, Suppr ou Ctrl+Retour
 // arrière corbeille, Ctrl+Z annuler, Ctrl+A tout sélectionner, Échap annule la copie en cours,
-// Ctrl+Maj+Suppr vide la corbeille, Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
+// Ctrl+1 / Ctrl+2 vue en liste / en grille, Ctrl+Maj+Suppr vide la corbeille, Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
 // Mode sélecteur (fili-file --pick, lancé par le portail FileChooser): barre de validation en bas (nom en
 // enregistrement, filtres, Annuler, Ouvrir/Enregistrer); les opérations sur les fichiers sont désactivées.
 import QtQuick
@@ -119,6 +119,8 @@ Window {
     Shortcut { sequence: "Ctrl+]"; onActivated: win.show(folder.forward()) }
     Shortcut { sequence: "Ctrl+L"; onActivated: pathBar.edit() }
     Shortcut { sequence: "Ctrl+F"; onActivated: searchInput.forceActiveFocus() }
+    Shortcut { sequence: "Ctrl+1"; onActivated: files.setViewMode("list") }
+    Shortcut { sequence: "Ctrl+2"; onActivated: files.setViewMode("grid") }
     Shortcut { sequence: "Ctrl+H"; onActivated: win.show(folder.toggleHidden(files.currentIndex)) }
     Shortcut { sequence: "F5"; onActivated: win.show(folder.refresh(files.currentIndex)) }
     Shortcut { sequence: "Ctrl+R"; onActivated: win.show(folder.refresh(files.currentIndex)) }
@@ -187,6 +189,18 @@ Window {
                 list.push({ id: "compress", label: Fili.tr("Compress") });
             }
         }
+        // Sur le fond du dossier: affichage (liste ou grille, fichiers cachés, tri)
+        if (t.length === 0) {
+            list.push({ separator: true });
+            list.push({ id: "view:list", label: Fili.tr("View as List"), hint: "Ctrl+1", checked: !files.tiles });
+            list.push({ id: "view:grid", label: Fili.tr("View as Icons"), hint: "Ctrl+2", checked: files.tiles });
+            list.push({ id: "hidden", label: Fili.tr("Show Hidden Files"), hint: "Ctrl+H", checked: folder.showHidden });
+            list.push({
+                id: "sort", label: Fili.tr("Sort By"),
+                children: files.allColumns.map(c => ({ id: "sort:" + c.sort, label: c.label, checked: folder.sortKey === c.sort }))
+                    .concat([{ id: "sort:0", label: Fili.tr("Name"), checked: folder.sortKey === 0 }]).sort((a, b) => parseInt(a.id.slice(5)) - parseInt(b.id.slice(5)))
+            });
+        }
         if (!trash) {
             list.push({ separator: true });
             list.push({ id: "newfolder", label: Fili.tr("New Folder"), hint: "Ctrl+Shift+N" });
@@ -216,7 +230,13 @@ Window {
     }
     function menuAction(id) {
         const t = files.targetsText();
-        if (id.startsWith("col:")) {
+        if (id.startsWith("view:"))
+            files.setViewMode(id.slice(5));
+        else if (id === "hidden")
+            win.show(folder.toggleHidden(files.currentIndex));
+        else if (id.startsWith("sort:"))
+            win.show(folder.sortBy(parseInt(id.slice(5)), files.currentIndex));
+        else if (id.startsWith("col:")) {
             const key = id.slice(4);
             const on = files.enabledKeys.indexOf(key) >= 0;
             files.setColumns(files.allColumns.map(c => c.key).filter(k => k === key ? !on : files.enabledKeys.indexOf(k) >= 0));
@@ -358,9 +378,15 @@ Window {
                 }
             }
         }
+        ViewSwitch {
+            id: viewSwitch
+            anchors { right: search.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            mode: files.viewMode
+            onChose: m => files.setViewMode(m)
+        }
         Row {
             id: trashTools
-            anchors { right: search.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            anchors { right: viewSwitch.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             spacing: 2
             visible: folder.inTrash
             TextButton {
@@ -374,7 +400,7 @@ Window {
         }
         // Titre: nom du dossier affiché (le chemin complet est dans la barre d'état)
         Text {
-            anchors { left: nav.right; leftMargin: FiliTheme.space5; right: trashTools.visible ? trashTools.left : search.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            anchors { left: nav.right; leftMargin: FiliTheme.space5; right: trashTools.visible ? trashTools.left : viewSwitch.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             text: win.title
             elide: Text.ElideMiddle
             font.family: FiliTheme.font

@@ -1,4 +1,5 @@
-// Vue en liste du dossier (colonnes Nom, Taille, Modifié; un clic sur un en-tête trie, un second inverse l'ordre).
+// Vue du dossier, en liste (colonnes Nom, Taille, Modifié...; un clic sur un en-tête trie, un second inverse l'ordre) ou en
+// grille d'icônes de 64 px (nom sous l'icône, deux lignes au plus); même délégué, mêmes sélection et raccourcis.
 // Une ligne sélectionnée: fond nuit3 et nom en voile (brume quand la fenêtre n'est pas active); survol: fond nuit3.
 // Sélection multiple: Ctrl+clic ajoute ou retire, Maj+clic ou Maj+flèches étendent, Ctrl+A tout. Clavier: flèches,
 // Début/Fin, Page préc./suiv., Entrée ou Ctrl+↓ ouvre, Retour arrière ou Alt+↑ remonte, Espace aperçu rapide,
@@ -10,7 +11,22 @@ import Fili.Files
 Rectangle {
     id: view
     required property FolderModel folder
-    property alias currentIndex: list.currentIndex
+    // Vue affichée: "list" ou "grid" (choix gardé dans l'état de l'utilisateur)
+    property string viewMode: Fili.viewMode()
+    readonly property bool tiles: viewMode === "grid"
+    readonly property Item active: tiles ? grid : list
+    readonly property int currentIndex: active.currentIndex
+    function setViewMode(mode) {
+        if (mode === viewMode)
+            return;
+        const i = active.currentIndex;
+        Fili.setViewMode(mode);
+        viewMode = mode;
+        active.currentIndex = i;
+        if (i >= 0)
+            active.positionViewAtIndex(i, ListView.Contain);
+        focusList();
+    }
     property bool windowActive: true
     signal openRow(int row)
     signal goUp()
@@ -41,7 +57,7 @@ Rectangle {
 
     function pick(row) {
         const s = {};
-        if (row >= 0 && row < list.count)
+        if (row >= 0 && row < active.count)
             s[folder.pathAt(row)] = true;
         selected = s;
         anchor = row;
@@ -50,18 +66,18 @@ Rectangle {
     function select(row) {
         if (row < 0)
             return;
-        list.currentIndex = Math.min(row, list.count - 1);
-        if (list.currentIndex >= 0)
-            list.positionViewAtIndex(list.currentIndex, ListView.Contain);
-        pick(list.currentIndex);
+        active.currentIndex = Math.min(row, active.count - 1);
+        if (active.currentIndex >= 0)
+            active.positionViewAtIndex(active.currentIndex, ListView.Contain);
+        pick(active.currentIndex);
     }
     function extendTo(row) {
-        if (list.count === 0)
+        if (active.count === 0)
             return;
-        list.currentIndex = Math.max(0, Math.min(row, list.count - 1));
-        list.positionViewAtIndex(list.currentIndex, ListView.Contain);
+        active.currentIndex = Math.max(0, Math.min(row, active.count - 1));
+        active.positionViewAtIndex(active.currentIndex, ListView.Contain);
         const s = {};
-        const from = Math.max(0, Math.min(anchor, list.currentIndex)), to = Math.max(anchor, list.currentIndex);
+        const from = Math.max(0, Math.min(anchor, active.currentIndex)), to = Math.max(anchor, active.currentIndex);
         for (let i = from; i <= to; i++)
             s[folder.pathAt(i)] = true;
         selected = s;
@@ -75,11 +91,11 @@ Rectangle {
             s[p] = true;
         selected = s;
         anchor = row;
-        list.currentIndex = row;
+        active.currentIndex = row;
     }
     function selectAll() {
         const s = {};
-        for (let i = 0; i < list.count; i++)
+        for (let i = 0; i < active.count; i++)
             s[folder.pathAt(i)] = true;
         selected = s;
     }
@@ -88,14 +104,14 @@ Rectangle {
         const keys = Object.keys(selected);
         if (keys.length > 0)
             return keys;
-        return list.currentIndex >= 0 ? [folder.pathAt(list.currentIndex)] : [];
+        return active.currentIndex >= 0 ? [folder.pathAt(active.currentIndex)] : [];
     }
     function targetsText() {
         return targets().join("\n");
     }
     function startRename() {
-        if (list.currentIndex >= 0)
-            renaming = list.currentIndex;
+        if (active.currentIndex >= 0)
+            renaming = active.currentIndex;
     }
     // Le dossier a changé sous la vue: ne garder que ce qui existe encore
     function reloaded() {
@@ -104,14 +120,14 @@ Rectangle {
             if (folder.has(p))
                 keep[p] = true;
         selected = keep;
-        if (list.currentIndex < 0 && list.count > 0)
+        if (active.currentIndex < 0 && active.count > 0)
             select(0);
     }
     function dragUris(path) {
         return folder.uris(selected[path] ? Object.keys(selected).join("\n") : path);
     }
     function focusList() {
-        list.forceActiveFocus();
+        active.forceActiveFocus();
     }
 
     // Colonnes après le nom: affichées selon le choix de l'utilisateur (clic droit sur un en-tête), dans cet ordre
@@ -144,6 +160,7 @@ Rectangle {
     // En-têtes de colonnes: petit 11, brume2; colonne de tri en brume avec son sens
     Row {
         id: header
+        visible: !view.tiles
         x: FiliTheme.space2
         width: view.width - 2 * FiliTheme.space2
         height: 26
@@ -181,21 +198,69 @@ Rectangle {
                             const p = mapToItem(view, e.x, e.y);
                             view.headerContext(p.x, p.y);
                         } else
-                            view.select(view.folder.sortBy(col.modelData.sort, list.currentIndex));
+                            view.select(view.folder.sortBy(col.modelData.sort, active.currentIndex));
                     }
                 }
             }
         }
     }
     Rectangle {
+        visible: !view.tiles
         anchors.top: header.bottom
         width: parent.width
         height: 1
         color: FiliTheme.nuit4
     }
 
+    // Saisie au clavier: lettres tapées à moins d'une seconde d'intervalle
+    property string typed: ""
+    Timer { id: typedReset; interval: 1000; onTriggered: view.typed = "" }
+
+    // Touches communes aux deux vues; perRow: nombre de colonnes de la grille (1 en liste)
+    function handleKey(e, perRow) {
+        Fili.keyNav = true;
+        const ctrl = e.modifiers & Qt.ControlModifier, alt = e.modifiers & Qt.AltModifier, shift = e.modifiers & Qt.ShiftModifier;
+        const count = active.count, cur = active.currentIndex;
+        const rowsPerPage = Math.max(1, Math.floor(active.height / (tiles ? grid.cellHeight : FiliTheme.rowHeight)) - 1);
+        const move = row => shift ? view.extendTo(row) : view.select(Math.max(0, Math.min(row, count - 1)));
+        if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || (e.key === Qt.Key_Down && (ctrl || alt)))
+            view.openRow(cur);
+        else if (e.key === Qt.Key_Backspace || (e.key === Qt.Key_Up && (ctrl || alt)))
+            view.goUp();
+        else if (e.key === Qt.Key_Up)
+            move(cur - perRow);
+        else if (e.key === Qt.Key_Down)
+            move(cur + perRow);
+        else if (e.key === Qt.Key_Left && tiles)
+            move(cur - 1);
+        else if (e.key === Qt.Key_Right && tiles)
+            move(cur + 1);
+        else if (e.key === Qt.Key_Menu) {
+            const it = active.itemAtIndex(cur);
+            const p = it ? it.mapToItem(view, FiliTheme.space4, it.height) : Qt.point(FiliTheme.space6, FiliTheme.space6);
+            view.context(p.x, p.y);
+        } else if (e.key === Qt.Key_Space && view.typed === "")
+            view.folder.quicklook(cur);
+        else if (e.key === Qt.Key_Home)
+            move(0);
+        else if (e.key === Qt.Key_End)
+            move(count - 1);
+        else if (e.key === Qt.Key_PageDown)
+            move(cur + rowsPerPage * perRow);
+        else if (e.key === Qt.Key_PageUp)
+            move(cur - rowsPerPage * perRow);
+        else if (e.text.length === 1 && e.text >= " " && !ctrl && !alt) {
+            view.typed += e.text;
+            typedReset.restart();
+            view.select(view.folder.find(view.typed));
+        } else
+            return;
+        e.accepted = true;
+    }
+
     ListView {
         id: list
+        visible: !view.tiles
         anchors { top: header.bottom; topMargin: 1 + 2; left: parent.left; right: parent.right; bottom: parent.bottom }
         clip: true
         // Le ListView impose x = 0 à ses délégués: la marge des lignes est celle du contenu
@@ -235,45 +300,59 @@ Rectangle {
             }
         }
 
-        // Saisie au clavier: lettres tapées à moins d'une seconde d'intervalle
-        property string typed: ""
-        Timer { id: typedReset; interval: 1000; onTriggered: list.typed = "" }
+        Keys.onPressed: e => view.handleKey(e, 1)
 
-        Keys.onPressed: e => {
-            Fili.keyNav = true;
-            const ctrl = e.modifiers & Qt.ControlModifier, alt = e.modifiers & Qt.AltModifier, shift = e.modifiers & Qt.ShiftModifier;
-            const page = Math.max(1, Math.floor(list.height / FiliTheme.rowHeight) - 1);
-            const move = row => shift ? view.extendTo(row) : view.select(Math.max(0, Math.min(row, count - 1)));
-            if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || (e.key === Qt.Key_Down && (ctrl || alt)))
-                view.openRow(currentIndex);
-            else if (e.key === Qt.Key_Backspace || (e.key === Qt.Key_Up && (ctrl || alt)))
-                view.goUp();
-            else if (e.key === Qt.Key_Up)
-                move(currentIndex - 1);
-            else if (e.key === Qt.Key_Down)
-                move(currentIndex + 1);
-            else if (e.key === Qt.Key_Menu)
-                view.context(FiliTheme.space6, Math.max(0, currentIndex) * FiliTheme.rowHeight - list.contentY + FiliTheme.rowHeight);
-            else if (e.key === Qt.Key_Space && list.typed === "")
-                view.folder.quicklook(currentIndex);
-            else if (e.key === Qt.Key_Home)
-                move(0);
-            else if (e.key === Qt.Key_End)
-                move(count - 1);
-            else if (e.key === Qt.Key_PageDown)
-                move(currentIndex + page);
-            else if (e.key === Qt.Key_PageUp)
-                move(currentIndex - page);
-            else if (e.text.length === 1 && e.text >= " " && !ctrl && !alt) {
-                list.typed += e.text;
-                typedReset.restart();
-                view.select(view.folder.find(list.typed));
-            } else
-                return;
-            e.accepted = true;
+        delegate: fileDelegate
+    }
+
+    GridView {
+        id: grid
+        visible: view.tiles
+        anchors { top: parent.top; topMargin: FiliTheme.space2; left: parent.left; right: parent.right; bottom: parent.bottom }
+        clip: true
+        cellWidth: 104
+        cellHeight: 112
+        readonly property int columns: Math.max(1, Math.floor((width - 2 * FiliTheme.space4) / cellWidth))
+        // Grille alignée à gauche (le GridView pose les cellules à partir de la marge du contenu)
+        leftMargin: FiliTheme.space4
+        rightMargin: FiliTheme.space4
+        model: view.folder
+        activeFocusOnTab: true
+        keyNavigationEnabled: false
+        highlightMoveDuration: 0
+        boundsBehavior: Flickable.StopAtBounds
+        reuseItems: true
+        KineticScroll {}
+
+        MouseArea {
+            z: -2
+            width: grid.width
+            height: Math.max(grid.height, grid.contentHeight)
+            acceptedButtons: Qt.RightButton
+            onPressed: e => {
+                view.pick(-1);
+                const p = mapToItem(view, e.x, e.y);
+                view.context(p.x, p.y);
+            }
+        }
+        DropArea {
+            z: -1
+            width: grid.width
+            height: Math.max(grid.height, grid.contentHeight)
+            onDropped: drop => {
+                view.dropped(drop.urls.map(u => u.toString()).join("\n"), view.folder.path, drop.proposedAction === Qt.CopyAction);
+                drop.acceptProposedAction();
+            }
         }
 
-        delegate: Rectangle {
+        Keys.onPressed: e => view.handleKey(e, columns)
+
+        delegate: fileDelegate
+    }
+
+    Component {
+        id: fileDelegate
+        Rectangle {
             id: row
             required property int index
             required property string name
@@ -285,15 +364,16 @@ Rectangle {
             required property string thumb
             required property bool thumbReady
             required property bool isImage
-            readonly property bool current: ListView.isCurrentItem
+            readonly property bool tile: view.tiles
+            readonly property bool current: index === view.currentIndex
             readonly property bool sel: view.selected[path] === true
             readonly property bool editing: view.renaming === index
-            readonly property bool stripe: index % 2 === 1
-            width: ListView.view.width - 2 * FiliTheme.space2
-            height: FiliTheme.rowHeight
-            radius: FiliTheme.radiusControl
+            readonly property bool stripe: !tile && index % 2 === 1
+            width: tile ? grid.cellWidth - FiliTheme.space2 : view.width - 2 * FiliTheme.space2
+            height: tile ? grid.cellHeight - FiliTheme.space2 : FiliTheme.rowHeight
+            radius: tile ? FiliTheme.radiusControl + 2 : FiliTheme.radiusControl
             color: sel || drop.containsDrag ? FiliTheme.nuit3 : area.containsMouse ? FiliTheme.nuit2 : stripe ? FiliTheme.alpha(FiliTheme.nuit2, 0.55) : "transparent"
-            border.width: drop.containsDrag ? 1 : current && list.activeFocus && Fili.keyNav ? 1 : 0
+            border.width: drop.containsDrag ? 1 : current && view.active.activeFocus && Fili.keyNav ? 1 : 0
             border.color: FiliTheme.voile
             readonly property color ink: sel && view.windowActive ? FiliTheme.voile : row.hidden ? FiliTheme.brume2 : FiliTheme.brume
 
@@ -309,9 +389,11 @@ Rectangle {
             onEditingChanged: if (editing) beginRename()
             Component.onCompleted: if (editing) beginRename()
             ListView.onReused: if (editing) beginRename()
+            GridView.onReused: if (editing) beginRename()
 
             Image {
                 id: img
+                visible: !row.tile
                 x: FiliTheme.space2
                 anchors.verticalCenter: parent.verticalCenter
                 width: FiliTheme.iconSize
@@ -325,16 +407,53 @@ Rectangle {
             // Miniature de PDF (première page), par-dessus l'icône du type
             Image {
                 anchors.fill: img
-                visible: status === Image.Ready
+                visible: !row.tile && status === Image.Ready
                 source: row.thumb !== "" && (row.thumbReady || view.ready[row.path]) ? row.thumb + "?" + (view.ready[row.path] ? 1 : 0) : ""
                 sourceSize: Qt.size(FiliTheme.iconSize * 2, FiliTheme.iconSize * 2)
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 cache: false
             }
+            // Grille: icône de 64 px (ou miniature) et nom dessous, sur deux lignes au plus
+            Image {
+                id: tileImg
+                visible: row.tile
+                x: Math.round((row.width - width) / 2)
+                y: FiliTheme.space2
+                width: 64
+                height: 64
+                sourceSize: Qt.size(128, 128)
+                source: row.tile ? row.icon : ""
+                asynchronous: true
+                opacity: row.hidden ? 0.6 : 1
+                fillMode: Image.PreserveAspectFit
+            }
+            Image {
+                anchors.fill: tileImg
+                visible: row.tile && status === Image.Ready
+                source: row.tile && row.thumb !== "" && (row.thumbReady || view.ready[row.path]) ? row.thumb + "?" + (view.ready[row.path] ? 1 : 0) : ""
+                sourceSize: Qt.size(128, 128)
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                cache: false
+            }
+            Text {
+                visible: row.tile && !row.editing
+                x: FiliTheme.space1
+                y: tileImg.y + tileImg.height + FiliTheme.space1
+                width: row.width - 2 * FiliTheme.space1
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                text: row.name
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.sizeList
+                color: row.ink
+            }
             Text {
                 anchors { left: img.right; leftMargin: FiliTheme.space2; right: cells.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
-                visible: !row.editing
+                visible: !row.tile && !row.editing
                 text: row.name
                 elide: Text.ElideMiddle
                 font.family: FiliTheme.font
@@ -343,8 +462,10 @@ Rectangle {
             }
             // Renommage sur place
             Rectangle {
-                anchors { left: img.right; leftMargin: FiliTheme.space2 - 4; right: cells.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
-                height: parent.height - 2
+                x: row.tile ? FiliTheme.space1 : FiliTheme.space2 + FiliTheme.iconSize + FiliTheme.space2 - 4
+                y: row.tile ? tileImg.y + tileImg.height + FiliTheme.space1 : 1
+                width: row.tile ? row.width - 2 * FiliTheme.space1 : row.width - x - cells.width - FiliTheme.space2
+                height: row.tile ? 22 : parent.height - 2
                 visible: row.editing
                 radius: FiliTheme.radiusControl
                 color: FiliTheme.nuit2
@@ -381,9 +502,10 @@ Rectangle {
             }
             Row {
                 id: cells
+                visible: !row.tile
                 anchors { right: parent.right; verticalCenter: parent.verticalCenter }
                 Repeater {
-                    model: view.cols
+                    model: row.tile ? [] : view.cols
                     delegate: Text {
                         required property var modelData
                         width: view.colWidth(modelData)
@@ -431,7 +553,7 @@ Rectangle {
                 onPressed: e => {
                     if (e.button === Qt.RightButton) {
                         if (!row.sel) {
-                            list.currentIndex = row.index;
+                            view.active.currentIndex = row.index;
                             view.pick(row.index);
                         }
                         const p = area.mapToItem(view, e.x, e.y);
@@ -444,17 +566,17 @@ Rectangle {
                     if (e.modifiers & Qt.ControlModifier)
                         view.toggle(row.index);
                     else if (e.modifiers & Qt.ShiftModifier) {
-                        list.currentIndex = row.index;
+                        view.active.currentIndex = row.index;
                         view.extendTo(row.index);
                     } else if (!row.sel) {
-                        list.currentIndex = row.index;
+                        view.active.currentIndex = row.index;
                         view.pick(row.index);
                     } else {
-                        list.currentIndex = row.index;
+                        view.active.currentIndex = row.index;
                         // Sélection multiple: elle se réduit au relâchement s'il n'y a pas eu de glisser
                         collapse = true;
                     }
-                    list.forceActiveFocus();
+                    view.active.forceActiveFocus();
                 }
                 onReleased: {
                     if (collapse && !drag.active)
@@ -468,8 +590,8 @@ Rectangle {
 
     // Dossier vide
     Text {
-        anchors.centerIn: list
-        visible: list.count === 0
+        anchors.centerIn: view.active
+        visible: view.active.count === 0
         text: Fili.tr("Empty folder")
         font.family: FiliTheme.font
         font.pixelSize: FiliTheme.size
