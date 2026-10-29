@@ -7,6 +7,7 @@ mod fs;
 mod i18n;
 mod icons;
 mod ops;
+mod volumes;
 mod watch;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};

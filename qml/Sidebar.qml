@@ -14,7 +14,17 @@ Rectangle {
     color: FiliTheme.nuitProfond
 
     ListModel { id: places }
-    Component.onCompleted: JSON.parse(Fili.places()).forEach(p => places.append(p))
+    function reload() {
+        places.clear();
+        JSON.parse(Fili.places()).forEach(p => places.append(p));
+    }
+    Component.onCompleted: reload()
+    Connections {
+        target: Fili
+        function onPlacesChanged() {
+            side.reload();
+        }
+    }
 
     ListView {
         id: list
@@ -45,10 +55,11 @@ Rectangle {
             id: row
             required property string name
             required property string path
+            required property string dev
             required property string mono
             required property string monoLight
             required property int index
-            readonly property bool sel: path === side.current
+            readonly property bool sel: path !== "" && path === side.current
             x: FiliTheme.space2
             width: ListView.view.width - 2 * FiliTheme.space2
             height: FiliTheme.sideRowHeight
@@ -72,12 +83,28 @@ Rectangle {
                 }
             }
             Text {
-                anchors { left: img.right; leftMargin: FiliTheme.space2 + 2; right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                anchors { left: img.right; leftMargin: FiliTheme.space2 + 2; right: eject.visible ? eject.left : parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 text: row.name
+                opacity: row.dev !== "" && row.path === "" ? 0.6 : 1
                 elide: Text.ElideRight
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
                 color: row.sel ? FiliTheme.voile : FiliTheme.brume
+            }
+            // Éjecter un volume monté
+            Text {
+                id: eject
+                visible: row.dev !== "" && row.path !== ""
+                anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                text: "⏏"
+                font.pixelSize: FiliTheme.size
+                color: ejectArea.containsMouse ? FiliTheme.brume : FiliTheme.ardoise
+                MouseArea {
+                    id: ejectArea
+                    anchors { fill: parent; margins: -6 }
+                    hoverEnabled: true
+                    onClicked: Fili.unmountVolume(row.dev)
+                }
             }
             DropArea {
                 id: drop
@@ -94,14 +121,21 @@ Rectangle {
                 onClicked: {
                     Fili.keyNav = false;
                     list.currentIndex = row.index;
-                    side.open(row.path);
+                    if (row.path === "")
+                        Fili.mountVolume(row.dev);
+                    else
+                        side.open(row.path);
                 }
             }
         }
         Keys.onPressed: e => {
             Fili.keyNav = true;
             if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Space) && currentIndex >= 0) {
-                side.open(places.get(currentIndex).path);
+                const p = places.get(currentIndex);
+                if (p.path === "")
+                    Fili.mountVolume(p.dev);
+                else
+                    side.open(p.path);
                 e.accepted = true;
             }
         }

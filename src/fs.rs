@@ -108,6 +108,12 @@ pub fn starts_with(name: &str, prefix: &str) -> bool {
     prefix.chars().map(fold).all(|c| n.next() == Some(c))
 }
 
+// Le nom contient needle, sans casse ni accents (filtre du dossier)
+pub fn contains(name: &str, needle: &str) -> bool {
+    let n: String = name.chars().map(fold).collect();
+    n.contains(&needle.chars().map(fold).collect::<String>())
+}
+
 fn digits(it: &mut std::iter::Peekable<std::str::Chars>) -> String {
     let mut s = String::new();
     while let Some(c) = it.next_if(char::is_ascii_digit) {
@@ -224,6 +230,13 @@ mod tests {
         assert_eq!(names(&v), ["Z", "c", "a.txt", "b.txt"]);
         sort(&mut v, Key::Date, false);
         assert_eq!(names(&v), ["Z", "c", "a.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn filter_ignores_case_and_accents() {
+        assert!(contains("Écoles-2024.PDF", "ecole"));
+        assert!(contains("Écoles-2024.PDF", "pdf"));
+        assert!(!contains("notes.txt", "pdf"));
     }
 
     #[test]

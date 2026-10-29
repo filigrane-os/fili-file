@@ -32,6 +32,7 @@ pub mod qobject {
         #[qproperty(bool, can_forward, cxx_name = "canForward", READ, NOTIFY = changed)]
         #[qproperty(QString, status, READ, NOTIFY = changed)]
         #[qproperty(QString, error, READ, NOTIFY = changed)]
+        #[qproperty(QString, filter, READ, NOTIFY = changed)]
         #[qproperty(bool, busy, READ, NOTIFY = changed)]
         // Avancement de l'opération en cours (0 à 1), -1 tant que le total n'est pas connu
         #[qproperty(f64, progress, READ, NOTIFY = changed)]
@@ -66,6 +67,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "toggleHidden"]
         fn toggle_hidden(self: Pin<&mut FolderModel>, row: i32) -> i32;
+        // Ne garder que les noms qui contiennent ce texte (vide: tout)
+        #[qinvokable]
+        #[cxx_name = "setFilter"]
+        fn set_filter(self: Pin<&mut FolderModel>, text: &QString);
         #[qinvokable]
         fn quicklook(self: &FolderModel, row: i32);
         #[qinvokable]
@@ -158,6 +163,22 @@ pub mod qobject {
         #[cxx_name = "themeChanged"]
         fn theme_changed(self: Pin<&mut Fili>);
 
+        // Les volumes ou les montages ont changé: la barre latérale relit ses lieux
+        #[qsignal]
+        #[cxx_name = "placesChanged"]
+        fn places_changed(self: Pin<&mut Fili>);
+        // Volume monté à la demande de mount_volume (chemin) ou erreur (texte)
+        #[qsignal]
+        fn mounted(self: Pin<&mut Fili>, path: &QString);
+        #[qsignal]
+        #[cxx_name = "volumeError"]
+        fn volume_error(self: Pin<&mut Fili>, message: &QString);
+        #[qinvokable]
+        #[cxx_name = "mountVolume"]
+        fn mount_volume(self: Pin<&mut Fili>, dev: &QString);
+        #[qinvokable]
+        #[cxx_name = "unmountVolume"]
+        fn unmount_volume(self: Pin<&mut Fili>, dev: &QString);
         #[qinvokable]
         fn tr(self: &Fili, text: &QString) -> QString;
         // Lieux de la barre latérale, en JSON: [{section, name, path, icon}]
@@ -177,7 +198,7 @@ pub mod qobject {
     impl cxx_qt::Threading for FolderModel {}
 }
 
-use crate::{fs, i18n, icons, ops, watch::Watcher};
+use crate::{fs, i18n, icons, ops, volumes, watch::Watcher};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
@@ -318,6 +339,7 @@ pub struct FolderModelRust {
     can_forward: bool,
     status: QString,
     error: QString,
+    filter: QString,
     busy: bool,
     progress: f64,
     job: QString,
@@ -376,7 +398,13 @@ impl FolderModel {
     // Liste courante filtrée (cachés) et triée, sans relire le disque
     fn filtered(&self) -> Vec<fs::Entry> {
         let (hidden, key, desc) = (self.show_hidden, fs::Key::from(self.sort_key), self.sort_desc);
-        let mut rows: Vec<fs::Entry> = self.all.iter().filter(|e| hidden || !e.hidden()).cloned().collect();
+        let needle = self.filter.to_string();
+        let mut rows: Vec<fs::Entry> = self
+            .all
+            .iter()
+            .filter(|e| (hidden || !e.hidden()) && (needle.is_empty() || fs::contains(&e.name, &needle)))
+            .cloned()
+            .collect();
         fs::sort(&mut rows, key, desc);
         rows
     }
@@ -476,6 +504,7 @@ impl FolderModel {
                 }
                 r.dir = dir;
                 r.error = QString::default();
+                r.filter = QString::default();
                 self.as_mut().rebuild();
                 let row = select.map_or(0, |n| self.row_of(n));
                 self.as_mut().update_history_flags();
@@ -628,6 +657,12 @@ impl FolderModel {
         self.as_mut().rebuild();
         self.as_mut().changed();
         name.map_or(0, |n| self.row_of(&n))
+    }
+
+    pub fn set_filter(mut self: Pin<&mut Self>, text: &QString) {
+        self.as_mut().rust_mut().filter = text.clone();
+        self.as_mut().rebuild();
+        self.as_mut().changed();
     }
 
     // Aperçu rapide (~/.local/bin/quicklook): relancé sur le même fichier, il se referme
@@ -1031,6 +1066,32 @@ fn read_light() -> bool {
 impl cxx_qt::Initialize for Fili {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().light = read_light();
+        // Montages: /proc/self/mountinfo signale chaque changement par POLLPRI
+        let mounts = self.qt_thread();
+        std::thread::spawn(move || {
+            use std::{io::{Read, Seek}, os::fd::AsRawFd};
+            let Ok(mut file) = std::fs::File::open("/proc/self/mountinfo") else { return };
+            let mut pfd = libc::pollfd { fd: file.as_raw_fd(), events: libc::POLLPRI, revents: 0 };
+            // Le changement est acquitté par une lecture complète du même descripteur
+            let mut table = String::new();
+            let mut ack = |file: &mut std::fs::File| {
+                table.clear();
+                let _ = file.rewind();
+                let _ = file.read_to_string(&mut table);
+            };
+            ack(&mut file);
+            loop {
+                if unsafe { libc::poll(&mut pfd, 1, -1) } < 0 {
+                    return;
+                }
+                // Laisser les montages en rafale finir, puis relire la table (le changement est acquitté par la lecture)
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                ack(&mut file);
+                if mounts.queue(|mut f| f.as_mut().places_changed()).is_err() {
+                    return;
+                }
+            }
+        });
         // Suivi du dossier d'état (inotify, fil bloqué sur read: aucun réveil tant que rien ne change)
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -1065,6 +1126,40 @@ impl cxx_qt::Initialize for Fili {
 }
 
 impl Fili {
+    // Monte ou démonte en arrière-plan (udisksctl): le QML est prévenu par mounted / volumeError, puis placesChanged
+    pub fn mount_volume(self: Pin<&mut Self>, dev: &QString) {
+        let dev = dev.to_string();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let r = volumes::mount(&dev);
+            let _ = qt.queue(move |mut f| match r {
+                Ok(path) => {
+                    f.as_mut().places_changed();
+                    f.as_mut().mounted(&QString::from(&path));
+                }
+                Err(e) => {
+                    let msg = i18n::trf("Cannot mount “%1”: %2", &[&dev, &e]);
+                    f.as_mut().volume_error(&QString::from(&msg));
+                }
+            });
+        });
+    }
+
+    pub fn unmount_volume(self: Pin<&mut Self>, dev: &QString) {
+        let dev = dev.to_string();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let r = volumes::unmount(&dev);
+            let _ = qt.queue(move |mut f| match r {
+                Ok(()) => f.as_mut().places_changed(),
+                Err(e) => {
+                    let msg = i18n::trf("Cannot eject “%1”: %2", &[&dev, &e]);
+                    f.as_mut().volume_error(&QString::from(&msg));
+                }
+            });
+        });
+    }
+
     pub fn tr(&self, text: &QString) -> QString {
         QString::from(i18n::tr(&text.to_string()))
     }
@@ -1074,15 +1169,16 @@ impl Fili {
         let (places, devices) = (i18n::tr("Places"), i18n::tr("Devices"));
         let mut seen = vec![home.clone()];
         // (section, nom, chemin, nom d'icône)
-        let mut items: Vec<(&str, String, String, &str)> = vec![(
+        let mut items: Vec<(&str, String, String, &str, String)> = vec![(
             places,
             Path::new(&home).file_name().map_or("~".into(), |n| n.to_string_lossy().into_owned()),
             home.clone(),
             "user-home",
+            String::new(),
         )];
         let name = |p: &str| Path::new(p).file_name().map_or(p.to_string(), |n| n.to_string_lossy().into_owned());
         for (p, icon) in xdg_dirs() {
-            items.push((places, name(&p), p.clone(), icon));
+            items.push((places, name(&p), p.clone(), icon, String::new()));
             seen.push(p);
         }
         // Signets GTK (partagés avec Thunar et le sélecteur de fichiers): « file:///chemin libellé »
@@ -1095,21 +1191,26 @@ impl Fili {
                 continue;
             }
             let label = if label.is_empty() { name(&p) } else { label.to_string() };
-            items.push((places, label, p.clone(), "folder"));
+            items.push((places, label, p.clone(), "folder", String::new()));
             seen.push(p);
         }
         let _ = ops::ensure_trash(&ops::home_trash());
         let trash = if ops::trash_is_empty() { "user-trash" } else { "user-trash-full" };
-        items.push((places, i18n::tr("Trash").to_string(), ops::trash_files().to_string_lossy().into_owned(), trash));
-        items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "drive-harddisk"));
+        items.push((places, i18n::tr("Trash").to_string(), ops::trash_files().to_string_lossy().into_owned(), trash, String::new()));
+        items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "drive-harddisk", String::new()));
+        // Volumes amovibles: non montés, un clic les monte (path vide, dev renseigné)
+        for v in volumes::list() {
+            items.push((devices, v.name, v.mount.unwrap_or_default(), "drive-removable-media", v.dev));
+        }
         let body: Vec<String> = items
             .iter()
-            .map(|(s, n, p, i)| {
+            .map(|(s, n, p, i, dev)| {
                 format!(
-                    "{{\"section\":{},\"name\":{},\"path\":{},\"mono\":{},\"monoLight\":{}}}",
+                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"mono\":{},\"monoLight\":{}}}",
                     json(s),
                     json(n),
                     json(p),
+                    json(dev),
                     json(&icons::symbolic(i, true)),
                     json(&icons::symbolic(i, false))
                 )

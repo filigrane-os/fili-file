@@ -1,5 +1,5 @@
 // Fenêtre de fili-file: barre d'outils (précédent, suivant, chemin), barre latérale, liste, barre d'état.
-// Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin, Ctrl+H fichiers cachés, F5 relire,
+// Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin, Ctrl+F recherche dans le dossier, Ctrl+H fichiers cachés, F5 relire,
 // Ctrl+C / Ctrl+X / Ctrl+V copier, couper, coller, F2 renommer, Ctrl+Maj+N nouveau dossier, Suppr ou Ctrl+Retour
 // arrière corbeille, Ctrl+Z annuler, Ctrl+A tout sélectionner, Échap annule la copie en cours,
 // Ctrl+Maj+Suppr vide la corbeille, Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
@@ -17,6 +17,22 @@ Window {
     title: folder.path === "/" ? "/" : folder.path.split("/").pop()
 
     FolderModel { id: folder }
+
+    // Message passager (volumes): effacé après 6 s
+    property string notice: ""
+    Timer { id: noticeTimer; interval: 6000; onTriggered: win.notice = "" }
+    Connections {
+        target: Fili
+        function onMounted(path) {
+            win.open(path);
+        }
+        function onVolumeError(message) {
+            win.notice = message;
+            noticeTimer.restart();
+        }
+    }
+    // Un volume branché ou une corbeille vidée en dehors: relire les lieux au retour dans la fenêtre
+    onActiveChanged: if (active) sidebar.reload()
 
     function show(row) {
         if (row >= 0)
@@ -41,13 +57,14 @@ Window {
     Shortcut { sequence: "Ctrl+["; onActivated: win.show(folder.back()) }
     Shortcut { sequence: "Ctrl+]"; onActivated: win.show(folder.forward()) }
     Shortcut { sequence: "Ctrl+L"; onActivated: pathBar.edit() }
+    Shortcut { sequence: "Ctrl+F"; onActivated: searchInput.forceActiveFocus() }
     Shortcut { sequence: "Ctrl+H"; onActivated: win.show(folder.toggleHidden(files.currentIndex)) }
     Shortcut { sequence: "F5"; onActivated: win.show(folder.refresh(files.currentIndex)) }
     Shortcut { sequence: "Ctrl+R"; onActivated: win.show(folder.refresh(files.currentIndex)) }
     Shortcut { sequences: ["Ctrl+W", "Ctrl+Q"]; onActivated: Qt.quit() }
 
     // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
-    readonly property bool typing: files.editing || pathBar.editing || confirm.visible
+    readonly property bool typing: files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible
     function trashSelection() {
         const row = folder.trash(files.targetsText(), files.currentIndex);
         files.reloaded();
@@ -102,9 +119,53 @@ Window {
                 onClicked: win.show(folder.forward())
             }
         }
+        // Recherche dans le dossier affiché (Ctrl+F): filtre les noms, Échap efface
+        Rectangle {
+            id: search
+            anchors { right: parent.right; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            width: 170
+            height: 24
+            radius: FiliTheme.radiusControl
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: searchInput.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+            Text {
+                anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                visible: searchInput.text === ""
+                text: Fili.tr("Search")
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.size
+                color: FiliTheme.ardoise
+            }
+            TextInput {
+                id: searchInput
+                anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+                verticalAlignment: TextInput.AlignVCenter
+                clip: true
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.size
+                color: FiliTheme.brume
+                selectionColor: FiliTheme.nuit4
+                selectedTextColor: FiliTheme.brume
+                onTextChanged: if (text !== folder.filter) folder.setFilter(text)
+                Keys.onEscapePressed: {
+                    text = "";
+                    files.focusList();
+                }
+                Keys.onReturnPressed: files.focusList()
+                Keys.onDownPressed: files.focusList()
+            }
+            Connections {
+                target: folder
+                function onChanged() {
+                    if (folder.filter === "" && searchInput.text !== "")
+                        searchInput.text = "";
+                }
+            }
+        }
         Row {
             id: trashTools
-            anchors { right: parent.right; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            anchors { right: search.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
             spacing: 2
             visible: folder.inTrash
             TextButton {
@@ -118,7 +179,7 @@ Window {
         }
         PathBar {
             id: pathBar
-            anchors { left: nav.right; leftMargin: FiliTheme.space2; right: trashTools.visible ? trashTools.left : parent.right; rightMargin: FiliTheme.space3; top: parent.top; bottom: parent.bottom }
+            anchors { left: nav.right; leftMargin: FiliTheme.space2; right: trashTools.visible ? trashTools.left : search.left; rightMargin: FiliTheme.space3; top: parent.top; bottom: parent.bottom }
             path: folder.path
             onOpen: p => win.open(p)
             onDone: {
@@ -184,10 +245,10 @@ Window {
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideMiddle
-            text: folder.error || folder.status
+            text: folder.error || win.notice || folder.status
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeSmall
-            color: folder.error ? FiliTheme.cendre : FiliTheme.brume2
+            color: folder.error || win.notice ? FiliTheme.cendre : FiliTheme.brume2
         }
         // Opération en cours: nom, avancement, annulation
         Row {
