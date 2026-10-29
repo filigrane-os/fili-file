@@ -1,0 +1,4 @@
+# qmake de Qt 6 (paquet qt6-base-devel): Void le range hors du PATH, cxx-qt le trouve par QMAKE.
+# Pris en compte quand cargo tourne dans ce dossier (bootstrap.sh et distro/build-repo.sh s'y placent).
+[env]
+QMAKE = "/usr/lib/qt6/bin/qmake6"
