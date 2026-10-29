@@ -43,10 +43,10 @@ QtObject {
     readonly property int space6: 24
 
     // Propres à fili-file (décision à valider): ligne de liste et de barre latérale, icône de liste, barres
-    readonly property int rowHeight: 20
-    readonly property int sideRowHeight: 22
+    readonly property int rowHeight: 24
+    readonly property int sideRowHeight: 28
     readonly property int iconSize: 16
     readonly property int toolbarHeight: 38
     readonly property int statusHeight: 22
-    readonly property int sidebarWidth: 180
+    readonly property int sidebarWidth: 200
 }

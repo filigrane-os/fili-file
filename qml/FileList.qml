@@ -103,13 +103,15 @@ Rectangle {
     readonly property int sizeWidth: 84
     readonly property int dateWidth: 150
     readonly property int pad: FiliTheme.space3
+    // Début du nom dans une ligne: marge, icône, écart
+    readonly property int nameInset: FiliTheme.space2 + FiliTheme.iconSize + FiliTheme.space2
 
     // En-têtes de colonnes: petit 11, brume2; colonne de tri en brume avec son sens
     Row {
         id: header
-        x: view.pad
-        width: view.width - 2 * view.pad
-        height: 24
+        x: FiliTheme.space2
+        width: view.width - 2 * FiliTheme.space2
+        height: 26
         Repeater {
             model: [
                 { key: 0, label: Fili.tr("Name"), width: header.width - view.sizeWidth - view.dateWidth, align: Text.AlignLeft },
@@ -123,7 +125,7 @@ Rectangle {
                 width: modelData.width
                 height: header.height
                 Text {
-                    anchors { fill: parent; leftMargin: col.modelData.key === 2 ? FiliTheme.space4 : FiliTheme.iconSize + FiliTheme.space2; rightMargin: col.modelData.key === 1 ? 0 : FiliTheme.space2 }
+                    anchors { fill: parent; leftMargin: col.modelData.key === 2 ? FiliTheme.space4 : view.nameInset; rightMargin: col.modelData.key === 1 ? FiliTheme.space2 : FiliTheme.space2 }
                     verticalAlignment: Text.AlignVCenter
                     horizontalAlignment: col.modelData.align
                     elide: Text.ElideRight
@@ -131,6 +133,13 @@ Rectangle {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeSmall
                     color: col.active ? FiliTheme.brume : FiliTheme.brume2
+                }
+                Rectangle {
+                    visible: col.modelData.key > 0
+                    anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                    width: 1
+                    height: 14
+                    color: FiliTheme.nuit4
                 }
                 MouseArea {
                     anchors.fill: parent
@@ -148,7 +157,7 @@ Rectangle {
 
     ListView {
         id: list
-        anchors { top: header.bottom; topMargin: 1 + FiliTheme.space1; left: parent.left; right: parent.right; bottom: parent.bottom }
+        anchors { top: header.bottom; topMargin: 1 + 2; left: parent.left; right: parent.right; bottom: parent.bottom }
         clip: true
         model: view.folder
         focus: true
@@ -221,11 +230,12 @@ Rectangle {
             readonly property bool current: ListView.isCurrentItem
             readonly property bool sel: view.selected[path] === true
             readonly property bool editing: view.renaming === index
+            readonly property bool stripe: index % 2 === 1
             x: FiliTheme.space2
             width: ListView.view.width - 2 * FiliTheme.space2
             height: FiliTheme.rowHeight
             radius: FiliTheme.radiusControl
-            color: sel || area.containsMouse || drop.containsDrag ? FiliTheme.nuit3 : "transparent"
+            color: sel || drop.containsDrag ? FiliTheme.nuit3 : area.containsMouse ? FiliTheme.nuit2 : stripe ? FiliTheme.alpha(FiliTheme.nuit2, 0.55) : "transparent"
             border.width: drop.containsDrag ? 1 : current && list.activeFocus && Fili.keyNav ? 1 : 0
             border.color: FiliTheme.voile
             readonly property color ink: sel && view.windowActive ? FiliTheme.voile : row.hidden ? FiliTheme.brume2 : FiliTheme.brume
@@ -245,7 +255,7 @@ Rectangle {
 
             Image {
                 id: img
-                x: view.pad - FiliTheme.space2
+                x: FiliTheme.space2
                 anchors.verticalCenter: parent.verticalCenter
                 width: FiliTheme.iconSize
                 height: FiliTheme.iconSize
@@ -314,7 +324,7 @@ Rectangle {
             }
             Text {
                 id: dateText
-                anchors { right: parent.right; rightMargin: view.pad - FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
                 width: view.dateWidth - FiliTheme.space4
                 text: row.modified
                 elide: Text.ElideRight

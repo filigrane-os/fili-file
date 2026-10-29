@@ -1073,15 +1073,16 @@ impl Fili {
         let home = home();
         let (places, devices) = (i18n::tr("Places"), i18n::tr("Devices"));
         let mut seen = vec![home.clone()];
-        let mut items = vec![(
+        // (section, nom, chemin, nom d'icône)
+        let mut items: Vec<(&str, String, String, &str)> = vec![(
             places,
             Path::new(&home).file_name().map_or("~".into(), |n| n.to_string_lossy().into_owned()),
             home.clone(),
-            icons::named("user-home"),
+            "user-home",
         )];
         let name = |p: &str| Path::new(p).file_name().map_or(p.to_string(), |n| n.to_string_lossy().into_owned());
-        for (p, _) in xdg_dirs() {
-            items.push((places, name(&p), p.clone(), icons::folder(&p, special())));
+        for (p, icon) in xdg_dirs() {
+            items.push((places, name(&p), p.clone(), icon));
             seen.push(p);
         }
         // Signets GTK (partagés avec Thunar et le sélecteur de fichiers): « file:///chemin libellé »
@@ -1094,27 +1095,23 @@ impl Fili {
                 continue;
             }
             let label = if label.is_empty() { name(&p) } else { label.to_string() };
-            items.push((places, label, p.clone(), icons::folder(&p, special())));
+            items.push((places, label, p.clone(), "folder"));
             seen.push(p);
         }
         let _ = ops::ensure_trash(&ops::home_trash());
-        let full = !ops::trash_is_empty();
-        items.push((
-            places,
-            i18n::tr("Trash").to_string(),
-            ops::trash_files().to_string_lossy().into_owned(),
-            icons::named(if full { "user-trash-full" } else { "user-trash" }),
-        ));
-        items.push((devices, i18n::tr("Computer").to_string(), "/".into(), icons::named("drive-harddisk")));
+        let trash = if ops::trash_is_empty() { "user-trash" } else { "user-trash-full" };
+        items.push((places, i18n::tr("Trash").to_string(), ops::trash_files().to_string_lossy().into_owned(), trash));
+        items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "drive-harddisk"));
         let body: Vec<String> = items
             .iter()
             .map(|(s, n, p, i)| {
                 format!(
-                    "{{\"section\":{},\"name\":{},\"path\":{},\"icon\":{}}}",
+                    "{{\"section\":{},\"name\":{},\"path\":{},\"mono\":{},\"monoLight\":{}}}",
                     json(s),
                     json(n),
                     json(p),
-                    json(i)
+                    json(&icons::symbolic(i, true)),
+                    json(&icons::symbolic(i, false))
                 )
             })
             .collect();

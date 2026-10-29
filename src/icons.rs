@@ -82,11 +82,31 @@ pub fn named(name: &str) -> String {
     find(&[name])
 }
 
-// Dossiers personnels (XDG) reconnus par leur chemin, sinon dossier générique
+// Glyphe monochrome 16 px de la barre latérale (Papirus-Dark: clair, pour le mode sombre; Papirus: sombre), que le
+// QML teinte; à défaut, l'icône en couleur
+pub fn symbolic(name: &str, dark: bool) -> String {
+    let theme = if dark { "Papirus-Dark" } else { "Papirus" };
+    for ctx in ["places", "devices", "actions"] {
+        let p = format!("/usr/share/icons/{theme}/16x16/{ctx}/{name}.svg");
+        if Path::new(&p).exists() {
+            return format!("file://{p}");
+        }
+    }
+    named(name)
+}
+
+// Dossiers bleus (variante Papirus « folder-blue », comme le Finder): dossiers personnels (XDG) reconnus par leur
+// chemin, sinon dossier générique
 pub fn folder(path: &str, special: &HashMap<String, &'static str>) -> String {
     match special.get(path) {
-        Some(name) => find(&[name, "folder"]),
-        None => find(&["folder"]),
+        Some(name) => {
+            let kind = match name.trim_start_matches("folder-").trim_start_matches("user-") {
+                "download" => "downloads",
+                k => k,
+            };
+            find(&[&format!("folder-blue-{kind}"), name, "folder-blue", "folder"])
+        }
+        None => find(&["folder-blue", "folder"]),
     }
 }
 

@@ -1,6 +1,8 @@
-// Barre latérale: lieux (dossier personnel, dossiers XDG, signets GTK) et appareils, en sections à intertitres
-// (capitales espacées, ardoise, comme PanelSection). Le lieu affiché est sélectionné (fond nuit3, texte voile).
+// Barre latérale à la manière du Finder: lieux (dossier personnel, dossiers XDG, signets GTK, corbeille) et appareils,
+// en sections à intertitres (11 px DemiGras ardoise, sans capitales), glyphes monochromes teintés voile. Le lieu
+// affiché est sélectionné (fond nuit3, texte voile). Décision à valider: lignes de 28, intertitres 11 DemiGras.
 import QtQuick
+import QtQuick.Effects
 import Fili.Files
 
 Rectangle {
@@ -17,7 +19,7 @@ Rectangle {
     ListView {
         id: list
         anchors.fill: parent
-        anchors.topMargin: FiliTheme.space1
+        anchors.topMargin: FiliTheme.space2
         anchors.bottomMargin: FiliTheme.space2
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -29,22 +31,22 @@ Rectangle {
         section.delegate: Text {
             required property string section
             width: ListView.view.width
-            height: FiliTheme.sideRowHeight + FiliTheme.space2
-            leftPadding: FiliTheme.space3
+            height: 30
+            leftPadding: FiliTheme.space4 - 2
             verticalAlignment: Text.AlignBottom
             bottomPadding: FiliTheme.space1
             text: section
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeSmall
-            font.capitalization: Font.AllUppercase
-            font.letterSpacing: FiliTheme.sizeSmall * 0.14
+            font.weight: FiliTheme.weightAccent
             color: FiliTheme.ardoise
         }
         delegate: Rectangle {
             id: row
             required property string name
             required property string path
-            required property string icon
+            required property string mono
+            required property string monoLight
             required property int index
             readonly property bool sel: path === side.current
             x: FiliTheme.space2
@@ -57,19 +59,24 @@ Rectangle {
 
             Image {
                 id: img
-                x: FiliTheme.space1
+                x: FiliTheme.space2
                 anchors.verticalCenter: parent.verticalCenter
-                width: FiliTheme.iconSize
-                height: FiliTheme.iconSize
-                sourceSize: Qt.size(FiliTheme.iconSize * 2, FiliTheme.iconSize * 2)
-                source: row.icon
+                width: 16
+                height: 16
+                sourceSize: Qt.size(32, 32)
+                source: FiliTheme.light ? row.monoLight : row.mono
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    colorization: 1.0
+                    colorizationColor: row.sel ? FiliTheme.voileVif : FiliTheme.voile
+                }
             }
             Text {
-                anchors { left: img.right; leftMargin: FiliTheme.space2 - 2; right: parent.right; rightMargin: FiliTheme.space1; verticalCenter: parent.verticalCenter }
+                anchors { left: img.right; leftMargin: FiliTheme.space2 + 2; right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 text: row.name
                 elide: Text.ElideRight
                 font.family: FiliTheme.font
-                font.pixelSize: FiliTheme.sizeList
+                font.pixelSize: FiliTheme.size
                 color: row.sel ? FiliTheme.voile : FiliTheme.brume
             }
             DropArea {
