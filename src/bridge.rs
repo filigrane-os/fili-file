@@ -47,6 +47,10 @@ pub mod qobject {
         // Le contenu du dossier a changé sur le disque (ou après une opération): la vue remet sa sélection en place
         #[qsignal]
         fn reloaded(self: Pin<&mut FolderModel>);
+        // Miniature de ce fichier prête (génération en arrière-plan)
+        #[qsignal]
+        #[cxx_name = "thumbReady"]
+        fn thumb_ready(self: Pin<&mut FolderModel>, path: &QString);
 
         // Les déplacements rendent la ligne à sélectionner ensuite (-1: rien n'a changé)
         #[qinvokable]
@@ -84,6 +88,9 @@ pub mod qobject {
         fn find_name(self: &FolderModel, name: &QString) -> i32;
         #[qinvokable]
         fn has(self: &FolderModel, path: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pathIsDir"]
+        fn path_is_dir(self: &FolderModel, path: &QString) -> bool;
         // Opérations: les chemins sont séparés par des retours à la ligne; les rendus sont la ligne à sélectionner
         // ensuite (-1: aucune). Les erreurs vont dans la barre d'état (error).
         #[qinvokable]
@@ -112,6 +119,21 @@ pub mod qobject {
         fn new_folder(self: Pin<&mut FolderModel>) -> i32;
         #[qinvokable]
         fn undo(self: Pin<&mut FolderModel>);
+        // Applications pour ouvrir ce fichier, en JSON: [{id, name}] (la préférée d'abord)
+        #[qinvokable]
+        #[cxx_name = "openWithList"]
+        fn open_with_list(self: &FolderModel, path: &QString) -> QString;
+        #[qinvokable]
+        #[cxx_name = "openWith"]
+        fn open_with(self: &FolderModel, id: &QString, path: &QString);
+        // Tous les chemins sont des archives que extract sait ouvrir
+        #[qinvokable]
+        #[cxx_name = "allArchives"]
+        fn all_archives(self: &FolderModel, paths: &QString) -> bool;
+        #[qinvokable]
+        fn extract(self: Pin<&mut FolderModel>, paths: &QString);
+        #[qinvokable]
+        fn compress(self: Pin<&mut FolderModel>, paths: &QString);
         #[qinvokable]
         fn cancel(self: Pin<&mut FolderModel>);
     }
@@ -198,7 +220,7 @@ pub mod qobject {
     impl cxx_qt::Threading for FolderModel {}
 }
 
-use crate::{fs, i18n, icons, ops, volumes, watch::Watcher};
+use crate::{apps, fs, i18n, icons, ops, volumes, watch::Watcher};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
@@ -223,6 +245,9 @@ const ROLE_SIZE: i32 = 259;
 const ROLE_DATE: i32 = 260;
 const ROLE_ICON: i32 = 261;
 const ROLE_HIDDEN: i32 = 262;
+const ROLE_THUMB: i32 = 263;
+const ROLE_THUMB_READY: i32 = 264;
+const ROLE_IMAGE: i32 = 265;
 
 fn home() -> String {
     env::var("HOME").unwrap_or_else(|_| "/".into())
@@ -322,6 +347,28 @@ fn spawn(program: &str, arg: &str, dir: &Path) {
     if let Ok(mut child) = child {
         std::thread::spawn(move || child.wait());
     }
+}
+
+// Miniature d'un PDF: première page par pdftoppm, gardée dans ~/.cache/filigrane/thumbs (nom = chemin, date, taille)
+fn thumb_path(e: &fs::Entry) -> PathBuf {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (&e.path, e.mtime, e.size).hash(&mut h);
+    let cache = env::var("XDG_CACHE_HOME").unwrap_or_else(|_| format!("{}/.cache", home()));
+    PathBuf::from(cache).join(format!("filigrane/thumbs/{:016x}.png", h.finish()))
+}
+
+static THUMBING: AtomicBool = AtomicBool::new(false);
+
+// Nom sans extension d'archive reconnue (None: ce n'est pas une archive)
+fn archive_stem(name: &str) -> Option<String> {
+    let lower = name.to_lowercase();
+    for ext in [".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tgz", ".tar", ".zip", ".7z", ".rar", ".iso"] {
+        if lower.ends_with(ext) && name.len() > ext.len() {
+            return Some(name[..name.len() - ext.len()].to_string());
+        }
+    }
+    None
 }
 
 fn bin(name: &str) -> String {
@@ -463,6 +510,42 @@ impl FolderModel {
         }
         self.as_mut().set_status();
         self.as_mut().changed();
+        self.as_mut().queue_thumbs();
+    }
+
+    // Génère en arrière-plan les miniatures PDF manquantes du dossier (40 au plus, une série à la fois)
+    fn queue_thumbs(self: Pin<&mut Self>) {
+        let todo: Vec<(String, PathBuf)> = self
+            .rows
+            .iter()
+            .filter(|e| icons::is_pdf(e))
+            .map(|e| (e.path.clone(), thumb_path(e)))
+            .filter(|(_, t)| !t.exists())
+            .take(40)
+            .collect();
+        if todo.is_empty() || THUMBING.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            for (src, out) in todo {
+                let Some(dir) = out.parent() else { continue };
+                let _ = std::fs::create_dir_all(dir);
+                let stem = out.with_extension("");
+                let ok = Command::new("pdftoppm")
+                    .args(["-png", "-f", "1", "-l", "1", "-scale-to", "96", "-singlefile", &src])
+                    .arg(&stem)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .is_ok_and(|s| s.success());
+                if ok {
+                    let _ = qt.queue(move |mut m| m.as_mut().thumb_ready(&QString::from(&src)));
+                }
+            }
+            THUMBING.store(false, Ordering::SeqCst);
+        });
     }
 
     // Relit le dossier affiché sur place; false si on ne peut plus le lire
@@ -506,6 +589,7 @@ impl FolderModel {
                 r.error = QString::default();
                 r.filter = QString::default();
                 self.as_mut().rebuild();
+                self.as_mut().queue_thumbs();
                 let row = select.map_or(0, |n| self.row_of(n));
                 self.as_mut().update_history_flags();
                 Ok(row)
@@ -692,6 +776,11 @@ impl FolderModel {
         self.rows.iter().any(|e| e.path == p)
     }
 
+    pub fn path_is_dir(&self, path: &QString) -> bool {
+        let p = path.to_string();
+        self.rows.iter().any(|e| e.path == p && e.is_dir)
+    }
+
     pub fn uris(&self, paths: &QString) -> QString {
         let list: Vec<String> = paths_of(paths).iter().map(|p| format!("file://{}", ops::encode(p))).collect();
         QString::from(&list.join("\r\n"))
@@ -865,6 +954,165 @@ impl FolderModel {
         });
     }
 
+    pub fn open_with_list(&self, path: &QString) -> QString {
+        let path = path.to_string();
+        let list = icons::mime_type(&base(&path)).map(|m| apps::for_mime(&m)).unwrap_or_default();
+        let body: Vec<String> = list.iter().map(|a| format!("{{\"id\":{},\"name\":{}}}", json(&a.id), json(&a.name))).collect();
+        QString::from(&format!("[{}]", body.join(",")))
+    }
+
+    pub fn open_with(&self, id: &QString, path: &QString) {
+        let (id, path) = (id.to_string(), path.to_string());
+        let Some(app) = apps::desktop(&id) else { return };
+        let argv = apps::command(&app, &path);
+        let Some((program, args)) = argv.split_first() else { return };
+        let child = Command::new(program)
+            .args(args)
+            .current_dir(&self.dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .process_group(0)
+            .spawn();
+        if let Ok(mut child) = child {
+            std::thread::spawn(move || child.wait());
+        }
+    }
+
+    pub fn all_archives(&self, paths: &QString) -> bool {
+        let list = paths_of(paths);
+        !list.is_empty() && list.iter().all(|p| archive_stem(&base(p)).is_some())
+    }
+
+    pub fn extract(self: Pin<&mut Self>, paths: &QString) {
+        self.start_archive(paths_of(paths), false);
+    }
+
+    pub fn compress(self: Pin<&mut Self>, paths: &QString) {
+        self.start_archive(paths_of(paths), true);
+    }
+
+    // Extraction (tar, 7z) ou compression (zip) en arrière-plan, annulable; le résultat se défait (corbeille)
+    fn start_archive(mut self: Pin<&mut Self>, items: Vec<String>, compress: bool) {
+        if items.is_empty() {
+            return;
+        }
+        if self.busy {
+            return self.fail(i18n::tr("Another operation is in progress").into());
+        }
+        if self.in_trash {
+            return self.fail(i18n::tr("Nothing can be created in the Trash").into());
+        }
+        let what = if items.len() == 1 { base(&items[0]) } else { fs::count(items.len()) };
+        let label = if compress { i18n::trf("Compressing %1", &[&what]) } else { i18n::trf("Extracting %1", &[&what]) };
+        let cancel = Arc::new(AtomicBool::new(false));
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.busy = true;
+            r.progress = -1.0;
+            r.job = QString::from(&label);
+            r.error = QString::default();
+            r.cancel = cancel.clone();
+        }
+        self.as_mut().changed();
+        let dir = PathBuf::from(&self.dir);
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let msg = |name: &str, why: &str| {
+                if compress {
+                    i18n::trf("Cannot compress “%1”: %2", &[&name, &why])
+                } else {
+                    i18n::trf("Cannot extract “%1”: %2", &[&name, &why])
+                }
+            };
+            let (mut created, mut error): (Vec<PathBuf>, Option<String>) = (Vec::new(), None);
+            // Jobs: (programme, arguments, dossier ou fichier créé, nom pour les erreurs)
+            let mut jobs: Vec<(&str, Vec<String>, PathBuf, String)> = Vec::new();
+            if compress {
+                let first = base(&items[0]);
+                let name = if items.len() == 1 { first } else { i18n::tr("Archive").to_string() };
+                let out = ops::unique(&dir, &format!("{name}.zip"), "", false);
+                let mut args = vec!["-r".to_string(), "-q".to_string(), out.to_string_lossy().into_owned()];
+                args.extend(items.iter().map(|p| base(p)));
+                jobs.push(("zip", args, out, name));
+            } else {
+                for item in &items {
+                    let name = base(item);
+                    let Some(stem) = archive_stem(&name) else { continue };
+                    let out = ops::unique(&dir, &stem, "", true);
+                    let out_s = out.to_string_lossy().into_owned();
+                    let (program, args) = if name.contains(".tar") || name.ends_with(".tgz") {
+                        ("tar", vec!["-xf".to_string(), item.clone(), "-C".to_string(), out_s])
+                    } else {
+                        ("7z", vec!["x".to_string(), "-y".to_string(), format!("-o{out_s}"), item.clone()])
+                    };
+                    if !compress && std::fs::create_dir(&out).is_err() {
+                        error = Some(msg(&name, i18n::tr("permission denied")));
+                        break;
+                    }
+                    jobs.push((program, args, out, name));
+                }
+            }
+            for (program, args, out, name) in jobs {
+                let child = Command::new(program)
+                    .args(&args)
+                    .current_dir(&dir)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn();
+                let mut child = match child {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let _ = ops::remove_tree(&out);
+                        error = Some(msg(&name, &fs::error(&e)));
+                        break;
+                    }
+                };
+                let ok = loop {
+                    if cancel.load(Ordering::Relaxed) {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        break None;
+                    }
+                    match child.try_wait() {
+                        Ok(Some(status)) => break Some(status.success()),
+                        Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
+                        Err(_) => break Some(false),
+                    }
+                };
+                match ok {
+                    Some(true) => created.push(out),
+                    Some(false) => {
+                        let _ = ops::remove_tree(&out);
+                        let why = i18n::tr("the tool reported an error");
+                        error = Some(msg(&name, why));
+                        break;
+                    }
+                    None => {
+                        let _ = ops::remove_tree(&out);
+                        break;
+                    }
+                }
+            }
+            let _ = qt.queue(move |mut m| {
+                {
+                    let mut r = m.as_mut().rust_mut();
+                    r.busy = false;
+                    r.progress = 0.0;
+                    r.job = QString::default();
+                    r.error = QString::from(&error.unwrap_or_default());
+                }
+                if !created.is_empty() {
+                    m.as_mut().push_undo(Undo::Created(created));
+                }
+                m.as_mut().reload_rows();
+                m.as_mut().changed();
+                m.as_mut().reloaded();
+            });
+        });
+    }
+
     pub fn cancel(self: Pin<&mut Self>) {
         self.cancel.store(true, Ordering::Relaxed);
     }
@@ -1013,6 +1261,9 @@ impl FolderModel {
                 icons::file(e)
             })),
             ROLE_HIDDEN => QVariant::from(&e.hidden()),
+            ROLE_THUMB => QVariant::from(&QString::from(&if icons::is_pdf(e) { format!("file://{}", thumb_path(e).display()) } else { String::new() })),
+            ROLE_THUMB_READY => QVariant::from(&(icons::is_pdf(e) && thumb_path(e).exists())),
+            ROLE_IMAGE => QVariant::from(&icons::is_image(e)),
             _ => QVariant::default(),
         }
     }
@@ -1027,6 +1278,9 @@ impl FolderModel {
             (ROLE_DATE, "modified"),
             (ROLE_ICON, "icon"),
             (ROLE_HIDDEN, "hidden"),
+            (ROLE_THUMB, "thumb"),
+            (ROLE_THUMB_READY, "thumbReady"),
+            (ROLE_IMAGE, "isImage"),
         ] {
             roles.insert(role, QByteArray::from(name));
         }
@@ -1166,7 +1420,7 @@ impl Fili {
 
     pub fn places(&self) -> QString {
         let home = home();
-        let (places, devices) = (i18n::tr("Places"), i18n::tr("Devices"));
+        let (places, devices) = (i18n::tr("Favorites"), i18n::tr("Locations"));
         let mut seen = vec![home.clone()];
         // (section, nom, chemin, nom d'icône)
         let mut items: Vec<(&str, String, String, &str, String)> = vec![(
@@ -1191,17 +1445,18 @@ impl Fili {
                 continue;
             }
             let label = if label.is_empty() { name(&p) } else { label.to_string() };
-            items.push((places, label, p.clone(), "folder", String::new()));
+            let icon = if label.to_lowercase().contains("icloud") { "folder-cloud" } else { "folder" };
+            items.push((places, label, p.clone(), icon, String::new()));
             seen.push(p);
         }
-        let _ = ops::ensure_trash(&ops::home_trash());
-        let trash = if ops::trash_is_empty() { "user-trash" } else { "user-trash-full" };
-        items.push((places, i18n::tr("Trash").to_string(), ops::trash_files().to_string_lossy().into_owned(), trash, String::new()));
-        items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "drive-harddisk", String::new()));
+        items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "computer", String::new()));
         // Volumes amovibles: non montés, un clic les monte (path vide, dev renseigné)
         for v in volumes::list() {
             items.push((devices, v.name, v.mount.unwrap_or_default(), "drive-removable-media", v.dev));
         }
+        let _ = ops::ensure_trash(&ops::home_trash());
+        let trash = if ops::trash_is_empty() { "user-trash" } else { "user-trash-full" };
+        items.push((devices, i18n::tr("Trash").to_string(), ops::trash_files().to_string_lossy().into_owned(), trash, String::new()));
         let body: Vec<String> = items
             .iter()
             .map(|(s, n, p, i, dev)| {
@@ -1241,6 +1496,14 @@ mod tests {
         assert_eq!(normalize("file:///tmp/a%20b", "/"), PathBuf::from("/tmp/a b"));
         assert_eq!(normalize("../x", "/usr/share"), PathBuf::from("/usr/x"));
         assert_eq!(normalize("/..", "/"), PathBuf::from("/"));
+    }
+
+    #[test]
+    fn archive_names() {
+        assert_eq!(archive_stem("photos.TAR.GZ").as_deref(), Some("photos"));
+        assert_eq!(archive_stem("a.b.zip").as_deref(), Some("a.b"));
+        assert_eq!(archive_stem(".zip"), None);
+        assert_eq!(archive_stem("notes.txt"), None);
     }
 
     #[test]

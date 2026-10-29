@@ -11,6 +11,7 @@ fn main() {
                 "qml/FileList.qml",
                 "qml/IconButton.qml",
                 "qml/TextButton.qml",
+                "qml/ContextMenu.qml",
                 "qml/FocusRing.qml",
                 "qml/KineticScroll.qml",
             ])

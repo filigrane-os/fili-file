@@ -110,7 +110,28 @@ pub fn folder(path: &str, special: &HashMap<String, &'static str>) -> String {
     }
 }
 
+// Type MIME d'un fichier d'après son extension
+pub fn mime_type(name: &str) -> Option<String> {
+    let ext = name.rsplit_once('.').filter(|(stem, _)| !stem.is_empty())?.1.to_lowercase();
+    mime().by_ext.get(&ext).cloned()
+}
+
+const IMAGES: [&str; 8] = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
+
+// Miniature d'une image: le fichier lui-même, que Qt décode à la taille de l'icône (pas de cache ni de processus);
+// au-delà de 20 Mio l'icône du type
+pub fn is_image(e: &Entry) -> bool {
+    e.size < 20 << 20 && e.name.rsplit_once('.').is_some_and(|(_, x)| IMAGES.contains(&x.to_lowercase().as_str()))
+}
+
+pub fn is_pdf(e: &Entry) -> bool {
+    e.name.to_lowercase().ends_with(".pdf")
+}
+
 pub fn file(e: &Entry) -> String {
+    if is_image(e) {
+        return format!("file://{}", e.path);
+    }
     let m = mime();
     let ext = e.name.rsplit_once('.').filter(|(stem, _)| !stem.is_empty()).map(|(_, x)| x.to_lowercase());
     let t = ext.and_then(|x| m.by_ext.get(&x));

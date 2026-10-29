@@ -15,6 +15,8 @@ Rectangle {
     signal openRow(int row)
     signal goUp()
     signal dropped(string urls, string dest, bool copy)
+    // Clic droit (ou touche Menu): position dans cette vue; row = -1 hors des lignes
+    signal context(real x, real y)
 
     color: FiliTheme.nuit
 
@@ -22,6 +24,16 @@ Rectangle {
     property var selected: ({})
     property int anchor: 0
     // Ligne en cours de renommage (-1: aucune)
+    // Miniatures PDF prêtes depuis l'ouverture du dossier: chemin -> true
+    property var ready: ({})
+    Connections {
+        target: folder
+        function onThumbReady(path) {
+            const r = Object.assign({}, view.ready);
+            r[path] = true;
+            view.ready = r;
+        }
+    }
     property int renaming: -1
     readonly property bool editing: renaming >= 0
 
@@ -168,6 +180,18 @@ Rectangle {
         reuseItems: true
         KineticScroll {}
 
+        MouseArea {
+            id: bgArea
+            z: -2
+            width: list.width
+            height: Math.max(list.height, list.contentHeight)
+            acceptedButtons: Qt.RightButton
+            onPressed: e => {
+                view.pick(-1);
+                const p = bgArea.mapToItem(view, e.x, e.y);
+                view.context(p.x, p.y);
+            }
+        }
         // Déposer dans le dossier affiché (hors des lignes de dossier)
         DropArea {
             z: -1
@@ -198,6 +222,8 @@ Rectangle {
                 move(currentIndex - 1);
             else if (e.key === Qt.Key_Down)
                 move(currentIndex + 1);
+            else if (e.key === Qt.Key_Menu)
+                view.context(FiliTheme.space6, Math.max(0, currentIndex) * FiliTheme.rowHeight - list.contentY + FiliTheme.rowHeight);
             else if (e.key === Qt.Key_Space && list.typed === "")
                 view.folder.quicklook(currentIndex);
             else if (e.key === Qt.Key_Home)
@@ -227,6 +253,9 @@ Rectangle {
             required property string modified
             required property string icon
             required property bool hidden
+            required property string thumb
+            required property bool thumbReady
+            required property bool isImage
             readonly property bool current: ListView.isCurrentItem
             readonly property bool sel: view.selected[path] === true
             readonly property bool editing: view.renaming === index
@@ -263,6 +292,17 @@ Rectangle {
                 source: row.icon
                 asynchronous: true
                 opacity: row.hidden ? 0.6 : 1
+                fillMode: Image.PreserveAspectFit
+            }
+            // Miniature de PDF (première page), par-dessus l'icône du type
+            Image {
+                anchors.fill: img
+                visible: status === Image.Ready
+                source: row.thumb !== "" && (row.thumbReady || view.ready[row.path]) ? row.thumb + "?" + (view.ready[row.path] ? 1 : 0) : ""
+                sourceSize: Qt.size(FiliTheme.iconSize * 2, FiliTheme.iconSize * 2)
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                cache: false
             }
             Text {
                 anchors { left: img.right; leftMargin: FiliTheme.space2; right: sizeText.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
@@ -360,8 +400,18 @@ Rectangle {
                 hoverEnabled: true
                 drag.target: ghost
                 drag.threshold: 8
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 property bool collapse: false
                 onPressed: e => {
+                    if (e.button === Qt.RightButton) {
+                        if (!row.sel) {
+                            list.currentIndex = row.index;
+                            view.pick(row.index);
+                        }
+                        const p = area.mapToItem(view, e.x, e.y);
+                        view.context(p.x, p.y);
+                        return;
+                    }
                     Fili.keyNav = false;
                     view.renaming = -1;
                     collapse = false;

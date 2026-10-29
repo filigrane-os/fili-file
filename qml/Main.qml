@@ -64,7 +64,7 @@ Window {
     Shortcut { sequences: ["Ctrl+W", "Ctrl+Q"]; onActivated: Qt.quit() }
 
     // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
-    readonly property bool typing: files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible
+    readonly property bool typing: menu.visible || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible
     function trashSelection() {
         const row = folder.trash(files.targetsText(), files.currentIndex);
         files.reloaded();
@@ -79,6 +79,84 @@ Window {
     }
     function putBack() {
         win.show(folder.putBack(files.targetsText(), files.currentIndex));
+    }
+    // Menu contextuel: entrées selon la sélection (aucune: le dossier lui-même)
+    function openMenu(p) {
+        const t = files.targets().filter(path => files.selected[path]);
+        const one = t.length === 1;
+        const trash = folder.inTrash;
+        const archives = t.length > 0 && folder.allArchives(t.join("\n"));
+        const list = [];
+        if (t.length > 0) {
+            list.push({ id: "open", label: Fili.tr("Open"), enabled: one });
+            if (one && !folder.pathIsDir(t[0])) {
+                const apps = JSON.parse(folder.openWithList(t[0]));
+                list.push({
+                    id: "with", label: Fili.tr("Open With"),
+                    children: apps.length > 0 ? apps.map(a => ({ id: "app:" + a.id, label: a.name })) : [{ id: "", label: Fili.tr("No application"), enabled: false }]
+                });
+            }
+            list.push({ id: "quicklook", label: Fili.tr("Quick Look"), hint: "Space", enabled: one });
+            list.push({ separator: true });
+            list.push({ id: "copy", label: Fili.tr("Copy"), hint: "Ctrl+C" });
+            if (!trash)
+                list.push({ id: "cut", label: Fili.tr("Cut"), hint: "Ctrl+X" });
+        }
+        if (!trash)
+            list.push({ id: "paste", label: Fili.tr("Paste"), hint: "Ctrl+V", enabled: folder.canPaste });
+        if (t.length > 0) {
+            list.push({ separator: true });
+            if (!trash)
+                list.push({ id: "rename", label: Fili.tr("Rename"), hint: "F2", enabled: one });
+            if (trash)
+                list.push({ id: "putback", label: Fili.tr("Put Back") });
+            else
+                list.push({ id: "trash", label: Fili.tr("Move to Trash"), hint: "Del" });
+            if (!trash) {
+                list.push({ separator: true });
+                if (archives)
+                    list.push({ id: "extract", label: Fili.tr("Extract Here") });
+                list.push({ id: "compress", label: Fili.tr("Compress") });
+            }
+        }
+        if (!trash) {
+            list.push({ separator: true });
+            list.push({ id: "newfolder", label: Fili.tr("New Folder"), hint: "Ctrl+Shift+N" });
+        } else {
+            list.push({ separator: true });
+            list.push({ id: "empty", label: Fili.tr("Empty Trash") });
+        }
+        menu.open(p.x, p.y, list);
+    }
+    function menuAction(id) {
+        const t = files.targetsText();
+        if (id === "open")
+            win.show(folder.activate(files.currentIndex));
+        else if (id.startsWith("app:"))
+            folder.openWith(id.slice(4), files.targets()[0]);
+        else if (id === "quicklook")
+            folder.quicklook(files.currentIndex);
+        else if (id === "copy")
+            folder.copy(t);
+        else if (id === "cut")
+            folder.cut(t);
+        else if (id === "paste")
+            folder.paste();
+        else if (id === "rename")
+            files.startRename();
+        else if (id === "trash")
+            win.trashSelection();
+        else if (id === "putback")
+            win.putBack();
+        else if (id === "extract")
+            folder.extract(t);
+        else if (id === "compress")
+            folder.compress(t);
+        else if (id === "newfolder")
+            win.newFolder();
+        else if (id === "empty")
+            confirm.visible = true;
+        files.focusList();
     }
     Shortcut { sequence: "Ctrl+C"; enabled: !win.typing; onActivated: folder.copy(files.targetsText()) }
     Shortcut { sequence: "Ctrl+X"; enabled: !win.typing; onActivated: folder.cut(files.targetsText()) }
@@ -103,6 +181,17 @@ Window {
         width: parent.width
         height: FiliTheme.toolbarHeight
         color: FiliTheme.nuit
+        // Boutons précédent/suivant réunis dans une capsule
+        Rectangle {
+            x: nav.x - 4
+            anchors.verticalCenter: nav.verticalCenter
+            width: nav.width + 8
+            height: 28
+            radius: 8
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+        }
         Row {
             id: nav
             x: FiliTheme.space2
@@ -179,7 +268,7 @@ Window {
         }
         PathBar {
             id: pathBar
-            anchors { left: nav.right; leftMargin: FiliTheme.space2; right: trashTools.visible ? trashTools.left : search.left; rightMargin: FiliTheme.space3; top: parent.top; bottom: parent.bottom }
+            anchors { left: nav.right; leftMargin: FiliTheme.space3; right: trashTools.visible ? trashTools.left : search.left; rightMargin: FiliTheme.space3; top: parent.top; bottom: parent.bottom }
             path: folder.path
             onOpen: p => win.open(p)
             onDone: {
@@ -219,6 +308,11 @@ Window {
         onOpenRow: row => win.show(folder.activate(row))
         onGoUp: win.show(folder.up())
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
+        onContext: (x, y) => win.openMenu(files.mapToItem(null, x, y))
+    }
+    ContextMenu {
+        id: menu
+        onActivated: id => win.menuAction(id)
     }
     Connections {
         target: folder
