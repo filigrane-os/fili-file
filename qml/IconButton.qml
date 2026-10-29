@@ -9,7 +9,7 @@ Rectangle {
     property bool enabledState: true
     signal clicked()
 
-    width: 26
+    width: 28
     height: 24
     radius: FiliTheme.radiusControl
     color: !enabledState ? "transparent" : area.pressed ? FiliTheme.nuit4 : area.containsMouse ? FiliTheme.nuit3 : "transparent"

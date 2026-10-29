@@ -15,6 +15,11 @@ pub struct Entry {
     pub size: u64,
     pub mtime: i64,
     pub exec: bool,
+    // Création (date de naissance du fichier, à défaut la modification), droits (rwxr-xr-x), propriétaire, type lisible
+    pub created: i64,
+    pub mode: u32,
+    pub uid: u32,
+    pub kind: String,
 }
 
 impl Entry {
@@ -37,6 +42,10 @@ pub fn list(dir: &Path) -> io::Result<Vec<Entry>> {
             size: m.len(),
             mtime: m.mtime(),
             exec: m.is_file() && m.permissions().mode() & 0o111 != 0,
+            created: m.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(m.mtime(), |d| d.as_secs() as i64),
+            mode: m.permissions().mode() & 0o777,
+            uid: m.uid(),
+            kind: crate::icons::kind(&e.file_name().to_string_lossy(), m.is_dir()),
         });
     }
     Ok(out)
@@ -47,6 +56,10 @@ pub enum Key {
     Name,
     Size,
     Date,
+    Kind,
+    Created,
+    Permissions,
+    Owner,
 }
 
 impl Key {
@@ -54,6 +67,10 @@ impl Key {
         match i {
             1 => Key::Size,
             2 => Key::Date,
+            3 => Key::Kind,
+            4 => Key::Created,
+            5 => Key::Permissions,
+            6 => Key::Owner,
             _ => Key::Name,
         }
     }
@@ -66,12 +83,38 @@ pub fn sort(v: &mut [Entry], key: Key, desc: bool) {
             let o = match key {
                 Key::Size if !a.is_dir => a.size.cmp(&b.size),
                 Key::Date => a.mtime.cmp(&b.mtime),
+                Key::Kind => natural(&a.kind, &b.kind),
+                Key::Created => a.created.cmp(&b.created),
+                Key::Permissions => a.mode.cmp(&b.mode),
+                Key::Owner => natural(&owner(a.uid), &owner(b.uid)),
                 _ => Ordering::Equal,
             }
             .then_with(|| natural(&a.name, &b.name));
             if desc { o.reverse() } else { o }
         })
     });
+}
+
+// Nom du propriétaire (passwd), gardé en mémoire; à défaut le numéro
+pub fn owner(uid: u32) -> String {
+    static CACHE: std::sync::Mutex<Vec<(u32, String)>> = std::sync::Mutex::new(Vec::new());
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, n)) = cache.iter().find(|(u, _)| *u == uid) {
+        return n.clone();
+    }
+    let p = unsafe { libc::getpwuid(uid) };
+    let name = if p.is_null() {
+        uid.to_string()
+    } else {
+        unsafe { std::ffi::CStr::from_ptr((*p).pw_name) }.to_string_lossy().into_owned()
+    };
+    cache.push((uid, name.clone()));
+    name
+}
+
+// Droits à la façon de ls: rwxr-xr-x
+pub fn permissions(mode: u32) -> String {
+    "rwxrwxrwx".chars().enumerate().map(|(i, c)| if mode & (0o400 >> i) != 0 { c } else { '-' }).collect()
 }
 
 // Ordre naturel: sans casse ni accents, nombres comparés par valeur (« photo 2 » avant « photo 10 »)
@@ -205,7 +248,7 @@ mod tests {
     use super::*;
 
     fn e(name: &str, is_dir: bool, size: u64, mtime: i64) -> Entry {
-        Entry { name: name.into(), path: format!("/x/{name}"), is_dir, size, mtime, exec: false }
+        Entry { name: name.into(), path: format!("/x/{name}"), is_dir, size, mtime, exec: false, created: mtime, mode: 0o644, uid: 0, kind: String::new() }
     }
 
     fn names(v: &[Entry]) -> Vec<&str> {
@@ -237,6 +280,12 @@ mod tests {
         assert!(contains("Écoles-2024.PDF", "ecole"));
         assert!(contains("Écoles-2024.PDF", "pdf"));
         assert!(!contains("notes.txt", "pdf"));
+    }
+
+    #[test]
+    fn permissions_like_ls() {
+        assert_eq!(permissions(0o755), "rwxr-xr-x");
+        assert_eq!(permissions(0o640), "rw-r-----");
     }
 
     #[test]

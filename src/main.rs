@@ -8,15 +8,25 @@ mod fs;
 mod i18n;
 mod icons;
 mod ops;
+mod pick;
+mod portal;
 mod volumes;
 mod watch;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 
 fn main() {
+    // Service du portail FileChooser: sans interface, lancé par D-Bus (voir portal.rs)
+    if std::env::args().any(|a| a == "--portal") {
+        if let Err(e) = portal::serve() {
+            eprintln!("fili-file --portal: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let mut app = QGuiApplication::new();
     // app-id Wayland (règles niri, fili-file.desktop)
-    QGuiApplication::set_desktop_file_name(&QString::from("fili-file"));
+    QGuiApplication::set_desktop_file_name(&QString::from(if pick::get().is_some() { "fili-file-picker" } else { "fili-file" }));
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {
         engine.load(&QUrl::from("qrc:/qt/qml/Fili/Files/qml/Main.qml"));

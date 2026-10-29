@@ -1,7 +1,8 @@
 // Menu contextuel (clic droit ou touche Menu): liste à rayon 6, lignes de 24, survol nuit3, entrée désactivée en
 // ardoise, séparateurs, raccourci à droite. Une entrée peut porter un sous-menu (children) qui s'ouvre à droite.
 // Flèches ↑/↓ et Entrée, → ouvre le sous-menu, ← le ferme, Échap ou clic ailleurs ferme.
-// items: [{ id, label, hint, enabled, separator, children: [{ id, label }] }]
+// items: [{ id, label, hint, enabled, separator, checked, children: [{ id, label }] }]; si une entrée porte « checked »,
+// toutes les lignes gagnent une gouttière à gauche pour la coche
 import QtQuick
 import Fili.Files
 
@@ -99,6 +100,8 @@ Item {
         color: FiliTheme.nuit2
         border.width: 1
         border.color: FiliTheme.nuit4
+        // Gouttière des coches (colonnes affichées...)
+        readonly property bool gutter: model.some(i => i.checked !== undefined)
         Column {
             id: col
             x: FiliTheme.space1
@@ -125,12 +128,20 @@ Item {
                         radius: FiliTheme.radiusControl
                         color: it.on && (p.cur === it.index) ? FiliTheme.nuit3 : "transparent"
                         Text {
-                            anchors { left: parent.left; leftMargin: FiliTheme.space2; right: hint.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                            anchors { left: parent.left; leftMargin: FiliTheme.space2 + (p.gutter ? 18 : 0); right: hint.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                             text: it.modelData.label || ""
                             elide: Text.ElideRight
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.size
                             color: it.on ? FiliTheme.brume : FiliTheme.ardoise
+                        }
+                        Text {
+                            visible: it.modelData.checked === true
+                            anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                            text: "✓"
+                            font.family: FiliTheme.font
+                            font.pixelSize: FiliTheme.size
+                            color: it.on ? FiliTheme.voile : FiliTheme.ardoise
                         }
                         Text {
                             id: hint

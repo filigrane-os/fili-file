@@ -114,11 +114,32 @@ Rectangle {
         list.forceActiveFocus();
     }
 
-    readonly property int sizeWidth: 84
-    readonly property int dateWidth: 150
+    // Colonnes après le nom: affichées selon le choix de l'utilisateur (clic droit sur un en-tête), dans cet ordre
+    readonly property var allColumns: [
+        { key: "size", sort: 1, role: "size", label: Fili.tr("Size"), width: 96, align: Text.AlignRight },
+        { key: "modified", sort: 2, role: "modified", label: Fili.tr("Modified"), width: 160, align: Text.AlignLeft },
+        { key: "kind", sort: 3, role: "kind", label: Fili.tr("Kind"), width: 150, align: Text.AlignLeft },
+        { key: "created", sort: 4, role: "created", label: Fili.tr("Created"), width: 160, align: Text.AlignLeft },
+        { key: "permissions", sort: 5, role: "perms", label: Fili.tr("Permissions"), width: 110, align: Text.AlignLeft },
+        { key: "owner", sort: 6, role: "owner", label: Fili.tr("Owner"), width: 100, align: Text.AlignLeft }
+    ]
+    property var enabledKeys: Fili.columns().split(",")
+    readonly property var cols: allColumns.filter(c => enabledKeys.indexOf(c.key) >= 0)
+    readonly property int colsWidth: cols.reduce((a, c) => a + c.width, 0)
+    // Fenêtre étroite: les colonnes se resserrent pour garder 200 px au nom (jusqu'à 35 % de leur largeur)
+    readonly property real colScale: colsWidth > 0 ? Math.max(0.35, Math.min(1, (view.width - 2 * FiliTheme.space2 - 200) / colsWidth)) : 1
+    function colWidth(c) {
+        return Math.round(c.width * colScale);
+    }
+    function setColumns(keys) {
+        Fili.setColumns(keys.join(","));
+        enabledKeys = keys;
+    }
+    signal headerContext(real x, real y)
     readonly property int pad: FiliTheme.space3
     // Début du nom dans une ligne: marge, icône, écart
     readonly property int nameInset: FiliTheme.space2 + FiliTheme.iconSize + FiliTheme.space2
+    readonly property int cellPad: FiliTheme.space3
 
     // En-têtes de colonnes: petit 11, brume2; colonne de tri en brume avec son sens
     Row {
@@ -127,19 +148,16 @@ Rectangle {
         width: view.width - 2 * FiliTheme.space2
         height: 26
         Repeater {
-            model: [
-                { key: 0, label: Fili.tr("Name"), width: header.width - view.sizeWidth - view.dateWidth, align: Text.AlignLeft },
-                { key: 1, label: Fili.tr("Size"), width: view.sizeWidth, align: Text.AlignRight },
-                { key: 2, label: Fili.tr("Modified"), width: view.dateWidth, align: Text.AlignLeft }
-            ]
+            model: [{ key: "name", sort: 0, label: Fili.tr("Name"), width: 0, align: Text.AlignLeft }].concat(view.cols)
             delegate: Item {
                 id: col
                 required property var modelData
-                readonly property bool active: view.folder.sortKey === modelData.key
-                width: modelData.width
+                required property int index
+                readonly property bool active: view.folder.sortKey === modelData.sort
+                width: index === 0 ? header.width - view.colsWidth * view.colScale : view.colWidth(modelData)
                 height: header.height
                 Text {
-                    anchors { fill: parent; leftMargin: col.modelData.key === 2 ? FiliTheme.space4 : view.nameInset; rightMargin: col.modelData.key === 1 ? FiliTheme.space2 : FiliTheme.space2 }
+                    anchors { fill: parent; leftMargin: col.index === 0 ? view.nameInset : view.cellPad; rightMargin: view.cellPad }
                     verticalAlignment: Text.AlignVCenter
                     horizontalAlignment: col.modelData.align
                     elide: Text.ElideRight
@@ -149,7 +167,7 @@ Rectangle {
                     color: col.active ? FiliTheme.brume : FiliTheme.brume2
                 }
                 Rectangle {
-                    visible: col.modelData.key > 0
+                    visible: col.index > 0
                     anchors { left: parent.left; verticalCenter: parent.verticalCenter }
                     width: 1
                     height: 14
@@ -157,7 +175,14 @@ Rectangle {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: view.select(view.folder.sortBy(col.modelData.key, list.currentIndex))
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: e => {
+                        if (e.button === Qt.RightButton) {
+                            const p = mapToItem(view, e.x, e.y);
+                            view.headerContext(p.x, p.y);
+                        } else
+                            view.select(view.folder.sortBy(col.modelData.sort, list.currentIndex));
+                    }
                 }
             }
         }
@@ -173,6 +198,9 @@ Rectangle {
         id: list
         anchors { top: header.bottom; topMargin: 1 + 2; left: parent.left; right: parent.right; bottom: parent.bottom }
         clip: true
+        // Le ListView impose x = 0 à ses délégués: la marge des lignes est celle du contenu
+        leftMargin: FiliTheme.space2
+        rightMargin: FiliTheme.space2
         model: view.folder
         focus: true
         activeFocusOnTab: true
@@ -251,8 +279,7 @@ Rectangle {
             required property string name
             required property string path
             required property bool isDir
-            required property string size
-            required property string modified
+            required property var model
             required property string icon
             required property bool hidden
             required property string thumb
@@ -262,7 +289,6 @@ Rectangle {
             readonly property bool sel: view.selected[path] === true
             readonly property bool editing: view.renaming === index
             readonly property bool stripe: index % 2 === 1
-            x: FiliTheme.space2
             width: ListView.view.width - 2 * FiliTheme.space2
             height: FiliTheme.rowHeight
             radius: FiliTheme.radiusControl
@@ -307,7 +333,7 @@ Rectangle {
                 cache: false
             }
             Text {
-                anchors { left: img.right; leftMargin: FiliTheme.space2; right: sizeText.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                anchors { left: img.right; leftMargin: FiliTheme.space2; right: cells.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 visible: !row.editing
                 text: row.name
                 elide: Text.ElideMiddle
@@ -317,7 +343,7 @@ Rectangle {
             }
             // Renommage sur place
             Rectangle {
-                anchors { left: img.right; leftMargin: FiliTheme.space2 - 4; right: sizeText.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                anchors { left: img.right; leftMargin: FiliTheme.space2 - 4; right: cells.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 height: parent.height - 2
                 visible: row.editing
                 radius: FiliTheme.radiusControl
@@ -353,27 +379,25 @@ Rectangle {
                     onActiveFocusChanged: if (!activeFocus) commit()
                 }
             }
-            Text {
-                id: sizeText
-                anchors { right: dateText.left; rightMargin: FiliTheme.space4; verticalCenter: parent.verticalCenter }
-                width: view.sizeWidth
-                horizontalAlignment: Text.AlignRight
-                text: row.size
-                font.family: FiliTheme.font
-                font.pixelSize: FiliTheme.sizeList
-                font.features: { "tnum": 1 }
-                color: row.sel && view.windowActive ? FiliTheme.voile : FiliTheme.brume2
-            }
-            Text {
-                id: dateText
+            Row {
+                id: cells
                 anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-                width: view.dateWidth - FiliTheme.space4
-                text: row.modified
-                elide: Text.ElideRight
-                font.family: FiliTheme.font
-                font.pixelSize: FiliTheme.sizeList
-                font.features: { "tnum": 1 }
-                color: row.sel && view.windowActive ? FiliTheme.voile : FiliTheme.brume2
+                Repeater {
+                    model: view.cols
+                    delegate: Text {
+                        required property var modelData
+                        width: view.colWidth(modelData)
+                        leftPadding: view.cellPad
+                        rightPadding: view.cellPad
+                        horizontalAlignment: modelData.align
+                        elide: Text.ElideRight
+                        text: row.model[modelData.role]
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.sizeList
+                        font.features: { "tnum": 1 }
+                        color: row.sel && view.windowActive ? FiliTheme.voile : FiliTheme.brume2
+                    }
+                }
             }
 
             // Glisser: la sélection (ou la ligne seule) part en text/uri-list

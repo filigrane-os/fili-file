@@ -3,6 +3,8 @@
 // Ctrl+C / Ctrl+X / Ctrl+V copier, couper, coller, F2 renommer, Ctrl+Maj+N nouveau dossier, Suppr ou Ctrl+Retour
 // arrière corbeille, Ctrl+Z annuler, Ctrl+A tout sélectionner, Échap annule la copie en cours,
 // Ctrl+Maj+Suppr vide la corbeille, Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
+// Mode sélecteur (fili-file --pick, lancé par le portail FileChooser): barre de validation en bas (nom en
+// enregistrement, filtres, Annuler, Ouvrir/Enregistrer); les opérations sur les fichiers sont désactivées.
 import QtQuick
 import Fili.Files
 
@@ -14,7 +16,65 @@ Window {
     minimumHeight: 300
     visible: true
     color: FiliTheme.nuit
-    title: folder.path === "/" ? "/" : folder.path.split("/").pop()
+    title: picking ? Fili.pickTitle() : folder.path === "/" ? "/" : folder.path.split("/").pop()
+
+    // Mode sélecteur de fichiers
+    readonly property string pickKind: Fili.pickKind()
+    readonly property bool picking: pickKind !== ""
+    readonly property var pickFilters: picking ? JSON.parse(Fili.pickFilters()) : []
+    property int pickFilterIndex: Fili.pickFilter()
+    // Chemins que validerait le bouton (vide: bouton grisé)
+    function pickedPaths() {
+        if (!picking)
+            return [];
+        if (pickKind === "save") {
+            const n = nameInput.text.trim();
+            return n !== "" && n.indexOf("/") < 0 ? [folder.path + "/" + n] : [];
+        }
+        const sel = Object.keys(files.selected);
+        if (Fili.pickDirectory()) {
+            const dirs = sel.filter(p => folder.pathIsDir(p));
+            if (dirs.length !== sel.length || (!Fili.pickMultiple() && dirs.length > 1))
+                return [];
+            return dirs.length > 0 ? dirs : [folder.path];
+        }
+        if (sel.length === 0 || sel.some(p => folder.pathIsDir(p)) || (!Fili.pickMultiple() && sel.length > 1))
+            return [];
+        return sel;
+    }
+    readonly property var picked: pickedPaths()
+    function pickAccept() {
+        if (picked.length === 0)
+            return;
+        if (pickKind === "save" && Fili.pathExists(picked[0])) {
+            const name = picked[0].split("/").pop();
+            win.ask(Fili.tr("Replace “%1”?").replace("%1", name), Fili.tr("A file with this name already exists. Replacing it overwrites its content."), Fili.tr("Replace"), () => Fili.pickFinish(picked.join("\n"), pickFilterIndex));
+            return;
+        }
+        Fili.pickFinish(picked.join("\n"), pickFilterIndex);
+    }
+    // Double-clic ou Entrée sur une ligne: un dossier s'ouvre; un fichier est choisi en mode sélecteur
+    function openRow(row) {
+        if (picking && !folder.pathIsDir(folder.pathAt(row))) {
+            if (pickKind === "save")
+                nameInput.text = folder.pathAt(row).split("/").pop();
+            else
+                files.select(row);
+            pickAccept();
+            return;
+        }
+        show(folder.activate(row));
+    }
+    Connections {
+        target: files
+        function onSelectedChanged() {
+            if (win.pickKind !== "save")
+                return;
+            const sel = Object.keys(files.selected);
+            if (sel.length === 1 && !folder.pathIsDir(sel[0]))
+                nameInput.text = sel[0].split("/").pop();
+        }
+    }
 
     FolderModel { id: folder }
 
@@ -48,6 +108,7 @@ Window {
     }
 
     Component.onCompleted: {
+        nameInput.text = Fili.pickName();
         show(folder.go(Fili.startPath()));
         files.focusList();
     }
@@ -64,7 +125,7 @@ Window {
     Shortcut { sequences: ["Ctrl+W", "Ctrl+Q"]; onActivated: Qt.quit() }
 
     // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
-    readonly property bool typing: menu.visible || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible
+    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible
     function trashSelection() {
         const row = folder.trash(files.targetsText(), files.currentIndex);
         files.reloaded();
@@ -82,6 +143,8 @@ Window {
     }
     // Menu contextuel: entrées selon la sélection (aucune: le dossier lui-même)
     function openMenu(p) {
+        if (picking)
+            return;
         const t = files.targets().filter(path => files.selected[path]);
         const one = t.length === 1;
         const trash = folder.inTrash;
@@ -133,6 +196,12 @@ Window {
         }
         menu.open(p.x, p.y, list);
     }
+    // Colonnes de la liste: clic droit sur un en-tête (le nom reste toujours)
+    function openColumnsMenu(p) {
+        const list = [{ id: "", label: Fili.tr("Name"), checked: true, enabled: false }];
+        files.allColumns.forEach(c => list.push({ id: "col:" + c.key, label: c.label, checked: files.enabledKeys.indexOf(c.key) >= 0 }));
+        menu.open(p.x, p.y, list);
+    }
     // Menu d'un chemin (segment du fil d'Ariane ou lieu de la barre latérale)
     property string menuPath: ""
     function openPathMenu(path, x, y, crumb, removable) {
@@ -147,7 +216,15 @@ Window {
     }
     function menuAction(id) {
         const t = files.targetsText();
-        if (id === "gopath")
+        if (id.startsWith("col:")) {
+            const key = id.slice(4);
+            const on = files.enabledKeys.indexOf(key) >= 0;
+            files.setColumns(files.allColumns.map(c => c.key).filter(k => k === key ? !on : files.enabledKeys.indexOf(k) >= 0));
+        } else if (id.startsWith("filter:")) {
+            pickFilterIndex = parseInt(id.slice(7));
+            folder.setPickFilter(pickFilterIndex);
+            files.reloaded();
+        } else if (id === "gopath")
             win.open(menuPath);
         else if (id === "copypath")
             Fili.copyText(menuPath);
@@ -182,19 +259,21 @@ Window {
         else if (id === "newfolder")
             win.newFolder();
         else if (id === "empty")
-            confirm.visible = true;
+            win.askEmpty();
         files.focusList();
     }
-    Shortcut { sequence: "Ctrl+C"; enabled: !win.typing; onActivated: folder.copy(files.targetsText()) }
-    Shortcut { sequence: "Ctrl+X"; enabled: !win.typing; onActivated: folder.cut(files.targetsText()) }
-    Shortcut { sequence: "Ctrl+V"; enabled: !win.typing; onActivated: folder.paste() }
-    Shortcut { sequence: "Ctrl+A"; enabled: !win.typing; onActivated: files.selectAll() }
-    Shortcut { sequence: "Ctrl+Z"; enabled: !win.typing; onActivated: folder.undo() }
-    Shortcut { sequence: "F2"; enabled: !win.typing; onActivated: files.startRename() }
-    Shortcut { sequence: "Ctrl+Shift+N"; enabled: !win.typing; onActivated: win.newFolder() }
-    Shortcut { sequences: ["Delete", "Ctrl+Backspace"]; enabled: !win.typing; onActivated: win.trashSelection() }
-    Shortcut { sequence: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onActivated: confirm.visible = true }
+    Shortcut { sequence: "Ctrl+C"; enabled: !win.typing && !win.picking; onActivated: folder.copy(files.targetsText()) }
+    Shortcut { sequence: "Ctrl+X"; enabled: !win.typing && !win.picking; onActivated: folder.cut(files.targetsText()) }
+    Shortcut { sequence: "Ctrl+V"; enabled: !win.typing && !win.picking; onActivated: folder.paste() }
+    Shortcut { sequence: "Ctrl+A"; enabled: !win.typing && !win.picking; onActivated: files.selectAll() }
+    Shortcut { sequence: "Ctrl+Z"; enabled: !win.typing && !win.picking; onActivated: folder.undo() }
+    Shortcut { sequence: "F2"; enabled: !win.typing && !win.picking; onActivated: files.startRename() }
+    Shortcut { sequence: "Ctrl+Shift+N"; enabled: !win.typing && !win.picking; onActivated: win.newFolder() }
+    Shortcut { sequences: ["Delete", "Ctrl+Backspace"]; enabled: !win.typing && !win.picking; onActivated: win.trashSelection() }
+    Shortcut { sequence: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onActivated: win.askEmpty() }
     Shortcut { sequence: "Escape"; enabled: !win.typing && folder.busy; onActivated: folder.cancel() }
+    Shortcut { sequence: "Escape"; enabled: win.picking && !win.typing && !folder.busy; onActivated: Fili.pickCancel() }
+    Shortcut { sequence: "Ctrl+A"; enabled: win.picking && !win.typing && Fili.pickMultiple(); onActivated: files.selectAll() }
 
     // Boutons précédent/suivant de la souris, partout dans la fenêtre
     MouseArea {
@@ -210,10 +289,10 @@ Window {
         color: FiliTheme.nuit
         // Boutons précédent/suivant réunis dans une capsule
         Rectangle {
-            x: nav.x - 4
+            x: FiliTheme.margin
             anchors.verticalCenter: nav.verticalCenter
-            width: nav.width + 8
-            height: 28
+            width: nav.width + 2 * FiliTheme.space1 + 2
+            height: 30
             radius: 8
             color: FiliTheme.nuit2
             border.width: 1
@@ -221,9 +300,9 @@ Window {
         }
         Row {
             id: nav
-            x: FiliTheme.space2
+            x: FiliTheme.margin + FiliTheme.space1 + 1
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
+            spacing: FiliTheme.space1
             IconButton {
                 glyph: ""
                 enabledState: folder.canBack
@@ -238,9 +317,9 @@ Window {
         // Recherche dans le dossier affiché (Ctrl+F): filtre les noms, Échap efface
         Rectangle {
             id: search
-            anchors { right: parent.right; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
-            width: 170
-            height: 24
+            anchors { right: parent.right; rightMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
+            width: 180
+            height: 26
             radius: FiliTheme.radiusControl
             color: FiliTheme.nuit2
             border.width: 1
@@ -281,7 +360,7 @@ Window {
         }
         Row {
             id: trashTools
-            anchors { right: search.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+            anchors { right: search.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             spacing: 2
             visible: folder.inTrash
             TextButton {
@@ -290,12 +369,12 @@ Window {
             }
             TextButton {
                 label: Fili.tr("Empty Trash")
-                onClicked: confirm.visible = true
+                onClicked: win.askEmpty()
             }
         }
         // Titre: nom du dossier affiché (le chemin complet est dans la barre d'état)
         Text {
-            anchors { left: nav.right; leftMargin: FiliTheme.space4; right: trashTools.visible ? trashTools.left : search.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            anchors { left: nav.right; leftMargin: FiliTheme.space5; right: trashTools.visible ? trashTools.left : search.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             text: win.title
             elide: Text.ElideMiddle
             font.family: FiliTheme.font
@@ -314,7 +393,7 @@ Window {
 
     Sidebar {
         id: sidebar
-        anchors { top: toolbarLine.bottom; bottom: statusbar.top; left: parent.left }
+        anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: parent.left }
         width: FiliTheme.sidebarWidth
         current: folder.path
         onOpen: p => win.open(p)
@@ -323,20 +402,21 @@ Window {
     }
     Rectangle {
         id: sideLine
-        anchors { top: toolbarLine.bottom; bottom: statusbar.top; left: sidebar.right }
+        anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: sidebar.right }
         width: 1
         color: FiliTheme.nuit4
     }
 
     FileList {
         id: files
-        anchors { top: toolbarLine.bottom; bottom: statusbar.top; left: sideLine.right; right: parent.right }
+        anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: sideLine.right; right: parent.right }
         folder: folder
         windowActive: win.active
-        onOpenRow: row => win.show(folder.activate(row))
+        onOpenRow: row => win.openRow(row)
         onGoUp: win.show(folder.up())
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
         onContext: (x, y) => win.openMenu(files.mapToItem(null, x, y))
+        onHeaderContext: (x, y) => win.openColumnsMenu(files.mapToItem(null, x, y))
     }
     ContextMenu {
         id: menu
@@ -346,6 +426,71 @@ Window {
         target: folder
         function onReloaded() {
             files.reloaded();
+        }
+    }
+
+    // Mode sélecteur: nom (enregistrer), filtre, Annuler et validation
+    Rectangle {
+        id: pickbar
+        anchors.bottom: statusbar.top
+        width: parent.width
+        height: win.picking ? 48 : 0
+        visible: win.picking
+        color: FiliTheme.nuit
+        Rectangle {
+            width: parent.width
+            height: 1
+            color: FiliTheme.nuit4
+        }
+        Rectangle {
+            visible: win.pickKind === "save"
+            anchors { left: parent.left; leftMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
+            width: 300
+            height: 26
+            radius: FiliTheme.radiusControl
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: nameInput.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+            TextInput {
+                id: nameInput
+                anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+                verticalAlignment: TextInput.AlignVCenter
+                clip: true
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.size
+                color: FiliTheme.brume
+                selectionColor: FiliTheme.nuit4
+                selectedTextColor: FiliTheme.brume
+                onAccepted: win.pickAccept()
+                Keys.onEscapePressed: Fili.pickCancel()
+                Component.onCompleted: {
+                    if (win.pickKind === "save")
+                        forceActiveFocus();
+                }
+            }
+        }
+        TextButton {
+            visible: win.pickFilters.length > 0
+            anchors { left: parent.left; leftMargin: win.pickKind === "save" ? 300 + FiliTheme.margin : FiliTheme.margin - FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            height: 26
+            label: (win.pickFilters[win.pickFilterIndex] || "") + "  ▾"
+            onClicked: menu.open(x + FiliTheme.space2, pickbar.y - win.pickFilters.length * menu.itemHeight - FiliTheme.space4, win.pickFilters.map((n, i) => ({ id: "filter:" + i, label: n })))
+        }
+        Row {
+            anchors { right: parent.right; rightMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
+            spacing: FiliTheme.space2
+            TextButton {
+                height: 26
+                label: Fili.tr("Cancel")
+                onClicked: Fili.pickCancel()
+            }
+            TextButton {
+                height: 26
+                primary: true
+                opacity: win.picked.length > 0 ? 1 : 0.4
+                label: Fili.pickAccept() || (win.pickKind === "save" ? Fili.tr("Save") : Fili.pickDirectory() ? Fili.tr("Choose") : Fili.tr("Open"))
+                onClicked: win.pickAccept()
+            }
         }
     }
 
@@ -366,7 +511,7 @@ Window {
         readonly property bool message: folder.busy || folder.error !== "" || win.notice !== ""
         PathBar {
             id: pathBar
-            anchors { left: parent.left; leftMargin: FiliTheme.space2; top: parent.top; topMargin: 1; bottom: parent.bottom }
+            anchors { left: parent.left; leftMargin: FiliTheme.margin - FiliTheme.space2; top: parent.top; topMargin: 1; bottom: parent.bottom }
             width: parent.width * 0.6
             visible: !statusbar.message || editing
             fontSize: FiliTheme.sizeSmall
@@ -379,7 +524,7 @@ Window {
             }
         }
         Text {
-            anchors { left: pathBar.right; leftMargin: FiliTheme.space3; right: parent.right; rightMargin: FiliTheme.space3; top: parent.top; topMargin: 1; bottom: parent.bottom }
+            anchors { left: pathBar.right; leftMargin: FiliTheme.space3; right: parent.right; rightMargin: FiliTheme.margin; top: parent.top; topMargin: 1; bottom: parent.bottom }
             visible: !statusbar.message && !pathBar.editing
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: Text.AlignRight
@@ -433,18 +578,33 @@ Window {
         }
     }
 
-    // Confirmation avant de vider la corbeille (suppression définitive): Entrée vide, Échap annule
+    // Confirmation (vider la corbeille, remplacer un fichier): Entrée valide, Échap annule
+    function ask(heading, body, label, action) {
+        confirm.heading = heading;
+        confirm.body = body;
+        confirm.label = label;
+        confirm.action = action;
+        confirm.visible = true;
+    }
+    function askEmpty() {
+        ask(Fili.tr("Empty the Trash?"), Fili.tr("Its items will be deleted permanently. This cannot be undone."), Fili.tr("Empty Trash"), () => folder.emptyTrash());
+    }
     Rectangle {
         id: confirm
+        property string heading
+        property string body
+        property string label
+        property var action: () => {}
         anchors.fill: parent
         visible: false
+        z: 200
         color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
         focus: visible
         onVisibleChanged: if (visible) forceActiveFocus(); else files.focusList()
         Keys.onPressed: e => {
             if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
-                folder.emptyTrash();
                 visible = false;
+                confirm.action();
             } else if (e.key === Qt.Key_Escape)
                 visible = false;
             else
@@ -470,7 +630,7 @@ Window {
                 Text {
                     width: parent.width
                     wrapMode: Text.Wrap
-                    text: Fili.tr("Empty the Trash?")
+                    text: confirm.heading
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: FiliTheme.weightAccent
@@ -479,7 +639,7 @@ Window {
                 Text {
                     width: parent.width
                     wrapMode: Text.Wrap
-                    text: Fili.tr("Its items will be deleted permanently. This cannot be undone.")
+                    text: confirm.body
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
                     color: FiliTheme.brume2
@@ -492,11 +652,11 @@ Window {
                         onClicked: confirm.visible = false
                     }
                     TextButton {
-                        label: Fili.tr("Empty Trash")
+                        label: confirm.label
                         primary: true
                         onClicked: {
-                            folder.emptyTrash();
                             confirm.visible = false;
+                            confirm.action();
                         }
                     }
                 }

@@ -46,7 +46,10 @@ QtObject {
     readonly property int rowHeight: 24
     readonly property int sideRowHeight: 28
     readonly property int iconSize: 16
-    readonly property int toolbarHeight: 38
+    // Marge extérieure de la fenêtre: capsule de navigation, glyphes et intertitres de la barre latérale, fil d'Ariane,
+    // recherche et information de sélection s'alignent dessus
+    readonly property int margin: 24
+    readonly property int toolbarHeight: 44
     readonly property int statusHeight: 28
     readonly property int sidebarWidth: 200
 }

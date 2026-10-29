@@ -73,6 +73,9 @@ pub mod qobject {
         fn toggle_hidden(self: Pin<&mut FolderModel>, row: i32) -> i32;
         // Ne garder que les noms qui contiennent ce texte (vide: tout)
         #[qinvokable]
+        #[cxx_name = "setPickFilter"]
+        fn set_pick_filter(self: Pin<&mut FolderModel>, index: i32);
+        #[qinvokable]
         #[cxx_name = "setFilter"]
         fn set_filter(self: Pin<&mut FolderModel>, text: &QString);
         #[qinvokable]
@@ -198,6 +201,48 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "volumeError"]
         fn volume_error(self: Pin<&mut Fili>, message: &QString);
+        // Mode sélecteur de fichiers (portail FileChooser): "" hors de ce mode, sinon "open" ou "save"
+        #[qinvokable]
+        #[cxx_name = "pickKind"]
+        fn pick_kind(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "pickTitle"]
+        fn pick_title(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "pickName"]
+        fn pick_name(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "pickAccept"]
+        fn pick_accept(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "pickMultiple"]
+        fn pick_multiple(self: &Fili) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pickDirectory"]
+        fn pick_directory(self: &Fili) -> bool;
+        // Noms des filtres, en JSON: ["Images", "Tous les fichiers"]
+        #[qinvokable]
+        #[cxx_name = "pickFilters"]
+        fn pick_filters(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "pickFilter"]
+        fn pick_filter(self: &Fili) -> i32;
+        // Écrit la sélection (un chemin par ligne) et quitte; pickCancel quitte sans rien écrire
+        #[qinvokable]
+        #[cxx_name = "pickFinish"]
+        fn pick_finish(self: &Fili, paths: &QString, filter: i32);
+        // Colonnes affichées de la liste (clés séparées par des virgules), gardées dans l'état de l'utilisateur
+        #[qinvokable]
+        fn columns(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "setColumns"]
+        fn set_columns(self: &Fili, keys: &QString);
+        #[qinvokable]
+        #[cxx_name = "pathExists"]
+        fn path_exists(self: &Fili, path: &QString) -> bool;
+        #[qinvokable]
+        #[cxx_name = "pickCancel"]
+        fn pick_cancel(self: &Fili);
         // Favoris de l'utilisateur (signets GTK) et presse-papiers (wl-copy)
         #[qinvokable]
         #[cxx_name = "addFavorite"]
@@ -236,7 +281,7 @@ pub mod qobject {
     impl cxx_qt::Threading for FolderModel {}
 }
 
-use crate::{apps, fs, i18n, icons, ops, volumes, watch::Watcher};
+use crate::{apps, fs, i18n, icons, ops, pick, volumes, watch::Watcher};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
@@ -264,6 +309,10 @@ const ROLE_HIDDEN: i32 = 262;
 const ROLE_THUMB: i32 = 263;
 const ROLE_THUMB_READY: i32 = 264;
 const ROLE_IMAGE: i32 = 265;
+const ROLE_KIND: i32 = 266;
+const ROLE_CREATED: i32 = 267;
+const ROLE_PERMS: i32 = 268;
+const ROLE_OWNER: i32 = 269;
 
 fn home() -> String {
     env::var("HOME").unwrap_or_else(|_| "/".into())
@@ -450,6 +499,8 @@ pub struct FolderModelRust {
     status: QString,
     error: QString,
     filter: QString,
+    // Filtre du sélecteur de fichiers (index dans pick::Pick::filters, -1: aucun)
+    pick_filter: i32,
     busy: bool,
     progress: f64,
     job: QString,
@@ -512,11 +563,29 @@ impl FolderModel {
         let mut rows: Vec<fs::Entry> = self
             .all
             .iter()
-            .filter(|e| (hidden || !e.hidden()) && (needle.is_empty() || fs::contains(&e.name, &needle)))
+            .filter(|e| (hidden || !e.hidden()) && (needle.is_empty() || fs::contains(&e.name, &needle)) && self.picked(e))
             .cloned()
             .collect();
         fs::sort(&mut rows, key, desc);
         rows
+    }
+
+    // Sélecteur de fichiers: seuls les dossiers en mode « choisir un dossier », sinon les fichiers du filtre choisi
+    fn picked(&self, e: &fs::Entry) -> bool {
+        let Some(p) = pick::get() else { return true };
+        if p.directory {
+            return e.is_dir;
+        }
+        match usize::try_from(self.pick_filter).ok().and_then(|i| p.filters.get(i)) {
+            Some(f) => e.is_dir || f.matches(&e.name, icons::mime_type(&e.name).as_deref()),
+            None => true,
+        }
+    }
+
+    pub fn set_pick_filter(mut self: Pin<&mut Self>, index: i32) {
+        self.as_mut().rust_mut().pick_filter = index;
+        self.as_mut().rebuild();
+        self.as_mut().changed();
     }
 
     fn set_status(mut self: Pin<&mut Self>) {
@@ -1350,6 +1419,10 @@ impl FolderModel {
             ROLE_THUMB => QVariant::from(&QString::from(&if icons::is_pdf(e) { format!("file://{}", thumb_path(e).display()) } else { String::new() })),
             ROLE_THUMB_READY => QVariant::from(&(icons::is_pdf(e) && thumb_path(e).exists())),
             ROLE_IMAGE => QVariant::from(&icons::is_image(e)),
+            ROLE_KIND => QVariant::from(&QString::from(&e.kind)),
+            ROLE_CREATED => QVariant::from(&QString::from(&fs::date(e.created, self.now))),
+            ROLE_PERMS => QVariant::from(&QString::from(&fs::permissions(e.mode))),
+            ROLE_OWNER => QVariant::from(&QString::from(&fs::owner(e.uid))),
             _ => QVariant::default(),
         }
     }
@@ -1367,6 +1440,10 @@ impl FolderModel {
             (ROLE_THUMB, "thumb"),
             (ROLE_THUMB_READY, "thumbReady"),
             (ROLE_IMAGE, "isImage"),
+            (ROLE_KIND, "kind"),
+            (ROLE_CREATED, "created"),
+            (ROLE_PERMS, "perms"),
+            (ROLE_OWNER, "owner"),
         ] {
             roles.insert(role, QByteArray::from(name));
         }
@@ -1381,6 +1458,7 @@ impl FolderModel {
 impl cxx_qt::Initialize for FolderModel {
     fn initialize(mut self: Pin<&mut Self>) {
         let qt = self.qt_thread();
+        self.as_mut().rust_mut().pick_filter = pick::get().map_or(-1, |p| if p.filters.is_empty() { -1 } else { p.filter.max(0) });
         self.as_mut().rust_mut().watcher = Watcher::new(move || {
             let _ = qt.queue(|m| m.live_reload());
         });
@@ -1391,6 +1469,11 @@ impl cxx_qt::Initialize for FolderModel {
 pub struct FiliRust {
     light: bool,
     key_nav: bool,
+}
+
+fn columns_file() -> PathBuf {
+    let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
+    PathBuf::from(state).join("filigrane/fili-file-columns")
 }
 
 // État de fili-theme (« light » ou « dark »), comme FiliTheme.qml du fili-shell
@@ -1500,6 +1583,67 @@ impl Fili {
         });
     }
 
+    pub fn pick_kind(&self) -> QString {
+        QString::from(pick::get().map_or("", |p| p.kind.as_str()))
+    }
+
+    pub fn pick_title(&self) -> QString {
+        QString::from(pick::get().map_or("", |p| p.title.as_str()))
+    }
+
+    pub fn pick_name(&self) -> QString {
+        QString::from(pick::get().map_or("", |p| p.name.as_str()))
+    }
+
+    pub fn pick_accept(&self) -> QString {
+        QString::from(pick::get().map_or("", |p| p.accept.as_str()))
+    }
+
+    pub fn pick_multiple(&self) -> bool {
+        pick::get().is_some_and(|p| p.multiple)
+    }
+
+    pub fn pick_directory(&self) -> bool {
+        pick::get().is_some_and(|p| p.directory)
+    }
+
+    pub fn pick_filters(&self) -> QString {
+        let names: Vec<String> = pick::get().map(|p| p.filters.iter().map(|f| json(&f.name)).collect()).unwrap_or_default();
+        QString::from(&format!("[{}]", names.join(",")))
+    }
+
+    pub fn pick_filter(&self) -> i32 {
+        pick::get().map_or(-1, |p| if p.filters.is_empty() { -1 } else { p.filter.max(0) })
+    }
+
+    pub fn pick_finish(&self, paths: &QString, filter: i32) {
+        if let Some(p) = pick::get() {
+            let _ = std::fs::write(&p.out, format!("# filter {filter}\n{}\n", paths.to_string()));
+        }
+        std::process::exit(0);
+    }
+
+    pub fn columns(&self) -> QString {
+        let text = std::fs::read_to_string(columns_file()).unwrap_or_default();
+        QString::from(if text.trim().is_empty() { "size,modified" } else { text.trim() })
+    }
+
+    pub fn set_columns(&self, keys: &QString) {
+        let file = columns_file();
+        if let Some(dir) = file.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(file, keys.to_string());
+    }
+
+    pub fn path_exists(&self, path: &QString) -> bool {
+        ops::exists(Path::new(&path.to_string()))
+    }
+
+    pub fn pick_cancel(&self) {
+        std::process::exit(1);
+    }
+
     pub fn add_favorite(mut self: Pin<&mut Self>, path: &QString) {
         let p = normalize(&path.to_string(), "/").to_string_lossy().into_owned();
         let mut list = bookmarks();
@@ -1589,7 +1733,8 @@ impl Fili {
     }
 
     pub fn start_path(&self) -> QString {
-        let arg = env::args().skip(1).find(|a| !a.starts_with('-'));
+        let args: Vec<String> = env::args().skip(1).collect();
+        let arg = pick::positional(&args).or_else(|| pick::get().map(|p| p.folder.clone()).filter(|f| !f.is_empty()));
         let p = normalize(&arg.unwrap_or_else(home), &env::current_dir().map_or(home(), |d| d.to_string_lossy().into_owned()));
         QString::from(&p.to_string_lossy().into_owned())
     }

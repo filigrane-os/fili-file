@@ -116,6 +116,37 @@ pub fn mime_type(name: &str) -> Option<String> {
     mime().by_ext.get(&ext).cloned()
 }
 
+// Type de fichier lisible (« Image PNG »): commentaire de shared-mime-info dans la langue de la session, à défaut le
+// type MIME, à défaut « FICHIER »; « Dossier » pour un dossier
+pub fn kind(name: &str, is_dir: bool) -> String {
+    use crate::i18n::{tr, trf};
+    if is_dir {
+        return tr("Folder").to_string();
+    }
+    if let Some(t) = mime_type(name) {
+        static CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+        let mut guard = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        let cache = guard.get_or_insert_with(HashMap::new);
+        return cache.entry(t.clone()).or_insert_with(|| mime_comment(&t).unwrap_or(t)).clone();
+    }
+    match name.rsplit_once('.').filter(|(stem, ext)| !stem.is_empty() && !ext.is_empty()) {
+        Some((_, ext)) => trf("%1 file", &[&ext.to_uppercase()]),
+        None => tr("File").to_string(),
+    }
+}
+
+fn mime_comment(t: &str) -> Option<String> {
+    let text = fs::read_to_string(format!("/usr/share/mime/{t}.xml")).ok()?;
+    let lang = std::env::var("FILI_LANG").or_else(|_| std::env::var("LANG")).unwrap_or_default();
+    let lang = lang.get(..2).unwrap_or("en");
+    let pick = |open: &str| -> Option<String> {
+        let i = text.find(open)? + open.len();
+        let j = text[i..].find("</comment>")?;
+        Some(text[i..i + j].to_string())
+    };
+    pick(&format!("<comment xml:lang=\"{lang}\">")).or_else(|| pick("<comment>"))
+}
+
 const IMAGES: [&str; 8] = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
 
 // Miniature d'une image: le fichier lui-même, que Qt décode à la taille de l'icône (pas de cache ni de processus);

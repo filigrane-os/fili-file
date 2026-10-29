@@ -32,6 +32,10 @@ Rectangle {
         id: list
         anchors.fill: parent
         anchors.topMargin: FiliTheme.space1
+        // Les lignes sont inset px du bord (le ListView impose x = 0 à ses délégués: la marge est celle du contenu)
+        readonly property int inset: FiliTheme.space2 + 2
+        leftMargin: inset
+        rightMargin: inset
         anchors.bottomMargin: FiliTheme.space2
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -54,7 +58,7 @@ Rectangle {
             required property string section
             width: ListView.view.width
             height: 38
-            leftPadding: FiliTheme.space4 - 1
+            leftPadding: FiliTheme.margin - list.inset
             verticalAlignment: Text.AlignBottom
             bottomPadding: FiliTheme.space1
             text: section
@@ -73,8 +77,7 @@ Rectangle {
             required property string monoLight
             required property int index
             readonly property bool sel: path !== "" && path === side.current
-            x: FiliTheme.space2 + 2
-            width: ListView.view.width - 2 * FiliTheme.space2 - 2
+            width: ListView.view.width - 2 * list.inset
             height: FiliTheme.sideRowHeight + 2
             radius: FiliTheme.radiusControl
             color: sel || area.containsMouse || drop.containsDrag ? FiliTheme.nuit3 : "transparent"
@@ -83,7 +86,7 @@ Rectangle {
 
             Image {
                 id: img
-                x: FiliTheme.space2 + 2
+                x: FiliTheme.margin - list.inset
                 anchors.verticalCenter: parent.verticalCenter
                 width: 16
                 height: 16
@@ -96,7 +99,7 @@ Rectangle {
                 }
             }
             Text {
-                anchors { left: img.right; leftMargin: FiliTheme.space2 + 4; right: eject.visible ? eject.left : parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                anchors { left: img.right; leftMargin: FiliTheme.space2 + 2; right: eject.visible ? eject.left : parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 text: row.name
                 opacity: row.dev !== "" && row.path === "" ? 0.6 : 1
                 elide: Text.ElideRight
