@@ -41,6 +41,8 @@ Rectangle {
         boundsBehavior: Flickable.StopAtBounds
         model: places
         keyNavigationEnabled: true
+        // Un liseré entre les lignes: le fond du lieu courant ne touche pas celui du survol
+        spacing: 2
         activeFocusOnTab: true
         highlightMoveDuration: 0
         // Déposer un dossier entre les lieux (ou dans le vide): l'ajouter aux favoris
