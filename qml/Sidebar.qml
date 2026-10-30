@@ -75,6 +75,7 @@ Rectangle {
             required property bool removable
             required property string mono
             required property string monoLight
+            required property bool full
             required property int index
             readonly property bool sel: path !== "" && path === side.current
             width: ListView.view.width - 2 * list.inset
@@ -97,6 +98,18 @@ Rectangle {
                     colorization: 1.0
                     colorizationColor: row.sel ? FiliTheme.voileVif : FiliTheme.voile
                 }
+            }
+            // Corbeille pleine: pastille sur le glyphe (le glyphe plein de Papirus ne se distingue guère à 16 px)
+            Rectangle {
+                visible: row.full
+                x: img.x + img.width - 6
+                y: img.y - 1
+                width: 7
+                height: 7
+                radius: 3.5
+                color: FiliTheme.voileVif
+                border.width: 1
+                border.color: row.sel ? FiliTheme.nuit3 : FiliTheme.nuitProfond
             }
             Text {
                 anchors { left: img.right; leftMargin: FiliTheme.space2 + 2; right: eject.visible ? eject.left : parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }

@@ -77,6 +77,20 @@ Window {
     }
 
     FolderModel { id: folder }
+    // Icône de la corbeille (pleine ou vide): la barre latérale relit ses lieux quand l'état change
+    property bool trashFull: Fili.trashFull()
+    function checkTrash() {
+        const full = Fili.trashFull();
+        if (full !== trashFull) {
+            trashFull = full;
+            sidebar.reload();
+        }
+    }
+    Connections {
+        target: folder
+        function onChanged() { win.checkTrash(); }
+        function onReloaded() { win.checkTrash(); }
+    }
 
     // Message passager (volumes): effacé après 6 s
     property string notice: ""

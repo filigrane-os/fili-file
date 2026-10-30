@@ -276,6 +276,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "removeFavorite"]
         fn remove_favorite(self: Pin<&mut Fili>, path: &QString);
+        // La corbeille contient quelque chose (icône pleine ou vide de la barre latérale)
+        #[qinvokable]
+        #[cxx_name = "trashFull"]
+        fn trash_full(self: &Fili) -> bool;
         #[qinvokable]
         #[cxx_name = "isFavorite"]
         fn is_favorite(self: &Fili, path: &QString) -> bool;
@@ -1849,6 +1853,10 @@ impl Fili {
         }
     }
 
+    pub fn trash_full(&self) -> bool {
+        !ops::trash_is_empty()
+    }
+
     pub fn is_favorite(&self, path: &QString) -> bool {
         let p = path.to_string();
         default_favorites().iter().any(|(d, _)| *d == p) || bookmarks().iter().any(|(b, _)| *b == p)
@@ -1903,14 +1911,15 @@ impl Fili {
             .iter()
             .map(|(s, n, p, i, dev)| {
                 format!(
-                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"removable\":{},\"mono\":{},\"monoLight\":{}}}",
+                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"removable\":{},\"mono\":{},\"monoLight\":{},\"full\":{}}}",
                     json(s),
                     json(n),
                     json(p),
                     json(dev),
                     removable.contains(p),
                     json(&icons::symbolic(i, true)),
-                    json(&icons::symbolic(i, false))
+                    json(&icons::symbolic(i, false)),
+                    *i == "user-trash-full"
                 )
             })
             .collect();
