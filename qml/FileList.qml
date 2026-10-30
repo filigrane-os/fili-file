@@ -1,7 +1,7 @@
 // Vue du dossier, en liste (colonnes Nom, Taille, Modifié...; un clic sur un en-tête trie, un second inverse l'ordre) ou en
 // grille d'icônes de 64 px (nom sous l'icône, deux lignes au plus); même délégué, mêmes sélection et raccourcis.
 // Une ligne sélectionnée: fond nuit3 et nom en voile (brume quand la fenêtre n'est pas active); survol: fond nuit3.
-// Sélection multiple: Ctrl+clic ajoute ou retire, Maj+clic ou Maj+flèches étendent, Ctrl+A tout. Clavier: flèches,
+// Sélection multiple: tirer sur le fond trace une zone, Ctrl+clic ajoute ou retire, Maj+clic ou Maj+flèches étendent, Ctrl+A tout. Clavier: flèches,
 // Début/Fin, Page préc./suiv., Entrée ou Ctrl+↓ ouvre, Retour arrière ou Alt+↑ remonte, Espace aperçu rapide,
 // lettres = aller au nom qui commence ainsi. F2 renomme sur place (Entrée valide, Échap annule). Glisser les lignes
 // sélectionnées: text/uri-list, déposable sur un dossier de la liste, de la barre latérale ou dans une autre fenêtre.
@@ -275,6 +275,10 @@ Rectangle {
         reuseItems: true
         KineticScroll {}
 
+        BandSelect {
+            view: view
+            flick: list
+        }
         MouseArea {
             id: bgArea
             z: -2
@@ -324,6 +328,10 @@ Rectangle {
         reuseItems: true
         KineticScroll {}
 
+        BandSelect {
+            view: view
+            flick: grid
+        }
         MouseArea {
             z: -2
             width: grid.width

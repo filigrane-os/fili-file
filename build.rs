@@ -13,6 +13,7 @@ fn main() {
                 "qml/TextButton.qml",
                 "qml/ContextMenu.qml",
                 "qml/ViewSwitch.qml",
+                "qml/BandSelect.qml",
                 "qml/FocusRing.qml",
                 "qml/KineticScroll.qml",
             ])
