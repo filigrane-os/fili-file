@@ -174,19 +174,10 @@ pub fn symbolic(name: &str) -> String {
     found.map(|p| recolored(&p, "#ffffff")).unwrap_or_default()
 }
 
-// Dossiers bleus (variante « folder-blue » du thème, comme le Finder): dossiers personnels (XDG) reconnus par leur
-// chemin, sinon dossier générique
-pub fn folder(path: &str, special: &HashMap<String, &'static str>) -> String {
-    match special.get(path) {
-        Some(name) => {
-            let kind = match name.trim_start_matches("folder-").trim_start_matches("user-") {
-                "download" => "downloads",
-                k => k,
-            };
-            find(&[&format!("folder-blue-{kind}"), name, "folder-blue", "folder"])
-        }
-        None => find(&["folder-blue", "folder"]),
-    }
+// Dossier « folder-blue » du thème (couleur d'accentuation, voir tint), le même pour tous: pas d'icône propre aux
+// dossiers Documents, Téléchargements, Images...
+pub fn folder() -> String {
+    find(&["folder-blue", "folder"])
 }
 
 // Type MIME d'un fichier d'après son extension

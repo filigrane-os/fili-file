@@ -325,7 +325,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 use qobject::*;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     env,
     os::unix::process::CommandExt,
     path::{Path, PathBuf},
@@ -427,16 +427,6 @@ fn write_bookmarks(list: &[(String, String)]) -> std::io::Result<()> {
         text.push_str(&format!("file://{}{}{}\n", ops::encode(p), if label.is_empty() { "" } else { " " }, label));
     }
     std::fs::write(file, text)
-}
-
-// Dossiers spéciaux pour les icônes de la liste
-fn special() -> &'static HashMap<String, &'static str> {
-    static S: std::sync::OnceLock<HashMap<String, &'static str>> = std::sync::OnceLock::new();
-    S.get_or_init(|| {
-        let mut m: HashMap<String, &'static str> = xdg_dirs().into_iter().collect();
-        m.insert(home(), "user-home");
-        m
-    })
 }
 
 use ops::decode as percent_decode;
@@ -1586,7 +1576,7 @@ impl FolderModel {
             ROLE_SIZE => QVariant::from(&QString::from(&if e.is_dir { String::from("—") } else { fs::size(e.size) })),
             ROLE_DATE => QVariant::from(&QString::from(&fs::date(e.mtime, self.now))),
             ROLE_ICON => QVariant::from(&QString::from(&if e.is_dir {
-                icons::folder(&e.path, special())
+                icons::folder()
             } else {
                 icons::file(e)
             })),
