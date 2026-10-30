@@ -1,6 +1,6 @@
 // Backend xdg-desktop-portal pour org.freedesktop.impl.portal.FileChooser (fili-file --portal): le service D-Bus
 // est lancé à la demande (dbus-1/services), répond aux Ouvrir et Enregistrer des applications (Chrome...) en
-// lançant fili-file en mode sélecteur (pick.rs), puis s'arrête après deux minutes sans demande.
+// lançant fili-file en mode sélecteur (pick.rs) et aux demandes FileManager1 (Afficher dans le dossier), puis s'arrête après deux minutes sans demande.
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -177,8 +177,45 @@ impl Chooser {
     }
 }
 
+// org.freedesktop.FileManager1 (Chrome « Afficher dans le dossier », etc.): une fenêtre fili-file par demande
+struct FileManager;
+
+impl FileManager {
+    fn launch(&self, uris: &[String], extra: &[&str]) {
+        let Ok(exe) = std::env::current_exe() else { return };
+        for uri in uris.iter().filter(|u| u.starts_with("file://")) {
+            let child = Command::new(&exe).args(extra).arg(uri).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+            if let Ok(mut child) = child {
+                std::thread::spawn(move || child.wait());
+            }
+        }
+        LAST.store(now(), Ordering::SeqCst);
+    }
+}
+
+#[interface(name = "org.freedesktop.FileManager1")]
+impl FileManager {
+    // Un fichier: son dossier s'ouvre avec lui sélectionné
+    fn show_items(&self, uris: Vec<String>, _startup_id: &str) {
+        self.launch(&uris, &[]);
+    }
+
+    fn show_folders(&self, uris: Vec<String>, _startup_id: &str) {
+        self.launch(&uris, &[]);
+    }
+
+    fn show_item_properties(&self, uris: Vec<String>, _startup_id: &str) {
+        self.launch(&uris, &["--info"]);
+    }
+}
+
 pub fn serve() -> zbus::Result<()> {
-    let _conn = Builder::session()?.name(NAME)?.serve_at("/org/freedesktop/portal/desktop", Chooser)?.build()?;
+    let _conn = Builder::session()?
+        .name(NAME)?
+        .name("org.freedesktop.FileManager1")?
+        .serve_at("/org/freedesktop/portal/desktop", Chooser)?
+        .serve_at("/org/freedesktop/FileManager1", FileManager)?
+        .build()?;
     LAST.store(now(), Ordering::SeqCst);
     loop {
         std::thread::sleep(Duration::from_secs(5));

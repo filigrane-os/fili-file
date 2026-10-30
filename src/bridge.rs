@@ -107,6 +107,10 @@ pub mod qobject {
         fn cut(self: Pin<&mut FolderModel>, paths: &QString);
         #[qinvokable]
         fn paste(self: Pin<&mut FolderModel>);
+        // Relit le presse-papiers système (des fichiers y sont-ils?) pour canPaste
+        #[qinvokable]
+        #[cxx_name = "refreshPaste"]
+        fn refresh_paste(self: Pin<&mut FolderModel>);
         #[qinvokable]
         #[cxx_name = "dropItems"]
         fn drop_items(self: Pin<&mut FolderModel>, urls: &QString, dest: &QString, copy: bool);
@@ -142,6 +146,21 @@ pub mod qobject {
         fn compress(self: Pin<&mut FolderModel>, paths: &QString);
         #[qinvokable]
         fn cancel(self: Pin<&mut FolderModel>);
+        // Copie dans le dossier même (nom « copie »)
+        #[qinvokable]
+        fn duplicate(self: Pin<&mut FolderModel>, paths: &QString);
+        // Terminal (foot) dans ce dossier, sinon dans le dossier affiché
+        #[qinvokable]
+        fn terminal(self: &FolderModel, path: &QString);
+        // Infos d'un ou plusieurs éléments, en JSON: [[libellé, valeur]]; la taille des dossiers suit par infoSize
+        #[qinvokable]
+        fn info(self: &FolderModel, paths: &QString) -> QString;
+        #[qinvokable]
+        #[cxx_name = "startInfoSize"]
+        fn start_info_size(self: Pin<&mut FolderModel>, paths: &QString);
+        #[qsignal]
+        #[cxx_name = "infoSize"]
+        fn info_size(self: Pin<&mut FolderModel>, text: &QString);
     }
 
     unsafe extern "RustQt" {
@@ -280,6 +299,10 @@ pub mod qobject {
         fn start_path(self: &Fili) -> QString;
         #[qinvokable]
         fn home(self: &Fili) -> QString;
+        // Lancé avec --info (FileManager1.ShowItemProperties): la fenêtre d'informations s'ouvre au démarrage
+        #[qinvokable]
+        #[cxx_name = "startInfo"]
+        fn start_info(self: &Fili) -> bool;
     }
 
     impl cxx_qt::Initialize for Fili {}
@@ -548,6 +571,62 @@ enum Mode {
 
 fn paths_of(list: &QString) -> Vec<String> {
     list.to_string().split('\n').filter(|p| !p.is_empty()).map(String::from).collect()
+}
+
+// Presse-papiers Wayland (wl-clipboard). Les lectures sont courtes: wl-paste rend la main dès que la sélection est lue.
+fn clip_set(paths: &[String]) {
+    if paths.is_empty() {
+        return;
+    }
+    let text = paths.iter().map(|p| format!("file://{}", ops::encode(p))).collect::<Vec<_>>().join("\r\n");
+    let child = Command::new("wl-copy").args(["--type", "text/uri-list"]).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+    if let Ok(mut child) = child {
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            let _ = stdin.write_all(text.as_bytes());
+        }
+        std::thread::spawn(move || child.wait());
+    }
+}
+
+fn clip_clear() {
+    let _ = Command::new("wl-copy").arg("--clear").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+}
+
+fn clip_read(mime: &str) -> Option<String> {
+    let out = Command::new("wl-paste").args(["--no-newline", "--type", mime]).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
+    (out.status.success() && !out.stdout.is_empty()).then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+fn clip_has_files() -> bool {
+    let out = Command::new("wl-paste").arg("--list-types").stdin(Stdio::null()).stderr(Stdio::null()).output();
+    out.is_ok_and(|o| {
+        let t = String::from_utf8_lossy(&o.stdout);
+        t.lines().any(|l| l == "text/uri-list" || l == "x-special/gnome-copied-files")
+    })
+}
+
+// Fichiers du presse-papiers et « couper » si l'application source le dit (GNOME, Thunar: x-special/gnome-copied-files)
+fn clip_get() -> Option<(Vec<String>, Option<bool>)> {
+    let (text, gnome) = match clip_read("x-special/gnome-copied-files") {
+        Some(t) => (t, true),
+        None => (clip_read("text/uri-list")?, false),
+    };
+    let parsed = parse_clip(&text, gnome);
+    (!parsed.0.is_empty()).then_some(parsed)
+}
+
+// gnome: première ligne « copy » ou « cut », puis une URI par ligne; sinon une URI par ligne (# = commentaire)
+fn parse_clip(text: &str, gnome: bool) -> (Vec<String>, Option<bool>) {
+    let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#'));
+    let mut cut = None;
+    let mut rest: Vec<&str> = lines.by_ref().collect();
+    if gnome && let Some(&first) = rest.first() && !first.contains("://") {
+        cut = Some(first == "cut");
+        rest.remove(0);
+    }
+    let items = rest.iter().filter(|l| l.starts_with("file://")).map(|l| normalize(l, "/").to_string_lossy().into_owned()).collect();
+    (items, cut)
 }
 
 fn base(p: &str) -> String {
@@ -973,8 +1052,11 @@ impl FolderModel {
         }
     }
 
+    // Copier et couper posent aussi les fichiers dans le presse-papiers Wayland (text/uri-list): les autres
+    // applications peuvent les coller. Le « couper » n'existe que chez nous, tant que le presse-papiers n'a pas changé.
     pub fn copy(mut self: Pin<&mut Self>, paths: &QString) {
         let list = paths_of(paths);
+        clip_set(&list);
         let mut r = self.as_mut().rust_mut();
         r.can_paste = !list.is_empty();
         r.clipboard = list;
@@ -990,16 +1072,33 @@ impl FolderModel {
         self.as_mut().rust_mut().clip_cut = true;
     }
 
+    pub fn refresh_paste(mut self: Pin<&mut Self>) {
+        let has = clip_has_files() || !self.clipboard.is_empty();
+        if self.can_paste != has {
+            self.as_mut().rust_mut().can_paste = has;
+            self.as_mut().changed();
+        }
+    }
+
     pub fn paste(mut self: Pin<&mut Self>) {
         if self.in_trash {
             return self.fail(i18n::tr("Nothing can be pasted into the Trash").into());
         }
-        let (items, dir) = (self.clipboard.clone(), self.dir.clone());
-        let mode = if self.clip_cut { Mode::Move } else { Mode::Copy };
-        if self.clip_cut {
+        // Le presse-papiers système d'abord (copié ici ou dans une autre application), sinon la copie interne
+        let (items, cut) = match clip_get() {
+            Some((items, cut)) => {
+                let ours = items == self.clipboard;
+                (items, cut.unwrap_or(ours && self.clip_cut))
+            }
+            None => (self.clipboard.clone(), self.clip_cut),
+        };
+        let dir = self.dir.clone();
+        let mode = if cut { Mode::Move } else { Mode::Copy };
+        if cut {
             let mut r = self.as_mut().rust_mut();
             r.clipboard.clear();
             r.can_paste = false;
+            clip_clear();
         }
         self.start_job(items, dir, mode);
     }
@@ -1113,6 +1212,67 @@ impl FolderModel {
                 m.as_mut().changed();
                 m.as_mut().reloaded();
             });
+        });
+    }
+
+    pub fn duplicate(self: Pin<&mut Self>, paths: &QString) {
+        if self.in_trash {
+            return;
+        }
+        let dir = self.dir.clone();
+        self.start_job(paths_of(paths), dir, Mode::Copy);
+    }
+
+    pub fn terminal(&self, path: &QString) {
+        let p = path.to_string();
+        let dir = if !p.is_empty() && Path::new(&p).is_dir() { p } else { self.dir.clone() };
+        let child = Command::new("foot").current_dir(&dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).process_group(0).spawn();
+        if let Ok(mut child) = child {
+            std::thread::spawn(move || child.wait());
+        }
+    }
+
+    pub fn info(&self, paths: &QString) -> QString {
+        use std::os::unix::fs::MetadataExt;
+        let list = paths_of(paths);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+        let mut rows: Vec<(String, String)> = Vec::new();
+        match list.as_slice() {
+            [] => {}
+            [one] => {
+                let p = Path::new(one);
+                let Ok(m) = std::fs::symlink_metadata(p) else { return QString::from("[]") };
+                let target = std::fs::metadata(p).unwrap_or_else(|_| m.clone());
+                let is_dir = target.is_dir();
+                rows.push((i18n::tr("Name").into(), base(one)));
+                rows.push((i18n::tr("Kind").into(), if m.is_symlink() { i18n::tr("Alias").into() } else { icons::kind(&base(one), is_dir) }));
+                rows.push((i18n::tr("Size").into(), if is_dir { "…".into() } else { fs::size(m.len()) }));
+                rows.push((i18n::tr("Where").into(), p.parent().map_or("/".into(), |d| d.to_string_lossy().into_owned())));
+                if let Ok(t) = m.created() {
+                    rows.push((i18n::tr("Created").into(), fs::date(t.duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64), now)));
+                }
+                rows.push((i18n::tr("Modified").into(), fs::date(m.mtime(), now)));
+                rows.push((i18n::tr("Permissions").into(), format!("{} ({:o})", fs::permissions(m.mode()), m.mode() & 0o777)));
+                rows.push((i18n::tr("Owner").into(), fs::owner(m.uid())));
+            }
+            many => {
+                rows.push((i18n::tr("Name").into(), fs::count(many.len())));
+                rows.push((i18n::tr("Size").into(), "…".into()));
+                rows.push((i18n::tr("Where").into(), Path::new(&many[0]).parent().map_or("/".into(), |d| d.to_string_lossy().into_owned())));
+            }
+        }
+        let body: Vec<String> = rows.iter().map(|(k, v)| format!("[{},{}]", json(k), json(v))).collect();
+        QString::from(&format!("[{}]", body.join(",")))
+    }
+
+    // Taille totale (dossiers compris) calculée à part, rendue par le signal infoSize
+    pub fn start_info_size(self: Pin<&mut Self>, paths: &QString) {
+        let list = paths_of(paths);
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let total: u64 = list.iter().map(|p| ops::tree_size(Path::new(p))).sum();
+            let text = if total < 1024 { fs::size(total) } else { format!("{} ({})", fs::size(total), i18n::trf("%1 B", &[&total])) };
+            let _ = qt.queue(move |m| m.info_size(&QString::from(&text)));
         });
     }
 
@@ -1767,11 +1927,22 @@ impl Fili {
     pub fn home(&self) -> QString {
         QString::from(&home())
     }
+
+    pub fn start_info(&self) -> bool {
+        env::args().any(|a| a == "--info")
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_clipboard() {
+        assert_eq!(parse_clip("cut\nfile:///tmp/a%20b\nfile:///tmp/c", true), (vec!["/tmp/a b".into(), "/tmp/c".into()], Some(true)));
+        assert_eq!(parse_clip("copy\nfile:///tmp/a", true), (vec!["/tmp/a".into()], Some(false)));
+        assert_eq!(parse_clip("# x\r\nfile:///tmp/a\r\nhttp://x/y\r\n", false), (vec!["/tmp/a".into()], None));
+    }
 
     #[test]
     fn normalizes_paths() {

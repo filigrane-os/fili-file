@@ -111,6 +111,8 @@ Window {
         nameInput.text = Fili.pickName();
         show(folder.go(Fili.startPath()));
         files.focusList();
+        if (Fili.startInfo())
+            showInfo();
     }
 
     Shortcut { sequence: "Alt+Left"; onActivated: win.show(folder.back()) }
@@ -127,7 +129,7 @@ Window {
     Shortcut { sequences: ["Ctrl+W", "Ctrl+Q"]; onActivated: Qt.quit() }
 
     // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
-    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible
+    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible
     function trashSelection() {
         const row = folder.trash(files.targetsText(), files.currentIndex);
         files.reloaded();
@@ -148,6 +150,7 @@ Window {
         if (picking)
             return;
         const t = files.targets().filter(path => files.selected[path]);
+        folder.refreshPaste();
         const one = t.length === 1;
         const trash = folder.inTrash;
         const archives = t.length > 0 && folder.allArchives(t.join("\n"));
@@ -178,6 +181,8 @@ Window {
             }
             if (!trash)
                 list.push({ id: "rename", label: Fili.tr("Rename"), hint: "F2", enabled: one });
+            if (!trash)
+                list.push({ id: "duplicate", label: Fili.tr("Duplicate"), hint: "Ctrl+D" });
             if (trash)
                 list.push({ id: "putback", label: Fili.tr("Put Back") });
             else
@@ -188,6 +193,12 @@ Window {
                     list.push({ id: "extract", label: Fili.tr("Extract Here") });
                 list.push({ id: "compress", label: Fili.tr("Compress") });
             }
+            list.push({ separator: true });
+            list.push({ id: "info", label: Fili.tr("Get Info"), hint: "Ctrl+I" });
+        }
+        if (!trash && (t.length === 0 || (one && folder.pathIsDir(t[0])))) {
+            menuPath = t.length === 1 ? t[0] : "";
+            list.push({ id: "terminal", label: Fili.tr("Open Terminal Here") });
         }
         // Sur le fond du dossier: affichage (liste ou grille, fichiers cachés, tri)
         if (t.length === 0) {
@@ -268,6 +279,12 @@ Window {
             folder.paste();
         else if (id === "rename")
             files.startRename();
+        else if (id === "duplicate")
+            folder.duplicate(t);
+        else if (id === "info")
+            win.showInfo();
+        else if (id === "terminal")
+            folder.terminal(menuPath);
         else if (id === "trash")
             win.trashSelection();
         else if (id === "putback")
@@ -285,6 +302,9 @@ Window {
     Shortcut { sequence: "Ctrl+C"; enabled: !win.typing && !win.picking; onActivated: folder.copy(files.targetsText()) }
     Shortcut { sequence: "Ctrl+X"; enabled: !win.typing && !win.picking; onActivated: folder.cut(files.targetsText()) }
     Shortcut { sequence: "Ctrl+V"; enabled: !win.typing && !win.picking; onActivated: folder.paste() }
+    Shortcut { sequence: "Ctrl+D"; enabled: !win.typing && !win.picking; onActivated: folder.duplicate(files.targetsText()) }
+    Shortcut { sequence: "Ctrl+I"; enabled: !win.typing && !win.picking; onActivated: win.showInfo() }
+    Shortcut { sequence: "Ctrl+Alt+T"; enabled: !win.typing && !win.picking; onActivated: folder.terminal(files.targets().length === 1 ? files.targets()[0] : "") }
     Shortcut { sequence: "Ctrl+A"; enabled: !win.typing && !win.picking; onActivated: files.selectAll() }
     Shortcut { sequence: "Ctrl+Z"; enabled: !win.typing && !win.picking; onActivated: folder.undo() }
     Shortcut { sequence: "F2"; enabled: !win.typing && !win.picking; onActivated: files.startRename() }
@@ -685,6 +705,88 @@ Window {
                             confirm.action();
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // Informations (Ctrl+I): éléments sélectionnés, à défaut le dossier affiché; la taille des dossiers arrive après
+    function showInfo() {
+        const t = files.targets().filter(path => files.selected[path]);
+        const list = t.length > 0 ? t : [folder.path];
+        infoCard.rows = JSON.parse(folder.info(list.join("\n")));
+        infoCard.visible = true;
+        folder.startInfoSize(list.join("\n"));
+    }
+    Connections {
+        target: folder
+        function onInfoSize(text) {
+            const r = infoCard.rows.slice();
+            const i = r.findIndex(x => x[0] === Fili.tr("Size"));
+            if (i >= 0 && infoCard.visible) {
+                r[i] = [r[i][0], text];
+                infoCard.rows = r;
+            }
+        }
+    }
+    Rectangle {
+        id: infoCard
+        property var rows: []
+        anchors.fill: parent
+        visible: false
+        z: 200
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        focus: visible
+        onVisibleChanged: if (visible) forceActiveFocus(); else files.focusList()
+        Keys.onPressed: e => {
+            if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Escape || (e.key === Qt.Key_I && (e.modifiers & Qt.ControlModifier)))
+                visible = false;
+            else
+                return;
+            e.accepted = true;
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: infoCard.visible = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 420
+            height: grid.implicitHeight + okRow.height + 3 * FiliTheme.space4
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            Grid {
+                id: grid
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
+                columns: 2
+                columnSpacing: FiliTheme.space3
+                rowSpacing: FiliTheme.space2
+                Repeater {
+                    model: infoCard.rows.length * 2
+                    Text {
+                        readonly property bool label: index % 2 === 0
+                        readonly property string content: infoCard.rows[Math.floor(index / 2)][label ? 0 : 1]
+                        width: label ? 110 : grid.width - 110 - FiliTheme.space3
+                        horizontalAlignment: label ? Text.AlignRight : Text.AlignLeft
+                        wrapMode: Text.WrapAnywhere
+                        text: content
+                        textFormat: Text.PlainText
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.sizeList
+                        font.weight: label ? FiliTheme.weightAccent : Font.Normal
+                        color: label ? FiliTheme.brume2 : FiliTheme.brume
+                    }
+                }
+            }
+            Row {
+                id: okRow
+                anchors { right: parent.right; bottom: parent.bottom; margins: FiliTheme.space4 }
+                TextButton {
+                    label: Fili.tr("OK")
+                    primary: true
+                    onClicked: infoCard.visible = false
                 }
             }
         }
