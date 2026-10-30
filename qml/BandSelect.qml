@@ -7,7 +7,10 @@ MouseArea {
     id: band
     required property Item view
     required property Flickable flick
-    z: -2
+    // Dans le contenu de la vue, sous les lignes: ailleurs, la souris n'arrive pas jusqu'ici
+    parent: flick.contentItem
+    z: -1
+    x: -flick.leftMargin
     width: flick.width
     height: Math.max(flick.height, flick.contentHeight)
     acceptedButtons: Qt.LeftButton
@@ -43,7 +46,8 @@ MouseArea {
         for (const it of flick.contentItem.children) {
             if (it.path === undefined || !it.visible)
                 continue;
-            if (it.x < rect.x + rect.width && it.x + it.width > rect.x && it.y < rect.y + rect.height && it.y + it.height > rect.y)
+            const left = rect.x + band.x;
+            if (it.x < left + rect.width && it.x + it.width > left && it.y < rect.y + rect.height && it.y + it.height > rect.y)
                 s[it.path] = true;
         }
         view.selected = s;
