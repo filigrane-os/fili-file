@@ -1,6 +1,6 @@
-// Icônes du thème Papirus (celui de Filigrane, mêmes icônes en mode clair et sombre): type MIME d'après l'extension
-// (shared-mime-info: globs2, generic-icons), puis nom d'icône freedesktop -> fichier. Tables lues une fois,
-// fichiers trouvés gardés en mémoire.
+// Icônes de Filigrane (thème « Filigrane-Icons » de scripts/icon-theme.sh: dossiers et glyphes de Nordic; le reste vient
+// d'Adwaita, en symboliques recolorés selon le mode): type MIME d'après l'extension (shared-mime-info: globs2,
+// generic-icons), puis nom d'icône freedesktop -> fichier. Tables lues une fois, fichiers trouvés gardés en mémoire.
 use crate::fs::Entry;
 use std::{
     collections::HashMap,
@@ -9,8 +9,8 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-const THEMES: [&str; 3] = ["Papirus", "Adwaita", "hicolor"];
-// 22 px en premier: les dossiers 16 px de Papirus sont monochromes (icônes de panneau), sombres sur fond sombre
+const OWN_THEME: &str = "Filigrane-Icons";
+const THEMES: [&str; 2] = ["Adwaita", "hicolor"];
 const SIZES: [&str; 6] = ["22x22", "32x32", "24x24", "16x16", "48x48", "scalable"];
 const CONTEXTS: [&str; 4] = ["places", "mimetypes", "devices", "apps"];
 
@@ -47,6 +47,11 @@ fn find(names: &[&str]) -> String {
     let cache = CACHE.get_or_init(Default::default);
     let mut cache = cache.lock().unwrap_or_else(|e| e.into_inner());
     for name in names {
+        if let Some(p) = lookup_user(name) {
+            return format!("file://{p}");
+        }
+    }
+    for name in names {
         if let Some(url) = cache.get(*name) {
             if !url.is_empty() {
                 return url.clone();
@@ -62,7 +67,53 @@ fn find(names: &[&str]) -> String {
     String::new()
 }
 
+// Racine du thème Filigrane-Icons (~/.local/share/icons, à défaut /usr/share/icons), rangé par contexte puis taille
+// (<ctx>/<taille>/)
+fn own_root() -> Option<&'static str> {
+    static T: OnceLock<Option<String>> = OnceLock::new();
+    T.get_or_init(|| {
+        let home = std::env::var("HOME").unwrap_or_default();
+        [format!("{home}/.local/share/icons/{OWN_THEME}"), format!("/usr/share/icons/{OWN_THEME}")].into_iter().find(|r| Path::new(r).is_dir())
+    })
+    .as_deref()
+}
+
+// Icône du thème Filigrane, prioritaire pour toutes les propositions
+fn lookup_user(name: &str) -> Option<String> {
+    let root = own_root()?;
+    for ctx in CONTEXTS {
+        for size in ["scalable", "32", "24", "22", "16"] {
+            for ext in ["svg", "png"] {
+                let p = format!("{root}/{ctx}/{size}/{name}.{ext}");
+                if Path::new(&p).exists() {
+                    return Some(p);
+                }
+            }
+        }
+    }
+    None
+}
+
+// Symbolique « <nom>-symbolic.svg »: thème Filigrane puis Adwaita
+fn lookup_symbolic(name: &str) -> Option<String> {
+    let mut roots: Vec<String> = own_root().map(String::from).into_iter().collect();
+    roots.push("/usr/share/icons/Adwaita/symbolic".into());
+    for root in &roots {
+        let own = root.ends_with(OWN_THEME);
+        for ctx in ["places", "mimetypes", "devices", "status", "actions"] {
+            let p = if own { format!("{root}/{ctx}/symbolic/{name}-symbolic.svg") } else { format!("{root}/{ctx}/{name}-symbolic.svg") };
+            if Path::new(&p).exists() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
 fn lookup(name: &str) -> Option<String> {
+    if let Some(p) = lookup_symbolic(name) {
+        return Some(p);
+    }
     for theme in THEMES {
         for size in SIZES {
             for ctx in CONTEXTS {
@@ -78,24 +129,52 @@ fn lookup(name: &str) -> Option<String> {
     None
 }
 
-pub fn named(name: &str) -> String {
-    find(&[name])
-}
-
-// Glyphe monochrome 16 px de la barre latérale (Papirus-Dark: clair, pour le mode sombre; Papirus: sombre), que le
-// QML teinte; à défaut, l'icône en couleur
-pub fn symbolic(name: &str, dark: bool) -> String {
-    let theme = if dark { "Papirus-Dark" } else { "Papirus" };
-    for ctx in ["places", "devices", "actions"] {
-        let p = format!("/usr/share/icons/{theme}/16x16/{ctx}/{name}.svg");
-        if Path::new(&p).exists() {
-            return format!("file://{p}");
+// Toutes les couleurs hexadécimales d'un SVG remplacées par `color`
+fn recolor_svg(svg: &str, color: &str) -> String {
+    let mut out = String::with_capacity(svg.len());
+    let mut rest = svg;
+    while let Some(i) = rest.find('#') {
+        let hex = rest[i + 1..].bytes().take_while(u8::is_ascii_hexdigit).count();
+        out.push_str(&rest[..i]);
+        if matches!(hex, 3 | 6 | 8) {
+            out.push_str(color);
+            rest = &rest[i + 1 + hex..];
+        } else {
+            out.push('#');
+            rest = &rest[i + 1..];
         }
     }
-    named(name)
+    out.push_str(rest);
+    out
 }
 
-// Dossiers bleus (variante Papirus « folder-blue », comme le Finder): dossiers personnels (XDG) reconnus par leur
+// Copie recolorée d'un SVG dans ~/.cache/fili-file/tint, nommée d'après la couleur et le chemin; l'URL d'origine si la
+// copie échoue
+fn recolored(path: &str, color: &str) -> String {
+    let Ok(home) = std::env::var("HOME") else { return format!("file://{path}") };
+    let dir = format!("{home}/.cache/fili-file/tint");
+    let out = format!("{dir}/{}-{}", &color[1..], path.trim_start_matches('/').replace('/', "_"));
+    if !Path::new(&out).exists() {
+        let Ok(svg) = fs::read_to_string(path) else { return format!("file://{path}") };
+        if fs::create_dir_all(&dir).and_then(|_| fs::write(&out, recolor_svg(&svg, color))).is_err() {
+            return format!("file://{path}");
+        }
+    }
+    format!("file://{out}")
+}
+
+// Glyphe de la barre latérale: symbolique du thème (dossier « folder » à défaut), en blanc pour que le QML le teinte
+// à l'accent par colorisation (qui garde la luminance: un glyphe noir resterait noir)
+pub fn symbolic(name: &str) -> String {
+    let base = if name == "user-trash-full" { "user-trash" } else { name };
+    // Glyphes pleins de 16 px du thème (places/16), plus lisibles que les symboliques à traits fins
+    let full = own_root().map(|r| format!("{r}/places/16/{name}.svg")).filter(|p| Path::new(p).exists());
+    let found = full
+        .or_else(|| lookup_symbolic(name)).or_else(|| lookup_symbolic(base)).or_else(|| lookup_symbolic("folder"));
+    found.map(|p| recolored(&p, "#ffffff")).unwrap_or_default()
+}
+
+// Dossiers bleus (variante « folder-blue » du thème, comme le Finder): dossiers personnels (XDG) reconnus par leur
 // chemin, sinon dossier générique
 pub fn folder(path: &str, special: &HashMap<String, &'static str>) -> String {
     match special.get(path) {
@@ -174,13 +253,84 @@ pub fn file(e: &Entry) -> String {
     if e.exec {
         names.push("application-x-executable");
     }
-    names.push("text-x-generic");
+    // file.svg du thème Filigrane passe avant tout (même icône pour tous les fichiers); sans le thème, le symbolique
+    // Adwaita du type
+    names.extend(["file", "text-x-generic"]);
     find(&names)
+}
+
+// Teintes d'accentuation [sombre, clair] (FiliTheme.qml, accentTones; vérifiées par un test)
+const ACCENTS: [(&str, &str, &str); 7] = [
+    ("default", "#dbe7f4", "#1c222b"),
+    ("voile", "#9dbbd6", "#3f5a78"),
+    ("ardoise", "#7f9ab6", "#4f6884"),
+    ("sauge", "#a3bfa8", "#4a7354"),
+    ("sable", "#d2bf92", "#80662b"),
+    ("cendre", "#c98f93", "#9a4f55"),
+    ("brume", "#dbe7f4", "#4f5e70"),
+];
+
+// Dossier « folder-blue* » (deux aplats, #5294e2 devant et #4877b1 derrière) recoloré à l'accent: copie
+// dans ~/.cache/fili-file/tint, nommée d'après l'icône et la couleur. Toute autre icône est rendue telle quelle.
+pub fn tint(url: &str, accent: &str, light: bool) -> String {
+    // Icône de type de fichier symbolique (Adwaita): gris du texte secondaire du mode
+    if let Some(path) = url.strip_prefix("file://").filter(|p| p.ends_with("-symbolic.svg")) {
+        return recolored(path, if light { "#4f5e70" } else { "#a9b8c8" });
+    }
+    let Some(path) = url.strip_prefix("file://").filter(|p| p.contains("/folder-blue") && p.ends_with(".svg")) else {
+        return url.to_string();
+    };
+    // Thème qui fournit déjà ses dossiers « folder-accent-<accent>.svg » (scripts/icon-theme.sh): on les prend
+    if let Some(dir) = path.strip_suffix("/folder-blue.svg") {
+        let kind = match (accent, light) {
+            ("default", false) => "dark-default".to_string(),
+            ("default", true) => "light-default".to_string(),
+            _ => format!("accent-{accent}"),
+        };
+        let own = format!("{dir}/folder-{kind}.svg");
+        if Path::new(&own).exists() {
+            return format!("file://{own}");
+        }
+    }
+    let (_, dark, clear) = ACCENTS.iter().find(|a| a.0 == accent).unwrap_or(&ACCENTS[0]);
+    let front = if light { clear } else { dark };
+    let rgb: Vec<u32> = (0..3).map(|i| u32::from_str_radix(&front[1 + 2 * i..3 + 2 * i], 16).unwrap_or(0)).collect();
+    let back = format!("#{:02x}{:02x}{:02x}", rgb[0] * 85 / 100, rgb[1] * 85 / 100, rgb[2] * 85 / 100);
+    let Ok(home) = std::env::var("HOME") else { return url.to_string() };
+    let dir = format!("{home}/.cache/fili-file/tint");
+    let out = format!("{dir}/{}-{}.svg", &front[1..], path.trim_start_matches('/').replace('/', "_").trim_end_matches(".svg"));
+    if !Path::new(&out).exists() {
+        let Ok(svg) = fs::read_to_string(path) else { return url.to_string() };
+        let svg = svg.replace("#5294e2", front).replace("#4877b1", &back);
+        if fs::create_dir_all(&dir).and_then(|_| fs::write(&out, svg)).is_err() {
+            return url.to_string();
+        }
+    }
+    format!("file://{out}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn accents_match_the_shell() {
+        let qml = fs::read_to_string(format!("{}/qml/FiliTheme.qml", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        for (name, dark, light) in ACCENTS {
+            assert!(qml.contains(&format!("{name}: [\"{dark}\"")), "{name} sombre");
+            assert!(qml.contains(&format!("\"{light}\", \"")), "{name} clair");
+        }
+    }
+
+    #[test]
+    fn recolor_replaces_hex_colors_only() {
+        assert_eq!(recolor_svg("<path fill=\"#222222\" style=\"fill:#fff;stroke:none\" d=\"M1 1\"/> #zz", "#ffffff"), "<path fill=\"#ffffff\" style=\"fill:#ffffff;stroke:none\" d=\"M1 1\"/> #zz");
+    }
+
+    #[test]
+    fn tint_leaves_other_icons_alone() {
+        assert_eq!(tint("file:///usr/share/icons/hicolor/22x22/apps/x.png", "sable", false), "file:///usr/share/icons/hicolor/22x22/apps/x.png");
+    }
 
     #[test]
     fn mime_by_extension() {

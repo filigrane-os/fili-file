@@ -61,8 +61,8 @@ mod tests {
         let shell = tokens(&read("../../dotfiles/config/quickshell/FiliTheme.qml"));
         let ours = tokens(&read("qml/FiliTheme.qml"));
         let mut common = 0;
-        // light: même rôle, autre source (Fili suit l'état de fili-theme)
-        for (name, value) in ours.iter().filter(|(n, _)| *n != "light") {
+        // light, accent: même rôle, autre source (Fili suit l'état de fili-theme)
+        for (name, value) in ours.iter().filter(|(n, _)| *n != "light" && *n != "accent") {
             if let Some(v) = shell.get(name) {
                 assert_eq!(v, value, "token {name}");
                 common += 1;

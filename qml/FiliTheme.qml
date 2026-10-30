@@ -6,6 +6,7 @@ import Fili.Files
 
 QtObject {
     readonly property bool light: Fili.light
+    readonly property string accent: Fili.accent
 
     readonly property color nuit: light ? "#f3f1ec" : "#1c222b"
     readonly property color nuitProfond: light ? "#f8f7f3" : "#181d25"
@@ -14,8 +15,11 @@ QtObject {
     readonly property color nuit4: light ? "#cdc8bd" : "#3c4858"
     readonly property color ardoise: "#5f7894"
     readonly property color brume2: light ? "#4f5e70" : "#a9b8c8"
-    readonly property color voile: light ? "#3f5a78" : "#9dbbd6"
-    readonly property color voileVif: light ? "#2f4a66" : "#b9d0e4"
+    // Couleur d'accentuation (fili-theme accent): [sombre, sombre vif, clair, clair vif]; défaut = brume en sombre, noir (nuit) en clair
+    readonly property var accentTones: ({ default: ["#dbe7f4", "#f3f1ec", "#1c222b", "#0f1319"], voile: ["#9dbbd6", "#b9d0e4", "#3f5a78", "#2f4a66"], ardoise: ["#7f9ab6", "#9ab2ca", "#4f6884", "#3d5470"], sauge: ["#a3bfa8", "#bcd3c0", "#4a7354", "#385a42"], sable: ["#d2bf92", "#e0d1ab", "#80662b", "#654f1f"], cendre: ["#c98f93", "#d9a8ab", "#9a4f55", "#7d3c42"], brume: ["#dbe7f4", "#f3f1ec", "#4f5e70", "#1c222b"] })
+    readonly property var tone: accentTones[accent] || accentTones.default
+    readonly property color voile: light ? tone[2] : tone[0]
+    readonly property color voileVif: light ? tone[3] : tone[1]
     readonly property color brume: light ? "#1c222b" : "#dbe7f4"
     readonly property color sable: light ? "#80662b" : "#d2bf92"
     readonly property color cendre: light ? "#9a4f55" : "#c98f93"

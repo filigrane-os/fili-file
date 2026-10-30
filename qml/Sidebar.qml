@@ -76,7 +76,6 @@ Rectangle {
             required property string dev
             required property bool removable
             required property string mono
-            required property string monoLight
             required property bool full
             required property int index
             readonly property bool sel: path !== "" && path === side.current
@@ -94,14 +93,14 @@ Rectangle {
                 width: 16
                 height: 16
                 sourceSize: Qt.size(32, 32)
-                source: FiliTheme.light ? row.monoLight : row.mono
+                source: row.mono
                 layer.enabled: true
                 layer.effect: MultiEffect {
                     colorization: 1.0
                     colorizationColor: row.sel ? FiliTheme.voileVif : FiliTheme.voile
                 }
             }
-            // Corbeille pleine: pastille sur le glyphe (le glyphe plein de Papirus ne se distingue guère à 16 px)
+            // Corbeille pleine: pastille sur le glyphe (le glyphe plein ne se distingue guère à 16 px)
             Rectangle {
                 visible: row.full
                 x: img.x + img.width - 6

@@ -315,7 +315,7 @@ Rectangle {
         anchors { top: parent.top; topMargin: FiliTheme.space2; left: parent.left; right: parent.right; bottom: parent.bottom }
         clip: true
         cellWidth: 104
-        cellHeight: 112
+        cellHeight: 120
         readonly property int columns: Math.max(1, Math.floor((width - 2 * FiliTheme.space4) / cellWidth))
         // Grille alignée à gauche (le GridView pose les cellules à partir de la marge du contenu)
         leftMargin: FiliTheme.space4
@@ -407,7 +407,7 @@ Rectangle {
                 width: FiliTheme.iconSize
                 height: FiliTheme.iconSize
                 sourceSize: Qt.size(FiliTheme.iconSize * 2, FiliTheme.iconSize * 2)
-                source: row.icon
+                source: Fili.tint(row.icon, Fili.accent, Fili.light)
                 asynchronous: true
                 opacity: row.hidden ? 0.6 : 1
                 fillMode: Image.PreserveAspectFit
@@ -431,7 +431,7 @@ Rectangle {
                 width: 64
                 height: 64
                 sourceSize: Qt.size(128, 128)
-                source: row.tile ? row.icon : ""
+                source: row.tile ? Fili.tint(row.icon, Fili.accent, Fili.light) : ""
                 asynchronous: true
                 opacity: row.hidden ? 0.6 : 1
                 fillMode: Image.PreserveAspectFit

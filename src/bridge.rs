@@ -203,6 +203,7 @@ pub mod qobject {
         #[qml_element]
         #[qml_singleton]
         #[qproperty(bool, light, READ, NOTIFY = theme_changed)]
+        #[qproperty(QString, accent, READ, NOTIFY = theme_changed)]
         #[qproperty(bool, key_nav, cxx_name = "keyNav")]
         type Fili = super::FiliRust;
 
@@ -294,6 +295,9 @@ pub mod qobject {
         fn unmount_volume(self: Pin<&mut Fili>, dev: &QString);
         #[qinvokable]
         fn tr(self: &Fili, text: &QString) -> QString;
+        // Icône de dossier à la couleur d'accentuation (autres icônes inchangées)
+        #[qinvokable]
+        fn tint(self: &Fili, url: &QString, accent: &QString, light: bool) -> QString;
         // Lieux de la barre latérale, en JSON: [{section, name, path, icon}]
         #[qinvokable]
         fn places(self: &Fili) -> QString;
@@ -352,7 +356,7 @@ fn home() -> String {
     env::var("HOME").unwrap_or_else(|_| "/".into())
 }
 
-// Dossiers personnels XDG (user-dirs.dirs, à défaut ~/Desktop, ~/Documents...) -> nom d'icône Papirus
+// Dossiers personnels XDG (user-dirs.dirs, à défaut ~/Desktop, ~/Documents...) -> nom d'icône freedesktop
 fn xdg_dirs() -> Vec<(String, &'static str)> {
     let home = home();
     let config = env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
@@ -1639,6 +1643,7 @@ impl cxx_qt::Initialize for FolderModel {
 #[derive(Default)]
 pub struct FiliRust {
     light: bool,
+    accent: QString,
     key_nav: bool,
 }
 
@@ -1662,9 +1667,15 @@ fn read_light() -> bool {
     std::fs::read_to_string(theme_file()).is_ok_and(|t| t.trim() == "light")
 }
 
+// Couleur d'accentuation (nom), « default » par défaut
+fn read_accent() -> String {
+    std::fs::read_to_string(theme_file().with_file_name("accent")).map(|t| t.trim().to_string()).unwrap_or_else(|_| "default".into())
+}
+
 impl cxx_qt::Initialize for Fili {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().light = read_light();
+        self.as_mut().rust_mut().accent = QString::from(&read_accent());
         // Montages: /proc/self/mountinfo signale chaque changement par POLLPRI
         let mounts = self.qt_thread();
         std::thread::spawn(move || {
@@ -1710,9 +1721,11 @@ impl cxx_qt::Initialize for Fili {
                     return;
                 }
                 let light = read_light();
+                let accent = read_accent();
                 let sent = qt.queue(move |mut f| {
-                    if f.light != light {
+                    if f.light != light || f.accent.to_string() != accent {
                         f.as_mut().rust_mut().light = light;
+                        f.as_mut().rust_mut().accent = QString::from(&accent);
                         f.as_mut().theme_changed();
                     }
                 });
@@ -1871,6 +1884,10 @@ impl Fili {
         }
     }
 
+    pub fn tint(&self, url: &QString, accent: &QString, light: bool) -> QString {
+        QString::from(icons::tint(&url.to_string(), &accent.to_string(), light))
+    }
+
     pub fn tr(&self, text: &QString) -> QString {
         QString::from(i18n::tr(&text.to_string()))
     }
@@ -1911,14 +1928,13 @@ impl Fili {
             .iter()
             .map(|(s, n, p, i, dev)| {
                 format!(
-                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"removable\":{},\"mono\":{},\"monoLight\":{},\"full\":{}}}",
+                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"removable\":{},\"mono\":{},\"full\":{}}}",
                     json(s),
                     json(n),
                     json(p),
                     json(dev),
                     removable.contains(p),
-                    json(&icons::symbolic(i, true)),
-                    json(&icons::symbolic(i, false)),
+                    json(&icons::symbolic(i)),
                     *i == "user-trash-full"
                 )
             })
