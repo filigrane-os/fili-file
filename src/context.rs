@@ -35,7 +35,7 @@ fn json(s: &str) -> String {
 const ABOUT: &str = "File manager. location = folder shown (results = title if a result list from ctl show replaces its content), selection = paths the user selected (absolute). \
 Act on files with normal shell tools (mv, cp, rg, sha256sum, tar...) using these paths; prefer the shell for batch work. \
 fili-file shows changes live (inotify), so no refresh call is needed. To change files use fili-tx (mv, mv - for batches, trash, mkdir, cp), never bare mv/rm: fili-tx undo reverts the whole request. \
-To take the user somewhere: fili-file ctl goto PATH (a file is selected in its folder). To show search results in this window: \
+To take the user somewhere: fili-file ctl goto PATH (a file is selected in its folder). Menu commands (the fili-bar menu): fili-file ctl action new-folder|copy|paste|rename|trash|undo|reload|... acts on the user's selection. To show search results in this window: \
 find them with fd/rg/find, then fili-file ctl show 'TITLE' < paths (one absolute path per line); both bring the window forward.";
 
 // results: titre de la liste de résultats affichée (vide: le dossier normal)
@@ -94,9 +94,16 @@ fn alive(pid: &str) -> bool {
     Path::new(&format!("/proc/{pid}")).is_dir()
 }
 
-// Instance visée: celle notée par Mod+Y ($FILI_CONTEXT_FILE), sinon la dernière lancée
-fn target() -> Option<PathBuf> {
+// Instance visée: celle du pid demandé (--pid: la fili-bar connaît la fenêtre active), sinon celle notée par Mod+Y
+// ($FILI_CONTEXT_FILE), sinon la dernière lancée
+fn target(pid: Option<&str>) -> Option<PathBuf> {
     let dir = PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR")?).join("fili/context");
+    if let Some(pid) = pid.filter(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())) {
+        let s = dir.join(format!("{pid}.sock"));
+        if alive(pid) && s.exists() {
+            return Some(s);
+        }
+    }
     let noted = std::env::var_os("FILI_CONTEXT_FILE").and_then(|f| fs::read_to_string(f).ok()).filter(|t| t.contains("\"app\":\"fili-file\""));
     if let Some(t) = noted {
         let pid: String = t.split("\"pid\":").nth(1).unwrap_or("").chars().take_while(char::is_ascii_digit).collect();
@@ -128,20 +135,36 @@ fn raise(pid: &str) {
     }
 }
 
-// fili-file ctl <goto CHEMIN | show TITRE (chemins sur l'entrée standard)>
+const USAGE: &str = "usage: fili-file ctl [--pid PID] goto PATH | show TITLE < paths | action NAME";
+
+// Sépare l'option --pid du reste des arguments
+fn split_pid(args: &[String]) -> (Option<String>, &[String]) {
+    match args {
+        [flag, pid, rest @ ..] if flag == "--pid" => (Some(pid.clone()), rest),
+        _ => (None, args),
+    }
+}
+
+// fili-file ctl [--pid PID] <goto CHEMIN | show TITRE (chemins sur l'entrée standard) | action NOM>
+// action: déclenche une commande de la barre de menus (new-folder, copy, paste, rename...), la fili-bar les propose
 pub fn ctl(args: &[String]) -> Result<(), String> {
-    let (verb, arg) = (args.first().ok_or("usage: fili-file ctl goto PATH | show TITLE < paths")?, args.get(1).cloned().unwrap_or_default());
+    let (pid, args) = split_pid(args);
+    let (verb, arg) = (args.first().ok_or(USAGE)?, args.get(1).cloned().unwrap_or_default());
     let mut body = String::new();
     match verb.as_str() {
-        "goto" if !arg.is_empty() => {}
+        "goto" | "action" if !arg.is_empty() => {}
         "show" => {
             let _ = std::io::stdin().take(4 << 20).read_to_string(&mut body);
         }
-        _ => return Err("usage: fili-file ctl goto PATH | show TITLE < paths".into()),
+        _ => return Err(USAGE.into()),
     }
     // Chemin relatif: relatif au dossier de l'appelant, pas à celui de l'application
     let arg = if verb == "goto" { std::path::absolute(&arg).map_or(arg, |p| p.to_string_lossy().into_owned()) } else { arg };
-    let mut sock = target();
+    let mut sock = target(pid.as_deref());
+    // Une commande de menu vise une fenêtre ouverte: pas d'instance à lancer pour elle
+    if sock.is_none() && verb == "action" {
+        return Err("no fili-file window".into());
+    }
     if sock.is_none() {
         // Aucune instance: on en lance une, puis on attend son socket
         std::process::Command::new(std::env::current_exe().map_err(|e| e.to_string())?)
@@ -153,7 +176,7 @@ pub fn ctl(args: &[String]) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         for _ in 0..50 {
             std::thread::sleep(Duration::from_millis(100));
-            sock = target();
+            sock = target(pid.as_deref());
             if sock.is_some() {
                 break;
             }
@@ -168,4 +191,31 @@ pub fn ctl(args: &[String]) -> Result<(), String> {
     let _ = c.read_to_string(&mut ack);
     raise(&sock.file_stem().unwrap_or_default().to_string_lossy());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v(a: &[&str]) -> Vec<String> {
+        a.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn pid_optionnel_avant_le_verbe() {
+        let a = v(&["--pid", "123", "action", "copy"]);
+        let (pid, rest) = split_pid(&a);
+        assert_eq!(pid.as_deref(), Some("123"));
+        assert_eq!(rest, &v(&["action", "copy"])[..]);
+        let b = v(&["goto", "/tmp"]);
+        let (pid, rest) = split_pid(&b);
+        assert_eq!(pid, None);
+        assert_eq!(rest, &b[..]);
+    }
+
+    #[test]
+    fn commande_sans_nom_refusee() {
+        assert!(ctl(&v(&["action"])).is_err());
+        assert!(ctl(&v(&["--pid", "1", "inconnue", "x"])).is_err());
+    }
 }

@@ -146,6 +146,8 @@ ApplicationWindow {
                 folder.showResults(arg, body);
                 files.select(0);
                 files.focusList();
+            } else if (verb === "action") {
+                win.runAction(arg);
             }
         }
     }
@@ -191,6 +193,20 @@ ApplicationWindow {
     Action { id: aUp; text: Fili.tr("Enclosing Folder"); shortcut: "Alt+Up"; onTriggered: win.show(folder.up()) }
     Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
     Action { id: aSearch; text: Fili.tr("Search"); shortcut: "Ctrl+F"; onTriggered: searchInput.forceActiveFocus() }
+
+    // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
+    // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
+    readonly property var menuActions: ({
+        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose,
+        "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename,
+        "select-all": aSelectAll, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden,
+        "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "search": aSearch
+    })
+    function runAction(name) {
+        const a = menuActions[name];
+        if (a && a.enabled)
+            a.trigger();
+    }
 
     menuBar: MenuBar {
         id: bar
