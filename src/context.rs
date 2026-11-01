@@ -32,21 +32,23 @@ fn json(s: &str) -> String {
 
 // Ce que l'assistant doit savoir de l'application (contrat commun des fili-*): le rôle, le sens des champs, la voie
 // d'exécution conseillée. Court: il part dans le prompt.
-const ABOUT: &str = "File manager. location = folder shown, selection = paths the user selected (absolute). \
+const ABOUT: &str = "File manager. location = folder shown (results = title if a result list from ctl show replaces its content), selection = paths the user selected (absolute). \
 Act on files with normal shell tools (mv, cp, rg, sha256sum, tar...) using these paths; prefer the shell for batch work. \
 fili-file shows changes live (inotify), so no refresh call is needed. Trash with gio trash, never rm, unless asked. \
 To take the user somewhere: fili-file ctl goto PATH (a file is selected in its folder). To show search results in this window: \
 find them with fd/rg/find, then fili-file ctl show 'TITLE' < paths (one absolute path per line); both bring the window forward.";
 
-pub fn publish(app: &str, location: &str, selection: &[String]) {
+// results: titre de la liste de résultats affichée (vide: le dossier normal)
+pub fn publish(app: &str, location: &str, selection: &[String], results: &str) {
     let Some(f) = file() else { return };
     let sel: Vec<String> = selection.iter().take(200).map(|p| json(p)).collect();
     let body = format!(
-        "{{\"app\":{},\"about\":{},\"pid\":{},\"location\":{},\"selection\":[{}],\"selection_count\":{}}}\n",
+        "{{\"app\":{},\"about\":{},\"pid\":{},\"location\":{},\"results\":{},\"selection\":[{}],\"selection_count\":{}}}\n",
         json(app),
         json(ABOUT),
         std::process::id(),
         json(location),
+        json(results),
         sel.join(","),
         selection.len()
     );

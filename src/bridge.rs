@@ -35,6 +35,8 @@ pub mod qobject {
         #[qproperty(QString, filter, READ, NOTIFY = changed)]
         // Titre des résultats affichés à la place du contenu du dossier (vide: dossier normal)
         #[qproperty(QString, results, READ, NOTIFY = changed)]
+        // Dossier à montrer dans le fil d'Ariane et le titre: le dossier commun des résultats, sinon le dossier affiché
+        #[qproperty(QString, shown, READ, NOTIFY = changed)]
         #[qproperty(bool, busy, READ, NOTIFY = changed)]
         // Avancement de l'opération en cours (0 à 1), -1 tant que le total n'est pas connu
         #[qproperty(f64, progress, READ, NOTIFY = changed)]
@@ -328,7 +330,7 @@ pub mod qobject {
         // un dossier vide retire le contexte (fermeture)
         #[qinvokable]
         #[cxx_name = "publishContext"]
-        fn publish_context(self: &Fili, location: &QString, selection: &QString);
+        fn publish_context(self: &Fili, location: &QString, selection: &QString, results: &QString);
     }
 
     impl cxx_qt::Initialize for Fili {}
@@ -546,6 +548,7 @@ pub struct FolderModelRust {
     error: QString,
     filter: QString,
     results: QString,
+    shown: QString,
     // Filtre du sélecteur de fichiers (index dans pick::Pick::filters, -1: aucun)
     pick_filter: i32,
     busy: bool,
@@ -785,6 +788,17 @@ impl FolderModel {
 
     // Relit le dossier affiché sur place; false si on ne peut plus le lire
     fn reload_rows(mut self: Pin<&mut Self>) -> bool {
+        // Résultats affichés: on ne relit pas le dossier, on relit chaque résultat et on retire ceux qui ont disparu
+        if !self.results.is_empty() {
+            let all: Vec<fs::Entry> = self
+                .all
+                .iter()
+                .filter_map(|e| fs::entry(Path::new(&e.path)).map(|n| fs::Entry { name: e.name.clone(), ..n }))
+                .collect();
+            self.as_mut().rust_mut().all = all;
+            self.as_mut().apply();
+            return true;
+        }
         match fs::list(Path::new(&self.dir)) {
             Ok(all) => {
                 self.as_mut().rust_mut().all = all;
@@ -798,17 +812,6 @@ impl FolderModel {
     // Changement vu par inotify: relecture, ou, si le dossier a disparu, le plus proche dossier qui existe
     fn live_reload(mut self: Pin<&mut Self>) {
         if self.dir.is_empty() {
-            return;
-        }
-        // Résultats affichés: on ne relit pas le dossier, on retire ce qui a disparu et on relit le reste
-        if !self.results.is_empty() {
-            let all: Vec<fs::Entry> = self
-                .all
-                .iter()
-                .filter_map(|e| fs::entry(Path::new(&e.path)).map(|n| fs::Entry { name: e.name.clone(), ..n }))
-                .collect();
-            self.as_mut().rust_mut().all = all;
-            self.as_mut().apply();
             return;
         }
         if !self.as_mut().reload_rows() {
@@ -831,6 +834,7 @@ impl FolderModel {
                 if let Some(w) = &r.watcher {
                     w.watch(Path::new(&dir));
                 }
+                r.shown = QString::from(&dir);
                 r.dir = dir;
                 r.error = QString::default();
                 r.filter = QString::default();
@@ -902,7 +906,8 @@ impl FolderModel {
                 common.truncate(n);
             }
         }
-        let prefix = format!("{}/", common.join("/"));
+        let shown = if common.len() > 1 { common.join("/") } else { "/".into() };
+        let prefix = format!("{}/", shown.trim_end_matches('/'));
         let all: Vec<fs::Entry> = found
             .iter()
             .map(|e| fs::Entry { name: e.path.strip_prefix(&prefix).unwrap_or(&e.path).to_string(), ..e.clone() })
@@ -911,13 +916,17 @@ impl FolderModel {
         r.all = all;
         r.filter = QString::default();
         r.results = if title.is_empty() { QString::from("…") } else { title.clone() };
+        r.shown = QString::from(&shown);
         self.as_mut().rebuild();
         self.as_mut().changed();
     }
 
     pub fn close_results(mut self: Pin<&mut Self>) {
         if !self.results.is_empty() {
-            self.as_mut().rust_mut().results = QString::default();
+            let dir = QString::from(&self.dir);
+            let mut r = self.as_mut().rust_mut();
+            r.results = QString::default();
+            r.shown = dir;
             self.as_mut().reload_rows();
             self.as_mut().changed();
         }
@@ -1149,6 +1158,9 @@ impl FolderModel {
     }
 
     pub fn paste(mut self: Pin<&mut Self>) {
+        if !self.results.is_empty() {
+            return self.fail(i18n::tr("Close the results first").into());
+        }
         if self.in_trash {
             return self.fail(i18n::tr("Nothing can be pasted into the Trash").into());
         }
@@ -1580,7 +1592,18 @@ impl FolderModel {
         match ops::rename(Path::new(&path), &name) {
             Ok(dst) => {
                 if dst != Path::new(&path) {
-                    self.as_mut().push_undo(Undo::Rename(PathBuf::from(&path), dst));
+                    self.as_mut().push_undo(Undo::Rename(PathBuf::from(&path), dst.clone()));
+                }
+                if !self.results.is_empty() {
+                    // Le résultat suit son nouveau nom (le dossier d'origine du chemin ne change pas)
+                    let dst = dst.to_string_lossy().into_owned();
+                    for e in self.as_mut().rust_mut().all.iter_mut().filter(|e| e.path == path) {
+                        e.name = format!("{}{}", e.name.strip_suffix(&base(&path)).unwrap_or(""), name);
+                        e.path = dst.clone();
+                    }
+                    self.as_mut().reload_rows();
+                    self.as_mut().changed();
+                    return self.rows.iter().position(|e| e.path == dst).map_or(-1, |i| i as i32);
                 }
                 self.as_mut().settle(Some(&name), 0)
             }
@@ -1598,6 +1621,10 @@ impl FolderModel {
 
     pub fn new_folder(mut self: Pin<&mut Self>) -> i32 {
         self.as_mut().rust_mut().error = QString::default();
+        if !self.results.is_empty() {
+            self.as_mut().fail(i18n::tr("Close the results first").into());
+            return -1;
+        }
         if self.in_trash {
             self.as_mut().fail(i18n::tr("Nothing can be created in the Trash").into());
             return -1;
@@ -2022,12 +2049,12 @@ impl Fili {
         QString::from(&home())
     }
 
-    pub fn publish_context(&self, location: &QString, selection: &QString) {
+    pub fn publish_context(&self, location: &QString, selection: &QString, results: &QString) {
         let loc = location.to_string();
         if loc.is_empty() {
             crate::context::clear();
         } else {
-            crate::context::publish("fili-file", &loc, &paths_of(selection));
+            crate::context::publish("fili-file", &loc, &paths_of(selection), &results.to_string());
         }
     }
 

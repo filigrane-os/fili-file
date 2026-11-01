@@ -375,7 +375,7 @@ Rectangle {
             readonly property bool tile: view.tiles
             readonly property bool current: index === view.currentIndex
             readonly property bool sel: view.selected[path] === true
-            readonly property bool editing: view.renaming === index
+            readonly property bool editing: view.renaming >= 0 && view.renaming === index && row.visible
             readonly property bool stripe: !tile && index % 2 === 1
             width: tile ? grid.cellWidth - FiliTheme.space2 : view.width - 2 * FiliTheme.space2
             height: tile ? grid.cellHeight - FiliTheme.space2 : FiliTheme.rowHeight
@@ -386,9 +386,9 @@ Rectangle {
             readonly property color ink: sel && view.windowActive ? FiliTheme.voile : row.hidden ? FiliTheme.brume2 : FiliTheme.brume
 
             function beginRename() {
-                input.text = row.name;
+                input.text = row.path.split("/").pop();
                 input.forceActiveFocus();
-                const dot = row.name.lastIndexOf(".");
+                const dot = input.text.lastIndexOf(".");
                 if (!row.isDir && dot > 0)
                     input.select(0, dot);
                 else
@@ -490,10 +490,10 @@ Rectangle {
                     selectionColor: FiliTheme.nuit4
                     selectedTextColor: FiliTheme.brume
                     function commit() {
-                        if (view.renaming !== row.index)
+                        if (view.renaming < 0 || view.renaming !== row.index)
                             return;
                         view.renaming = -1;
-                        if (text !== row.name) {
+                        if (text !== row.path.split("/").pop()) {
                             const r = view.folder.rename(row.path, text);
                             if (r >= 0)
                                 view.select(r);

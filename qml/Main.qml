@@ -16,7 +16,7 @@ Window {
     minimumHeight: 300
     visible: true
     color: FiliTheme.nuit
-    title: picking ? Fili.pickTitle() : folder.path === "/" ? "/" : folder.path.split("/").pop()
+    title: picking ? Fili.pickTitle() : folder.shown === "/" ? "/" : folder.shown.split("/").pop()
 
     // Mode sélecteur de fichiers
     readonly property string pickKind: Fili.pickKind()
@@ -125,7 +125,7 @@ Window {
     Timer {
         id: contextTimer
         interval: 150
-        onTriggered: Fili.publishContext(folder.path, Object.keys(files.selected).join("\n"))
+        onTriggered: Fili.publishContext(folder.path, Object.keys(files.selected).join("\n"), folder.results)
     }
     Connections {
         target: files
@@ -148,7 +148,7 @@ Window {
             }
         }
     }
-    Component.onDestruction: Fili.publishContext("", "")
+    Component.onDestruction: Fili.publishContext("", "", "")
 
     Component.onCompleted: {
         nameInput.text = Fili.pickName();
@@ -214,7 +214,7 @@ Window {
                 list.push({ id: "cut", label: Fili.tr("Cut"), hint: "Ctrl+X" });
         }
         if (!trash)
-            list.push({ id: "paste", label: Fili.tr("Paste"), hint: "Ctrl+V", enabled: folder.canPaste });
+            list.push({ id: "paste", label: Fili.tr("Paste"), hint: "Ctrl+V", enabled: folder.canPaste && folder.results === "" });
         if (t.length > 0) {
             list.push({ separator: true });
             list.push({ id: "copyfilepath", label: Fili.tr("Copy Full Path") });
@@ -484,7 +484,7 @@ Window {
         id: sidebar
         anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: parent.left }
         width: FiliTheme.sidebarWidth
-        current: folder.path
+        current: folder.shown
         onOpen: p => win.open(p)
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
         onContext: (path, removable, x, y) => win.openPathMenu(path, x, y, false, removable)
@@ -629,7 +629,7 @@ Window {
             width: parent.width * 0.6
             visible: !statusbar.message || editing
             fontSize: FiliTheme.sizeSmall
-            path: folder.path
+            path: folder.shown
             onOpen: p => win.open(p)
             onContext: (p, x, y) => win.openPathMenu(p, x, y, true)
             onDone: {
