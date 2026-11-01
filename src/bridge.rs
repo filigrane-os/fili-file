@@ -51,6 +51,11 @@ pub mod qobject {
         // Le contenu du dossier a changé sur le disque (ou après une opération): la vue remet sa sélection en place
         #[qsignal]
         fn reloaded(self: Pin<&mut FolderModel>);
+
+        // L'index récursif du dossier est prêt: la recherche couvre tous les niveaux
+        #[qsignal]
+        #[cxx_name = "indexReady"]
+        fn index_ready(self: Pin<&mut FolderModel>);
         // Miniature de ce fichier prête (génération en arrière-plan)
         #[qsignal]
         #[cxx_name = "thumbReady"]
@@ -519,6 +524,8 @@ fn thumb_path(e: &fs::Entry) -> PathBuf {
 }
 
 static THUMBING: AtomicBool = AtomicBool::new(false);
+// Numéro de l'index en cours de construction; tout changement l'annule
+static INDEX_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 // Nom sans extension d'archive reconnue (None: ce n'est pas une archive)
 fn archive_stem(name: &str) -> Option<String> {
@@ -559,6 +566,9 @@ pub struct FolderModelRust {
     can_undo: bool,
     dir: String,
     all: Vec<fs::Entry>,
+    // Tout le contenu du dossier à tous les niveaux (recherche floue), construit à la première saisie
+    index: Option<Vec<fs::Entry>>,
+    indexing: bool,
     rows: Vec<fs::Entry>,
     history_back: Vec<String>,
     history_forward: Vec<String>,
@@ -666,12 +676,31 @@ impl FolderModel {
     fn filtered(&self) -> Vec<fs::Entry> {
         let (hidden, key, desc) = (self.show_hidden, fs::Key::from(self.sort_key), self.sort_desc);
         let needle = self.filter.to_string();
-        let mut rows: Vec<fs::Entry> = self
-            .all
-            .iter()
-            .filter(|e| (hidden || !e.hidden()) && (needle.is_empty() || fs::contains(&e.name, &needle)) && self.picked(e))
-            .cloned()
-            .collect();
+        if !needle.trim().is_empty() {
+            // Recherche floue sur le chemin relatif, dans tout le sous-arbre (à défaut d'index, le dossier seul);
+            // les résultats affichés de l'assistant restent la seule source dans leur mode. Meilleur score d'abord.
+            let source = match (&self.index, self.results.is_empty()) {
+                (Some(i), true) => i,
+                _ => &self.all,
+            };
+            let mut scored: Vec<(i64, &fs::Entry)> = source
+                .iter()
+                .filter(|e| hidden || !e.name.split('/').any(|c| c.starts_with('.')))
+                .filter(|e| self.picked(e))
+                .filter_map(|e| fs::fuzzy(&e.name, &needle).map(|s| (s, e)))
+                .collect();
+            scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| fs::natural(&a.1.name, &b.1.name)));
+            // Métadonnées lues seulement pour les meilleurs résultats (l'index n'en porte pas)
+            return scored
+                .into_iter()
+                .take(500)
+                .map(|(_, e)| match fs::entry(Path::new(&e.path)) {
+                    Some(n) => fs::Entry { name: e.name.clone(), ..n },
+                    None => e.clone(),
+                })
+                .collect();
+        }
+        let mut rows: Vec<fs::Entry> = self.all.iter().filter(|e| (hidden || !e.hidden()) && self.picked(e)).cloned().collect();
         fs::sort(&mut rows, key, desc);
         rows
     }
@@ -786,6 +815,55 @@ impl FolderModel {
         });
     }
 
+    // Construit en arrière-plan l'index de tous les niveaux sous le dossier affiché (300 000 éléments au plus); la
+    // recherche s'étend à mesure que les paquets arrivent
+    fn start_index(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().index = None;
+        self.as_mut().rust_mut().indexing = false;
+        if self.dir.is_empty() || !self.results.is_empty() {
+            return;
+        }
+        let serial = INDEX_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+        let (dir, hidden) = (PathBuf::from(&self.dir), self.show_hidden);
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.index = Some(Vec::new());
+            r.indexing = true;
+        }
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            fs::walk(&dir, hidden, 300_000, |batch| {
+                if INDEX_GEN.load(Ordering::SeqCst) != serial {
+                    return false;
+                }
+                let _ = qt.queue(move |mut m| {
+                    if INDEX_GEN.load(Ordering::SeqCst) == serial {
+                        if let Some(i) = m.as_mut().rust_mut().index.as_mut() {
+                            i.extend(batch);
+                        }
+                        m.as_mut().rebuild();
+                        m.as_mut().changed();
+                    }
+                });
+                true
+            });
+            let _ = qt.queue(move |mut m| {
+                if INDEX_GEN.load(Ordering::SeqCst) == serial {
+                    m.as_mut().rust_mut().indexing = false;
+                    m.as_mut().index_ready();
+                }
+            });
+        });
+    }
+
+    // Abandonne l'index (filtre vidé, autre dossier): le calcul en cours s'arrête
+    fn drop_index(mut self: Pin<&mut Self>) {
+        INDEX_GEN.fetch_add(1, Ordering::SeqCst);
+        let mut r = self.as_mut().rust_mut();
+        r.index = None;
+        r.indexing = false;
+    }
+
     // Relit le dossier affiché sur place; false si on ne peut plus le lire
     fn reload_rows(mut self: Pin<&mut Self>) -> bool {
         // Résultats affichés: on ne relit pas le dossier, on relit chaque résultat et on retire ceux qui ont disparu
@@ -802,6 +880,11 @@ impl FolderModel {
         match fs::list(Path::new(&self.dir)) {
             Ok(all) => {
                 self.as_mut().rust_mut().all = all;
+                if self.filter.is_empty() {
+                    self.as_mut().drop_index();
+                } else {
+                    self.as_mut().start_index();
+                }
                 self.as_mut().apply();
                 true
             }
@@ -839,6 +922,7 @@ impl FolderModel {
                 r.error = QString::default();
                 r.filter = QString::default();
                 r.results = QString::default();
+                self.as_mut().drop_index();
                 self.as_mut().rebuild();
                 self.as_mut().queue_thumbs();
                 let row = select.map_or(0, |n| self.row_of(n));
@@ -917,6 +1001,7 @@ impl FolderModel {
         r.filter = QString::default();
         r.results = if title.is_empty() { QString::from("…") } else { title.clone() };
         r.shown = QString::from(&shown);
+        self.as_mut().drop_index();
         self.as_mut().rebuild();
         self.as_mut().changed();
     }
@@ -1033,6 +1118,9 @@ impl FolderModel {
         let name = self.selected_name(row);
         let mut r = self.as_mut().rust_mut();
         r.show_hidden = !r.show_hidden;
+        if !self.filter.is_empty() {
+            self.as_mut().start_index();
+        }
         self.as_mut().rebuild();
         self.as_mut().changed();
         name.map_or(0, |n| self.row_of(&n))
@@ -1040,6 +1128,11 @@ impl FolderModel {
 
     pub fn set_filter(mut self: Pin<&mut Self>, text: &QString) {
         self.as_mut().rust_mut().filter = text.clone();
+        if text.to_string().trim().is_empty() {
+            self.as_mut().drop_index();
+        } else if self.index.is_none() {
+            self.as_mut().start_index();
+        }
         self.as_mut().rebuild();
         self.as_mut().changed();
     }

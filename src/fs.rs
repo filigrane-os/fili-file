@@ -4,7 +4,7 @@ use std::{
     cmp::Ordering,
     fs, io,
     os::unix::fs::{MetadataExt, PermissionsExt},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 #[derive(Clone, Debug)]
@@ -156,6 +156,109 @@ pub fn contains(name: &str, needle: &str) -> bool {
     n.contains(&needle.chars().map(fold).collect::<String>())
 }
 
+// Recherche floue façon fzf: chaque mot de needle (séparés par des espaces) doit apparaître dans l'ordre dans le
+// chemin, sans casse ni accents. Score plus haut = meilleur (lettres consécutives, débuts de mots, nom de fichier).
+pub fn fuzzy(path: &str, needle: &str) -> Option<i64> {
+    let hay: Vec<char> = path.chars().map(fold).collect();
+    let base = hay.iter().rposition(|&c| c == '/').map_or(0, |i| i + 1);
+    let mut total = 0;
+    let mut any = false;
+    for word in needle.split_whitespace() {
+        any = true;
+        let w: Vec<char> = word.chars().map(fold).collect();
+        // Fin du plus court appariement vers l'avant, puis début le plus serré en revenant en arrière
+        let mut j = 0;
+        let mut end = 0;
+        for (i, &c) in hay.iter().enumerate() {
+            if c == w[j] {
+                j += 1;
+                if j == w.len() {
+                    end = i;
+                    break;
+                }
+            }
+        }
+        if j < w.len() {
+            return None;
+        }
+        let mut pos = vec![0; w.len()];
+        let mut k = w.len();
+        let mut i = end + 1;
+        while k > 0 {
+            i -= 1;
+            if hay[i] == w[k - 1] {
+                k -= 1;
+                pos[k] = i;
+            }
+        }
+        let mut score = 0i64;
+        for (n, &i) in pos.iter().enumerate() {
+            score += 16;
+            let prev = if i == 0 { '/' } else { hay[i - 1] };
+            if matches!(prev, '/' | '-' | '_' | '.' | ' ') {
+                score += 10;
+            }
+            if i == base {
+                score += 10;
+            }
+            if n > 0 {
+                score -= (i - pos[n - 1] - 1) as i64;
+                if i == pos[n - 1] + 1 {
+                    score += 8;
+                }
+            }
+        }
+        if pos[0] >= base {
+            score += 30;
+        }
+        total += score;
+    }
+    // Chemins courts d'abord à égalité
+    any.then_some(total * 4 - (hay.len() - base) as i64)
+}
+
+// Tout le contenu de root, niveau par niveau (les liens vers des dossiers ne sont pas suivis), sans lire les
+// métadonnées (name = chemin relatif, le reste est complété pour les seuls résultats affichés). Les dossiers cachés ne
+// sont parcourus que si hidden. emit reçoit les éléments par paquets; s'arrête à cap éléments ou quand emit rend false.
+pub fn walk(root: &Path, hidden: bool, cap: usize, mut emit: impl FnMut(Vec<Entry>) -> bool) {
+    let mut batch = Vec::new();
+    let mut total = 0;
+    let mut queue = std::collections::VecDeque::from([PathBuf::new()]);
+    while let Some(rel) = queue.pop_front() {
+        let Ok(rd) = fs::read_dir(root.join(&rel)) else { continue };
+        for d in rd.flatten() {
+            let name = d.file_name().to_string_lossy().into_owned();
+            let sub = rel.join(&name);
+            let is_dir = d.file_type().is_ok_and(|t| t.is_dir());
+            if is_dir && (hidden || !name.starts_with('.')) {
+                queue.push_back(sub.clone());
+            }
+            batch.push(Entry {
+                path: root.join(&sub).to_string_lossy().into_owned(),
+                name: sub.to_string_lossy().into_owned(),
+                is_dir,
+                size: 0,
+                mtime: 0,
+                exec: false,
+                created: 0,
+                mode: 0,
+                uid: 0,
+                kind: String::new(),
+            });
+            total += 1;
+            if batch.len() >= 3000 && !emit(std::mem::take(&mut batch)) {
+                return;
+            }
+        }
+        if total >= cap {
+            break;
+        }
+    }
+    if !batch.is_empty() {
+        emit(batch);
+    }
+}
+
 fn digits(it: &mut std::iter::Peekable<std::str::Chars>) -> String {
     let mut s = String::new();
     while let Some(c) = it.next_if(char::is_ascii_digit) {
@@ -279,6 +382,12 @@ mod tests {
         assert!(contains("Écoles-2024.PDF", "ecole"));
         assert!(contains("Écoles-2024.PDF", "pdf"));
         assert!(!contains("notes.txt", "pdf"));
+        assert!(fuzzy("src/Écoles-2024.PDF", "ec24").is_some());
+        assert!(fuzzy("src/main.rs", "mrs").is_some());
+        assert!(fuzzy("src/main.rs", "rsm").is_none());
+        assert!(fuzzy("a/budget.txt", "bud txt").is_some());
+        assert!(fuzzy("a/budget.txt", "bud pdf").is_none());
+        assert!(fuzzy("docs/readme.md", "readme") > fuzzy("readme/docs/a.md", "readme"));
     }
 
     #[test]
@@ -310,3 +419,25 @@ mod tests {
         fs::remove_dir_all(&dir).unwrap();
     }
 }
+
+#[cfg(test)]
+mod walk_tests {
+    use super::*;
+
+    #[test]
+    fn walk_goes_all_levels() {
+        let root = std::env::temp_dir().join(format!("fili-walk-{}", std::process::id()));
+        let deep = root.join("a/b/c/d");
+        fs::create_dir_all(&deep).unwrap();
+        fs::write(deep.join("target.txt"), "x").unwrap();
+        let mut all = Vec::new();
+        walk(&root, false, 1000, |b| {
+            all.extend(b);
+            true
+        });
+        let _ = fs::remove_dir_all(&root);
+        let names: Vec<_> = all.iter().map(|e| e.name.clone()).collect();
+        assert!(names.contains(&"a/b/c/d/target.txt".to_string()), "{names:?}");
+    }
+}
+

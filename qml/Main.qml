@@ -1,5 +1,5 @@
 // Fenêtre de fili-file: barre d'outils (précédent, suivant, chemin), barre latérale, liste, barre d'état.
-// Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin, Ctrl+F recherche dans le dossier, Ctrl+H fichiers cachés, F5 relire,
+// Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin, Ctrl+F recherche floue récursive, Ctrl+H fichiers cachés, F5 relire,
 // Ctrl+C / Ctrl+X / Ctrl+V copier, couper, coller, F2 renommer, Ctrl+Maj+N nouveau dossier, Suppr ou Ctrl+Retour
 // arrière corbeille, Ctrl+Z annuler, Ctrl+A tout sélectionner, Échap annule la copie en cours,
 // Ctrl+1 / Ctrl+2 vue en liste / en grille, Ctrl+Maj+Suppr vide la corbeille, Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
@@ -397,7 +397,7 @@ Window {
                 onClicked: win.show(folder.forward())
             }
         }
-        // Recherche dans le dossier affiché (Ctrl+F): filtre les noms, Échap efface
+        // Recherche floue (Ctrl+F) dans le dossier affiché et tous ses sous-dossiers, meilleurs résultats d'abord, Échap efface
         Rectangle {
             id: search
             anchors { right: parent.right; rightMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
