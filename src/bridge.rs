@@ -318,6 +318,16 @@ pub mod qobject {
         // Icône de dossier à la couleur d'accentuation (autres icônes inchangées)
         #[qinvokable]
         fn tint(self: &Fili, url: &QString, accent: &QString, light: bool) -> QString;
+        // Fiche « À propos de Casier »: lignes [[libellé, valeur]] en JSON, et dossier du thème par défaut (clair ou sombre)
+        #[qinvokable]
+        #[cxx_name = "aboutRows"]
+        fn about_rows(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "aboutFolder"]
+        fn about_folder(self: &Fili, light: bool) -> QString;
+        #[qinvokable]
+        #[cxx_name = "aboutLogo"]
+        fn about_logo(self: &Fili, light: bool) -> QString;
         // Lieux de la barre latérale, en JSON: [{section, name, path, icon}]
         #[qinvokable]
         fn places(self: &Fili) -> QString;
@@ -1813,6 +1823,14 @@ impl FolderModel {
 impl cxx_qt::Initialize for FolderModel {
     fn initialize(mut self: Pin<&mut Self>) {
         let qt = self.qt_thread();
+        let cfg = crate::config::load();
+        {
+            let mut m = self.as_mut();
+            let r = m.as_mut().rust_mut().get_mut();
+            r.show_hidden = cfg.show_hidden;
+            r.sort_key = cfg.sort;
+            r.sort_desc = cfg.sort_desc;
+        }
         self.as_mut().rust_mut().pick_filter = pick::get().map_or(-1, |p| if p.filters.is_empty() { -1 } else { p.filter.max(0) });
         self.as_mut().rust_mut().watcher = Watcher::new(move || {
             let _ = qt.queue(|m| m.live_reload());
@@ -2003,7 +2021,8 @@ impl Fili {
 
     pub fn columns(&self) -> QString {
         let text = std::fs::read_to_string(columns_file()).unwrap_or_default();
-        QString::from(if text.trim().is_empty() { "size,modified" } else { text.trim() })
+        let default = crate::config::load().columns.unwrap_or_else(|| "size,modified".into());
+        QString::from(if text.trim().is_empty() { default.as_str() } else { text.trim() })
     }
 
     pub fn set_columns(&self, keys: &QString) {
@@ -2016,6 +2035,7 @@ impl Fili {
 
     pub fn view_mode(&self) -> QString {
         let text = std::fs::read_to_string(view_file()).unwrap_or_default();
+        let text = if text.trim().is_empty() { crate::config::load().view.unwrap_or_default() } else { text };
         QString::from(if text.trim() == "grid" { "grid" } else { "list" })
     }
 
@@ -2077,6 +2097,22 @@ impl Fili {
         QString::from(icons::tint(&url.to_string(), &accent.to_string(), light))
     }
 
+    pub fn about_rows(&self) -> QString {
+        let rows = crate::about::rows();
+        QString::from(format!(
+            "[{}]",
+            rows.iter().map(|(k, v)| format!("[{k:?},{v:?}]")).collect::<Vec<_>>().join(",")
+        ))
+    }
+
+    pub fn about_folder(&self, light: bool) -> QString {
+        QString::from(icons::tint(&icons::folder(), "default", light))
+    }
+
+    pub fn about_logo(&self, light: bool) -> QString {
+        QString::from(crate::about::logo(light))
+    }
+
     pub fn tr(&self, text: &QString) -> QString {
         QString::from(i18n::tr(&text.to_string()))
     }
@@ -2134,7 +2170,8 @@ impl Fili {
     pub fn start_path(&self) -> QString {
         let args: Vec<String> = env::args().skip(1).collect();
         let arg = pick::positional(&args).or_else(|| pick::get().map(|p| p.folder.clone()).filter(|f| !f.is_empty()));
-        let p = normalize(&arg.unwrap_or_else(home), &env::current_dir().map_or(home(), |d| d.to_string_lossy().into_owned()));
+        let start = crate::config::load().start.unwrap_or_else(home);
+        let p = normalize(&arg.unwrap_or(start), &env::current_dir().map_or(home(), |d| d.to_string_lossy().into_owned()));
         QString::from(&p.to_string_lossy().into_owned())
     }
 

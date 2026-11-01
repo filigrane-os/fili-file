@@ -1,7 +1,9 @@
 // fili-file: explorateur de fichiers de Filigrane. Moteur en Rust (lecture des dossiers, tri, icônes, ouverture),
 // interface en QML avec les tokens du fili-shell (qml/FiliTheme.qml). Usage: fili-file [dossier | fichier | file://...]
+mod about;
 mod apps;
 mod bridge;
+mod config;
 mod context;
 mod fs;
 #[allow(dead_code)]

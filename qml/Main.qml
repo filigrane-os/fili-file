@@ -173,6 +173,7 @@ ApplicationWindow {
     Action { id: aTrash; text: Fili.tr("Move to Trash"); shortcut: "Delete"; enabled: win.canAct && !folder.inTrash; onTriggered: win.trashSelection() }
     Action { id: aTrashAlt; shortcut: "Ctrl+Backspace"; enabled: win.canAct; onTriggered: win.trashSelection() }
     Action { id: aEmpty; text: Fili.tr("Empty Trash"); shortcut: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onTriggered: win.askEmpty() }
+    Action { id: aAbout; text: Fili.tr("About Casier"); onTriggered: win.showAbout() }
     Action { id: aClose; text: Fili.tr("Close"); shortcut: "Ctrl+W"; onTriggered: Qt.quit() }
     Action { id: aQuit; text: Fili.tr("Quit"); shortcut: "Ctrl+Q"; onTriggered: Qt.quit() }
     Action { id: aUndo; text: Fili.tr("Undo"); shortcut: "Ctrl+Z"; enabled: win.canAct; onTriggered: folder.undo() }
@@ -197,7 +198,7 @@ ApplicationWindow {
     // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
     // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
     readonly property var menuActions: ({
-        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose,
+        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename,
         "select-all": aSelectAll, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "search": aSearch
@@ -255,6 +256,8 @@ ApplicationWindow {
         }
         FMenu {
             title: Fili.tr("File")
+            MenuItem { action: aAbout }
+            MenuSeparator {}
             MenuItem { action: aNewFolder }
             MenuItem { action: aOpen }
             MenuItem { action: aInfo }
@@ -969,6 +972,119 @@ ApplicationWindow {
                     label: Fili.tr("OK")
                     primary: true
                     onClicked: infoCard.visible = false
+                }
+            }
+        }
+    }
+
+    // À propos de Casier (nom affiché de fili-file): icône, nom, alias, version et le reste de la fiche
+    function showAbout() {
+        aboutCard.rows = JSON.parse(Fili.aboutRows());
+        aboutCard.visible = true;
+    }
+    Rectangle {
+        id: aboutCard
+        property var rows: []
+        anchors.fill: parent
+        visible: false
+        z: 210
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        focus: visible
+        onVisibleChanged: if (visible) forceActiveFocus(); else files.focusList()
+        Keys.onPressed: e => {
+            if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Escape)
+                visible = false;
+            else
+                return;
+            e.accepted = true;
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: aboutCard.visible = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 380
+            height: aboutColumn.implicitHeight + 2 * FiliTheme.space5
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            MouseArea { anchors.fill: parent }
+            Column {
+                id: aboutColumn
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space5 }
+                spacing: FiliTheme.space3
+                // Dossier du thème par défaut (clair ou sombre selon le thème) portant le logo de Filigrane
+                Item {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 96
+                    height: 96
+                    Image {
+                        anchors.fill: parent
+                        source: Fili.aboutFolder(FiliTheme.light)
+                        sourceSize: Qt.size(192, 192)
+                    }
+                    Image {
+                        width: parent.width * 0.62
+                        height: width * 0.24
+                        x: (parent.width - width) / 2
+                        y: parent.height * 0.52
+                        source: Fili.aboutLogo(FiliTheme.light)
+                        sourceSize.width: 192
+                        fillMode: Image.PreserveAspectFit
+                    }
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Casier"
+                    textFormat: Text.PlainText
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeTitle
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.brume
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: Fili.tr("The file manager of Filigrane")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: Font.Light
+                    color: FiliTheme.brume2
+                }
+                Rectangle { width: parent.width; height: 1; color: FiliTheme.nuit4 }
+                Grid {
+                    id: aboutGrid
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: FiliTheme.space3
+                    rowSpacing: FiliTheme.space2
+                    Repeater {
+                        model: aboutCard.rows.length * 2
+                        Text {
+                            readonly property bool label: index % 2 === 0
+                            width: label ? 110 : aboutGrid.width - 110 - FiliTheme.space3
+                            horizontalAlignment: label ? Text.AlignRight : Text.AlignLeft
+                            wrapMode: Text.WrapAnywhere
+                            text: aboutCard.rows[Math.floor(index / 2)][label ? 0 : 1]
+                            textFormat: Text.PlainText
+                            font.family: FiliTheme.font
+                            font.pixelSize: FiliTheme.sizeList
+                            font.weight: label ? FiliTheme.weightAccent : Font.Normal
+                            color: label ? FiliTheme.brume2 : FiliTheme.brume
+                        }
+                    }
+                }
+                Item {
+                    width: parent.width
+                    height: aboutOk.height
+                    TextButton {
+                        id: aboutOk
+                        anchors.right: parent.right
+                        label: Fili.tr("OK")
+                        primary: true
+                        onClicked: aboutCard.visible = false
+                    }
                 }
             }
         }

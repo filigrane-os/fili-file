@@ -2,6 +2,12 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
 fn main() {
+    // Version de l'à-propos: étiquette ou commit du dépôt (absent hors dépôt)
+    if let Ok(o) = std::process::Command::new("git").args(["describe", "--tags", "--always", "--dirty"]).output() {
+        if o.status.success() {
+            println!("cargo:rustc-env=FILI_FILE_GIT={}", String::from_utf8_lossy(&o.stdout).trim());
+        }
+    }
     CxxQtBuilder::new_qml_module(
         QmlModule::new("Fili.Files")
             .qml_files([
