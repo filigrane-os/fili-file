@@ -480,9 +480,16 @@ ApplicationWindow {
                 }
             }
         }
+        PreviewButton {
+            id: previewButton
+            visible: !win.picking
+            anchors { right: search.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+            on: win.previewOn
+            onClicked: win.togglePreview()
+        }
         ViewSwitch {
             id: viewSwitch
-            anchors { right: search.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            anchors { right: win.picking ? search.left : previewButton.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             mode: files.viewMode
             onChose: m => files.setViewMode(m)
         }
