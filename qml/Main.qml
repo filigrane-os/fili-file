@@ -710,7 +710,7 @@ ApplicationWindow {
     Rectangle {
         id: statusbar
         // Au-dessus de la liste pendant la saisie d'un chemin: ses propositions débordent vers le haut
-        z: pathBar.editing ? 150 : 0
+        z: pathBar.editing || tasksList.visible ? 150 : 0
         anchors.bottom: parent.bottom
         width: parent.width
         height: FiliTheme.statusHeight
@@ -775,12 +775,20 @@ ApplicationWindow {
             anchors.centerIn: parent
             visible: folder.busy
             spacing: FiliTheme.space3
+            // Nom de l'opération en cours, avec le nombre de celles en attente; un clic ouvre la liste des tâches
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: folder.job
+                text: folder.job + (win.tasks.length > 1 ? "  +" + (win.tasks.length - 1) : "")
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.sizeSmall
-                color: FiliTheme.brume2
+                color: taskHit.containsMouse ? FiliTheme.brume : FiliTheme.brume2
+                MouseArea {
+                    id: taskHit
+                    anchors { fill: parent; margins: -4 }
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: tasksList.shown = !tasksList.shown
+                }
             }
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
@@ -801,8 +809,75 @@ ApplicationWindow {
                 onClicked: folder.cancel()
             }
         }
+        // Liste des tâches: la tâche en cours (avancement), puis la file; × retire ou arrête
+        Rectangle {
+            id: tasksList
+            property bool shown: false
+            visible: shown && win.tasks.length > 0
+            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.top; bottomMargin: FiliTheme.space2 }
+            width: 360
+            height: win.tasks.length * 30 + 2 * FiliTheme.space1
+            radius: FiliTheme.radiusControl
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            Column {
+                anchors { fill: parent; margins: FiliTheme.space1 }
+                Repeater {
+                    model: win.tasks
+                    Item {
+                        required property var modelData
+                        required property int index
+                        width: parent.width
+                        height: 30
+                        Text {
+                            anchors { left: parent.left; leftMargin: FiliTheme.space2; right: bar.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                            text: modelData.label
+                            elide: Text.ElideRight
+                            font.family: FiliTheme.font
+                            font.pixelSize: FiliTheme.sizeList
+                            color: modelData.progress === -2 ? FiliTheme.ardoise : FiliTheme.brume
+                        }
+                        Rectangle {
+                            id: bar
+                            visible: modelData.progress !== -2
+                            anchors { right: cancelTask.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                            width: 70
+                            height: 4
+                            radius: 2
+                            color: FiliTheme.nuit3
+                            Rectangle {
+                                width: parent.width * Math.max(0.05, modelData.progress)
+                                height: parent.height
+                                radius: 2
+                                color: FiliTheme.voile
+                            }
+                        }
+                        Text {
+                            id: cancelTask
+                            anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                            text: "×"
+                            font.pixelSize: 18
+                            color: xArea.containsMouse ? FiliTheme.cendre : FiliTheme.ardoise
+                            MouseArea {
+                                id: xArea
+                                anchors { fill: parent; margins: -6 }
+                                hoverEnabled: true
+                                onClicked: folder.cancelTask(index)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
+    // Tâches en cours et en attente (copies, déplacements, archives): rafraîchies à chaque changement de l'opération
+    property var tasks: []
+    Connections {
+        target: folder
+        function onChanged() { win.tasks = JSON.parse(folder.tasks()); }
+    }
     // Confirmation (vider la corbeille, remplacer un fichier): Entrée valide, Échap annule
     // « Sélectionner selon un motif… »: *.pdf, photo*, a?.txt (sans joker: le nom contient le texte)
     Rectangle {

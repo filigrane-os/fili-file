@@ -177,6 +177,12 @@ pub mod qobject {
         fn compress(self: Pin<&mut FolderModel>, paths: &QString);
         #[qinvokable]
         fn cancel(self: Pin<&mut FolderModel>);
+        // Tâches en cours et en attente (JSON [{label, progress}], progress -2 = en attente) et annulation de l'une d'elles
+        #[qinvokable]
+        fn tasks(self: &FolderModel) -> QString;
+        #[qinvokable]
+        #[cxx_name = "cancelTask"]
+        fn cancel_task(self: Pin<&mut FolderModel>, index: i32);
         // Copie dans le dossier même (nom « copie »)
         #[qinvokable]
         fn duplicate(self: Pin<&mut FolderModel>, paths: &QString);
@@ -704,6 +710,8 @@ pub struct FolderModelRust {
     watcher: Option<Watcher>,
     // Copie ou déplacement en attente de la réponse à `conflict`
     pending: Option<(Vec<String>, String, Mode)>,
+    // Copies et déplacements en attente de la fin de l'opération en cours (file d'attente, dans l'ordre)
+    queue: Vec<(Vec<String>, String, Mode, Policy)>,
 }
 
 // Ce que Ctrl+Z défait (le plus récent en dernier, 20 au plus)
@@ -793,6 +801,11 @@ fn parse_clip(text: &str, gnome: bool) -> (Vec<String>, Option<bool>) {
     }
     let items = rest.iter().filter(|l| l.starts_with("file://")).map(|l| normalize(l, "/").to_string_lossy().into_owned()).collect();
     (items, cut)
+}
+
+fn job_label(items: &[String], mode: Mode) -> String {
+    let what = if items.len() == 1 { base(&items[0]) } else { fs::count(items.len()) };
+    if mode == Mode::Copy { i18n::trf("Copying %1", &[&what]) } else { i18n::trf("Moving %1", &[&what]) }
 }
 
 // Chemins proposés pour un texte tapé: le dossier est la partie avant le dernier « / » (~ et .. compris), le reste est
@@ -1488,9 +1501,6 @@ impl FolderModel {
         if items.is_empty() {
             return;
         }
-        if self.busy {
-            return self.fail(i18n::tr("Another operation is in progress").into());
-        }
         let clashes: Vec<String> = items
             .iter()
             .filter(|i| {
@@ -1521,10 +1531,11 @@ impl FolderModel {
             return;
         }
         if self.busy {
-            return self.fail(i18n::tr("Another operation is in progress").into());
+            self.as_mut().rust_mut().queue.push((items, dest, mode, policy));
+            self.as_mut().changed();
+            return;
         }
-        let what = if items.len() == 1 { base(&items[0]) } else { fs::count(items.len()) };
-        let label = if mode == Mode::Copy { i18n::trf("Copying %1", &[&what]) } else { i18n::trf("Moving %1", &[&what]) };
+        let label = job_label(&items, mode);
         let cancel = Arc::new(AtomicBool::new(false));
         {
             let mut r = self.as_mut().rust_mut();
@@ -1628,8 +1639,43 @@ impl FolderModel {
                 m.as_mut().reload_rows();
                 m.as_mut().changed();
                 m.as_mut().reloaded();
+                m.as_mut().next_job();
             });
         });
+    }
+
+    // La file d'attente avance: la copie ou le déplacement suivant démarre dès que le précédent est fini
+    fn next_job(mut self: Pin<&mut Self>) {
+        if self.busy || self.queue.is_empty() {
+            return;
+        }
+        let (items, dest, mode, policy) = self.as_mut().rust_mut().queue.remove(0);
+        self.run_job(items, dest, mode, policy);
+    }
+
+    // Tâches pour la fenêtre des tâches, en JSON: la tâche en cours d'abord, puis la file [{label, progress}]
+    pub fn tasks(&self) -> QString {
+        let mut list = Vec::new();
+        if self.busy {
+            list.push(format!("{{\"label\":{},\"progress\":{}}}", json(&self.job.to_string()), self.progress));
+        }
+        for (items, _, mode, _) in &self.queue {
+            list.push(format!("{{\"label\":{},\"progress\":-2}}", json(&job_label(items, *mode))));
+        }
+        QString::from(&format!("[{}]", list.join(",")))
+    }
+
+    // Annule la tâche i: la première arrête l'opération en cours, les autres sortent de la file
+    pub fn cancel_task(mut self: Pin<&mut Self>, index: i32) {
+        if self.busy && index == 0 {
+            self.cancel.store(true, Ordering::Relaxed);
+        } else {
+            let i = index - i32::from(self.busy);
+            if i >= 0 && (i as usize) < self.queue.len() {
+                self.as_mut().rust_mut().queue.remove(i as usize);
+            }
+        }
+        self.as_mut().changed();
     }
 
     pub fn duplicate(self: Pin<&mut Self>, paths: &QString) {
@@ -1898,6 +1944,7 @@ impl FolderModel {
                 m.as_mut().reload_rows();
                 m.as_mut().changed();
                 m.as_mut().reloaded();
+                m.as_mut().next_job();
             });
         });
     }
