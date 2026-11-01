@@ -13,6 +13,7 @@ fn main() {
             .qml_files([
                 "qml/Main.qml",
                 "qml/Sidebar.qml",
+                "qml/NearbyView.qml",
                 "qml/PathBar.qml",
                 "qml/FileList.qml",
                 "qml/Preview.qml",

@@ -117,7 +117,17 @@ ApplicationWindow {
         if (row >= 0)
             files.select(row);
     }
+    // « À proximité » (partage de proximité) remplace la liste des fichiers; tout changement de dossier la ferme
+    property bool nearby: false
+    property string nearbyFrom: ""
     function open(path) {
+        if (path === "nearby:") {
+            nearbyFrom = folder.shown;
+            nearby = true;
+            nearbyView.forceActiveFocus();
+            return;
+        }
+        nearby = false;
         const row = folder.go(path);
         if (row >= 0 || folder.error === "") {
             pathBar.editing = false;
@@ -211,7 +221,7 @@ ApplicationWindow {
     Action { id: aForward; text: Fili.tr("Forward"); shortcut: "Alt+Right"; enabled: folder.canForward; onTriggered: win.show(folder.forward()) }
     Action { id: aUp; text: Fili.tr("Enclosing Folder"); shortcut: "Alt+Up"; onTriggered: win.show(folder.up()) }
     Action { id: aShare; text: Fili.tr("Share…"); enabled: win.canAct && !folder.inTrash && !win.picking && win.shareable().length > 0; onTriggered: shareBox.open() }
-    Action { id: aReceive; text: Fili.tr("Receive…"); shortcut: "Ctrl+Shift+R"; enabled: !win.picking; onTriggered: receiveBox.open() }
+    Action { id: aNearby; text: Fili.tr("Nearby"); shortcut: "Ctrl+Shift+R"; enabled: !win.picking; onTriggered: win.open("nearby:") }
     Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
     Action { id: aConnect; text: Fili.tr("Connect to Server…"); shortcut: "Ctrl+K"; onTriggered: connectBox.open() }
     // « / » comme Ctrl+F (façon vim, yazi); sans libellé: la barre de menus ne montre que Ctrl+F
@@ -221,7 +231,7 @@ ApplicationWindow {
     // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
     // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
     readonly property var menuActions: ({
-        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "share": aShare, "receive": aReceive, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
+        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "share": aShare, "nearby": aNearby, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
@@ -615,7 +625,7 @@ ApplicationWindow {
         id: sidebar
         anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: parent.left }
         width: FiliTheme.sidebarWidth
-        current: folder.shown
+        current: win.nearby ? "nearby:" : folder.shown
         onOpen: p => win.open(p)
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
         onContext: (path, removable, x, y) => win.openPathMenu(path, x, y, false, removable)
@@ -706,6 +716,25 @@ ApplicationWindow {
                 files.focusList();
             }
         }
+    }
+    Connections {
+        target: folder
+        function onChanged() {
+            if (win.nearby && folder.shown !== win.nearbyFrom)
+                win.nearby = false;
+        }
+    }
+    NearbyView {
+        id: nearbyView
+        anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: sideLine.right; right: parent.right }
+        visible: win.nearby && !win.picking
+        z: 5
+        onNotice: text => {
+            win.notice = text;
+            noticeTimer.restart();
+        }
+        onOpenPath: p => win.open(p)
+        Keys.onEscapePressed: win.nearby = false
     }
     FileList {
         id: files
@@ -1100,6 +1129,8 @@ ApplicationWindow {
         Connections {
             target: Fili
             function onShareProtocolsReady(json) {
+                if (!shareBox.visible)
+                    return;
                 const all = JSON.parse(json).filter(p => p.id === "bluetooth" || p.id === "localsend");
                 shareBox.protocols = all;
                 const first = all.find(p => p.available) || all[0];
@@ -1109,7 +1140,7 @@ ApplicationWindow {
                     shareBox.loading = false;
             }
             function onSharePeersReady(p, json) {
-                if (p !== shareBox.proto)
+                if (!shareBox.visible || p !== shareBox.proto)
                     return;
                 shareBox.peers = JSON.parse(json);
                 shareBox.loading = false;
@@ -1202,184 +1233,6 @@ ApplicationWindow {
                 Row {
                     anchors.right: parent.right
                     TextButton { label: Fili.tr("Cancel"); onClicked: shareBox.visible = false }
-                }
-            }
-        }
-    }
-    // « Recevoir… »: état de la réception par protocole (fili-share receive-info), interrupteurs, derniers fichiers reçus
-    // (journal de fili-receive). Les demandes entrantes arrivent en notification (Accepter / Refuser), fenêtre fermée aussi.
-    Rectangle {
-        id: receiveBox
-        property var info: ({ dest: "", confirm: "ask", minutes: 0, name: "", protocols: [] })
-        property var received: []
-        property bool loading: false
-        readonly property var protocols: info.protocols.filter(p => p.id === "bluetooth" || p.id === "localsend")
-        readonly property bool anyOn: protocols.some(p => p.on)
-        function open() {
-            loading = true;
-            visible = true;
-            Fili.receiveInfo();
-        }
-        function when(t) {
-            return Qt.formatDateTime(new Date(t * 1000), "d MMM, hh:mm");
-        }
-        anchors.fill: parent
-        visible: false
-        z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
-        onVisibleChanged: if (!visible) files.focusList()
-        focus: visible
-        Keys.onEscapePressed: visible = false
-        Connections {
-            target: Fili
-            function onReceiveInfoReady(info, received) {
-                try {
-                    const i = JSON.parse(info);
-                    if (i.protocols)
-                        receiveBox.info = i;
-                    receiveBox.received = JSON.parse(received);
-                } catch (e) {}
-                receiveBox.loading = false;
-            }
-        }
-        MouseArea {
-            anchors.fill: parent
-            onClicked: receiveBox.visible = false
-        }
-        Rectangle {
-            anchors.centerIn: parent
-            width: 420
-            height: receiveCard.implicitHeight + 2 * FiliTheme.space4
-            radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
-            MouseArea { anchors.fill: parent }
-            Column {
-                id: receiveCard
-                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
-                spacing: FiliTheme.space3
-                Text {
-                    width: parent.width
-                    text: Fili.tr("Receive files")
-                    font.family: FiliTheme.font
-                    font.pixelSize: FiliTheme.size
-                    font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
-                }
-                Text {
-                    width: parent.width
-                    wrapMode: Text.Wrap
-                    text: receiveBox.anyOn
-                          ? Fili.tr("Ready to receive as “%1”. Each transfer asks for your approval.").replace("%1", receiveBox.info.name)
-                          : Fili.tr("Reception is off: this computer is not visible to other devices.")
-                    font.family: FiliTheme.font
-                    font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
-                }
-                Repeater {
-                    model: receiveBox.protocols
-                    Rectangle {
-                        required property var modelData
-                        width: receiveCard.width
-                        height: 30
-                        radius: FiliTheme.radiusControl
-                        color: FiliTheme.nuit3
-                        opacity: modelData.available ? 1 : 0.5
-                        Text {
-                            anchors { left: parent.left; leftMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
-                            text: modelData.label
-                            font.family: FiliTheme.font
-                            font.pixelSize: FiliTheme.size
-                            color: FiliTheme.brume
-                        }
-                        Text {
-                            anchors { right: toggle.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
-                            width: 200
-                            horizontalAlignment: Text.AlignRight
-                            elide: Text.ElideRight
-                            text: modelData.available ? (modelData.on ? Fili.tr("On") : Fili.tr("Off")) : modelData.why
-                            font.family: FiliTheme.font
-                            font.pixelSize: FiliTheme.sizeList
-                            color: modelData.on ? FiliTheme.voile : FiliTheme.brume2
-                        }
-                        TextButton {
-                            id: toggle
-                            anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
-                            visible: modelData.available
-                            primary: !modelData.on
-                            label: modelData.on ? Fili.tr("Turn Off") : Fili.tr("Turn On")
-                            onClicked: {
-                                receiveBox.loading = true;
-                                Fili.receiveSet(modelData.id, !modelData.on);
-                            }
-                        }
-                    }
-                }
-                Text {
-                    width: parent.width
-                    elide: Text.ElideMiddle
-                    text: Fili.tr("Saved in %1").replace("%1", receiveBox.info.dest)
-                    font.family: FiliTheme.font
-                    font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
-                }
-                Text {
-                    visible: receiveBox.received.length > 0
-                    width: parent.width
-                    text: Fili.tr("Received recently")
-                    font.family: FiliTheme.font
-                    font.pixelSize: FiliTheme.sizeList
-                    font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
-                }
-                Text {
-                    visible: receiveBox.received.length === 0 && !receiveBox.loading
-                    width: parent.width
-                    text: Fili.tr("Nothing received yet.")
-                    font.family: FiliTheme.font
-                    font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
-                }
-                Repeater {
-                    model: receiveBox.received.slice(0, 6)
-                    Rectangle {
-                        required property var modelData
-                        width: receiveCard.width
-                        height: 26
-                        radius: FiliTheme.radiusControl
-                        color: itemArea.containsMouse ? FiliTheme.nuit3 : "transparent"
-                        Text {
-                            anchors { left: parent.left; leftMargin: FiliTheme.space2; right: from.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
-                            elide: Text.ElideMiddle
-                            text: modelData.path.split("/").pop()
-                            font.family: FiliTheme.font
-                            font.pixelSize: FiliTheme.size
-                            color: FiliTheme.brume
-                        }
-                        Text {
-                            id: from
-                            anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
-                            text: modelData.sender + " · " + receiveBox.when(modelData.time)
-                            font.family: FiliTheme.font
-                            font.pixelSize: FiliTheme.sizeList
-                            color: FiliTheme.brume2
-                        }
-                        MouseArea {
-                            id: itemArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                receiveBox.visible = false;
-                                win.open(modelData.path);
-                            }
-                        }
-                    }
-                }
-                Row {
-                    anchors.right: parent.right
-                    spacing: FiliTheme.space2
-                    TextButton { label: Fili.tr("Done"); primary: true; onClicked: receiveBox.visible = false }
                 }
             }
         }

@@ -387,6 +387,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "shareSend"]
         fn share_send(self: &Fili, proto: &QString, id: &QString, name: &QString, paths: &QString);
+        // Choisir les fichiers à envoyer à cet appareil (fili-share send ouvre le sélecteur de Casier)
+        #[qinvokable]
+        #[cxx_name = "sharePick"]
+        fn share_pick(self: &Fili, proto: &QString, id: &QString, name: &QString);
         // Réception (fili-share receive-info / received): état des protocoles et fichiers reçus en JSON par
         // receiveInfoReady(info, received); receiveSet active ou coupe un protocole puis renvoie l'état
         #[qinvokable]
@@ -2429,6 +2433,19 @@ impl Fili {
         });
     }
 
+    pub fn share_pick(&self, proto: &QString, id: &QString, name: &QString) {
+        let child = Command::new(bin("fili-share"))
+            .args(["send".to_string(), proto.to_string(), id.to_string(), name.to_string()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .process_group(0)
+            .spawn();
+        if let Ok(mut child) = child {
+            std::thread::spawn(move || child.wait());
+        }
+    }
+
     pub fn receive_info(self: Pin<&mut Self>) {
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -2698,6 +2715,8 @@ impl Fili {
         for v in visits::ranked().into_iter().filter(|v| v.path != home && v.path != "/" && !seen.contains(&v.path)).take(5) {
             items.push((frequent, name(&v.path), v.path.clone(), "folder", String::new()));
         }
+        // Partage de proximité (vue À proximité de la fenêtre, pas un dossier)
+        items.push((devices, i18n::tr("Nearby").to_string(), "nearby:".into(), "network-wireless", String::new()));
         items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "computer", String::new()));
         // Volumes amovibles: non montés, un clic les monte (path vide, dev renseigné)
         for v in volumes::list() {

@@ -139,6 +139,7 @@ Rectangle {
             DropArea {
                 id: drop
                 anchors.fill: parent
+                enabled: row.path !== "nearby:"
                 onDropped: d => {
                     side.dropped(d.urls.map(u => u.toString()).join("\n"), row.path, d.proposedAction === Qt.CopyAction);
                     d.acceptProposedAction();
@@ -151,7 +152,7 @@ Rectangle {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 onClicked: e => {
                     if (e.button === Qt.RightButton) {
-                        if (row.path !== "") {
+                        if (row.path !== "" && row.path !== "nearby:") {
                             const p = area.mapToItem(null, e.x, e.y);
                             side.context(row.path, row.removable, p.x, p.y);
                         }
