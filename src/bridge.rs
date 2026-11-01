@@ -397,7 +397,7 @@ pub mod qobject {
     impl cxx_qt::Threading for FolderModel {}
 }
 
-use crate::{apps, fs, i18n, icons, ops, pick, volumes, watch::Watcher};
+use crate::{apps, fs, i18n, icons, ops, pick, visits, volumes, watch::Watcher};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
@@ -800,6 +800,13 @@ fn parse_clip(text: &str, gnome: bool) -> (Vec<String>, Option<bool>) {
 // Rend (nom, chemin complet, dossier?): meilleurs scores d'abord, dossiers avant fichiers à score égal.
 fn suggest(text: &str, limit: usize) -> Vec<(String, String, bool)> {
     let t = text.trim_start();
+    // Sans « / »: dossiers déjà visités qui correspondent (comme zoxide), puis le contenu du dossier personnel
+    let mut jumps: Vec<(String, String, bool)> = Vec::new();
+    if !t.contains('/') && !t.is_empty() && !t.starts_with('~') {
+        let mut scored: Vec<(i64, String)> = visits::ranked().into_iter().filter_map(|v| fs::fuzzy(&v.path, t).map(|s| (s, v.path))).collect();
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        jumps = scored.into_iter().take(limit).map(|(_, p)| (base(&p), p, true)).collect();
+    }
     let (dir, needle) = match t.rfind('/') {
         Some(i) => (&t[..=i], &t[i + 1..]),
         None => ("~/", t),
@@ -818,7 +825,9 @@ fn suggest(text: &str, limit: usize) -> Vec<(String, String, bool)> {
         found.push((score, path.is_dir(), name, path.to_string_lossy().into_owned()));
     }
     found.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then_with(|| a.2.to_lowercase().cmp(&b.2.to_lowercase())));
-    found.into_iter().take(limit).map(|(_, d, n, p)| (n, p, d)).collect()
+    jumps.extend(found.into_iter().take(limit).map(|(_, d, n, p)| (n, p, d)).filter(|(_, p, _)| !jumps.iter().any(|(_, q, _)| q == p)).collect::<Vec<_>>());
+    jumps.truncate(limit);
+    jumps
 }
 
 fn base(p: &str) -> String {
@@ -1125,6 +1134,9 @@ impl FolderModel {
         let previous = self.dir.clone();
         match self.as_mut().load(&dir, select.as_deref()) {
             Ok(row) => {
+                if dir != ops::trash_files() {
+                    visits::record(&dir.to_string_lossy());
+                }
                 if !previous.is_empty() {
                     let mut r = self.as_mut().rust_mut();
                     r.history_back.push(previous);
@@ -2445,6 +2457,11 @@ impl Fili {
             items.push((places, label, p.clone(), icon, String::new()));
             removable.push(p.clone());
             seen.push(p);
+        }
+        // Dossiers souvent ouverts récemment (hors favoris, dossier personnel et racine), 5 au plus
+        let frequent = i18n::tr("Frequent");
+        for v in visits::ranked().into_iter().filter(|v| v.path != home && v.path != "/" && !seen.contains(&v.path)).take(5) {
+            items.push((frequent, name(&v.path), v.path.clone(), "folder", String::new()));
         }
         items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "computer", String::new()));
         // Volumes amovibles: non montés, un clic les monte (path vide, dev renseigné)

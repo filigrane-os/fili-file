@@ -13,6 +13,7 @@ mod icons;
 mod ops;
 mod pick;
 mod portal;
+mod visits;
 mod volumes;
 mod watch;
 
