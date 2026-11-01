@@ -34,7 +34,7 @@ fn json(s: &str) -> String {
 // d'exécution conseillée. Court: il part dans le prompt.
 const ABOUT: &str = "File manager. location = folder shown (results = title if a result list from ctl show replaces its content), selection = paths the user selected (absolute). \
 Act on files with normal shell tools (mv, cp, rg, sha256sum, tar...) using these paths; prefer the shell for batch work. \
-fili-file shows changes live (inotify), so no refresh call is needed. Trash with gio trash, never rm, unless asked. \
+fili-file shows changes live (inotify), so no refresh call is needed. Never rm: gio trash. Before a batch rename/move, write the old -> new list in a file so it can be reverted. \
 To take the user somewhere: fili-file ctl goto PATH (a file is selected in its folder). To show search results in this window: \
 find them with fd/rg/find, then fili-file ctl show 'TITLE' < paths (one absolute path per line); both bring the window forward.";
 
