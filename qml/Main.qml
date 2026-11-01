@@ -17,13 +17,17 @@ ApplicationWindow {
     minimumHeight: 300
     visible: true
     color: FiliTheme.nuit
-    title: picking ? Fili.pickTitle() : folder.shown === "/" ? "/" : folder.shown.split("/").pop()
+    title: picking ? Fili.pickTitle() : win.searchLabel !== "" ? win.searchLabel : folder.shown === "/" ? "/" : folder.shown.split("/").pop()
+
+    // Nom de la recherche en cours (saisie ou résultats de l'assistant), vide hors recherche
+    readonly property string searchLabel: folder.filter.trim() !== "" ? Fili.tr("Search “%1”").replace("%1", folder.filter.trim()) : folder.results !== "" && folder.results !== "…" ? folder.results : folder.results !== "" ? Fili.tr("Search results") : ""
 
     // Mode sélecteur de fichiers
     readonly property string pickKind: Fili.pickKind()
     readonly property bool picking: pickKind !== ""
-    readonly property var pickFilters: picking ? JSON.parse(Fili.pickFilters()) : []
-    property int pickFilterIndex: Fili.pickFilter()
+    // Entrée 0: tous les fichiers (défaut); entrée i: filtre i - 1 de l'application
+    readonly property var pickFilters: picking ? [Fili.tr("All files")].concat(JSON.parse(Fili.pickFilters())) : []
+    property int pickFilterIndex: 0
     // Chemins que validerait le bouton (vide: bouton grisé)
     function pickedPaths() {
         if (!picking)
@@ -49,10 +53,10 @@ ApplicationWindow {
             return;
         if (pickKind === "save" && Fili.pathExists(picked[0])) {
             const name = picked[0].split("/").pop();
-            win.ask(Fili.tr("Replace “%1”?").replace("%1", name), Fili.tr("A file with this name already exists. Replacing it overwrites its content."), Fili.tr("Replace"), () => Fili.pickFinish(picked.join("\n"), pickFilterIndex));
+            win.ask(Fili.tr("Replace “%1”?").replace("%1", name), Fili.tr("A file with this name already exists. Replacing it overwrites its content."), Fili.tr("Replace"), () => Fili.pickFinish(picked.join("\n"), pickFilterIndex - 1));
             return;
         }
-        Fili.pickFinish(picked.join("\n"), pickFilterIndex);
+        Fili.pickFinish(picked.join("\n"), pickFilterIndex - 1);
     }
     // Double-clic ou Entrée sur une ligne: un dossier s'ouvre; un fichier est choisi en mode sélecteur
     function openRow(row) {
@@ -336,7 +340,7 @@ ApplicationWindow {
             files.setColumns(files.allColumns.map(c => c.key).filter(k => k === key ? !on : files.enabledKeys.indexOf(k) >= 0));
         } else if (id.startsWith("filter:")) {
             pickFilterIndex = parseInt(id.slice(7));
-            folder.setPickFilter(pickFilterIndex);
+            folder.setPickFilter(pickFilterIndex - 1);
             files.reloaded();
         } else if (id === "gopath")
             win.open(menuPath);
@@ -612,7 +616,7 @@ ApplicationWindow {
             }
         }
         TextButton {
-            visible: win.pickFilters.length > 0
+            visible: win.pickFilters.length > 1
             anchors { left: parent.left; leftMargin: win.pickKind === "save" ? 300 + FiliTheme.margin : FiliTheme.margin - FiliTheme.space3; verticalCenter: parent.verticalCenter }
             height: 26
             label: (win.pickFilters[win.pickFilterIndex] || "") + "  ▾"
@@ -655,7 +659,7 @@ ApplicationWindow {
             id: pathBar
             anchors { left: parent.left; leftMargin: FiliTheme.margin - FiliTheme.space2; top: parent.top; topMargin: 1; bottom: parent.bottom }
             width: parent.width * 0.6
-            visible: !statusbar.message || editing
+            visible: (!statusbar.message && win.searchLabel === "") || editing
             fontSize: FiliTheme.sizeSmall
             path: folder.shown
             onOpen: p => win.open(p)
@@ -666,12 +670,23 @@ ApplicationWindow {
             }
         }
         Text {
+            anchors { left: parent.left; leftMargin: FiliTheme.margin; right: parent.horizontalCenter; top: parent.top; topMargin: 1; bottom: parent.bottom }
+            visible: !statusbar.message && win.searchLabel !== "" && !pathBar.editing
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            text: win.searchLabel
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.sizeSmall
+            font.bold: true
+            color: FiliTheme.brume
+        }
+        Text {
             anchors { left: pathBar.right; leftMargin: FiliTheme.space3; right: parent.right; rightMargin: FiliTheme.margin; top: parent.top; topMargin: 1; bottom: parent.bottom }
             visible: !statusbar.message && !pathBar.editing
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: Text.AlignRight
             elide: Text.ElideMiddle
-            text: files.info || folder.status
+            text: win.searchLabel !== "" ? folder.status : files.info || folder.status
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeSmall
             color: FiliTheme.brume2

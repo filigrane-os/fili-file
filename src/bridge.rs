@@ -736,7 +736,9 @@ impl FolderModel {
     fn set_status(mut self: Pin<&mut Self>) {
         let n = self.rows.len();
         let free = fs::free(Path::new(&self.dir)).map(fs::size);
+        let searching = !self.filter.to_string().trim().is_empty() || !self.results.is_empty();
         let status = match free {
+            _ if searching => i18n::trf("%1 found", &[&fs::count(n)]),
             Some(f) => i18n::trf("%1, %2 available", &[&fs::count(n), &f]),
             None => fs::count(n),
         };
@@ -1831,7 +1833,7 @@ impl cxx_qt::Initialize for FolderModel {
             r.sort_key = cfg.sort;
             r.sort_desc = cfg.sort_desc;
         }
-        self.as_mut().rust_mut().pick_filter = pick::get().map_or(-1, |p| if p.filters.is_empty() { -1 } else { p.filter.max(0) });
+        self.as_mut().rust_mut().pick_filter = -1;
         self.as_mut().rust_mut().watcher = Watcher::new(move || {
             let _ = qt.queue(|m| m.live_reload());
         });
@@ -2008,8 +2010,9 @@ impl Fili {
         QString::from(&format!("[{}]", names.join(",")))
     }
 
+    // Le sélecteur s'ouvre sur « tous les fichiers » (-1), jamais sur le filtre demandé par l'application: il cacherait des fichiers
     pub fn pick_filter(&self) -> i32 {
-        pick::get().map_or(-1, |p| if p.filters.is_empty() { -1 } else { p.filter.max(0) })
+        -1
     }
 
     pub fn pick_finish(&self, paths: &QString, filter: i32) {
