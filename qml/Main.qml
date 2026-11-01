@@ -178,7 +178,11 @@ ApplicationWindow {
     Action { id: aTrashAlt; shortcut: "Ctrl+Backspace"; enabled: win.canAct; onTriggered: win.trashSelection() }
     Action { id: aEmpty; text: Fili.tr("Empty Trash"); shortcut: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onTriggered: win.askEmpty() }
     Action { id: aAbout; text: Fili.tr("About Casier"); onTriggered: win.showAbout() }
-    Action { id: aClose; text: Fili.tr("Close"); shortcut: "Ctrl+W"; onTriggered: Qt.quit() }
+    // Ctrl+W ferme l'onglet, et la fenêtre quand il n'y en a plus qu'un
+    Action { id: aClose; text: Fili.tr("Close"); shortcut: "Ctrl+W"; onTriggered: win.tabs.length > 1 ? win.closeTab(win.tabIndex) : Qt.quit() }
+    Action { id: aNewTab; text: Fili.tr("New Tab"); shortcut: "Ctrl+T"; enabled: !win.picking; onTriggered: win.newTab() }
+    Action { id: aNextTab; text: Fili.tr("Show Next Tab"); shortcut: "Ctrl+Tab"; enabled: win.tabs.length > 1; onTriggered: win.switchTab((win.tabIndex + 1) % win.tabs.length) }
+    Action { id: aPrevTab; text: Fili.tr("Show Previous Tab"); shortcut: "Ctrl+Shift+Tab"; enabled: win.tabs.length > 1; onTriggered: win.switchTab((win.tabIndex + win.tabs.length - 1) % win.tabs.length) }
     Action { id: aQuit; text: Fili.tr("Quit"); shortcut: "Ctrl+Q"; onTriggered: Qt.quit() }
     Action { id: aUndo; text: Fili.tr("Undo"); shortcut: "Ctrl+Z"; enabled: win.canAct; onTriggered: folder.undo() }
     Action { id: aCut; text: Fili.tr("Cut"); shortcut: "Ctrl+X"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.cut(files.targetsText()) }
@@ -212,7 +216,7 @@ ApplicationWindow {
     // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
     // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
     readonly property var menuActions: ({
-        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "about": aAbout,
+        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "search": aSearch
@@ -233,6 +237,41 @@ ApplicationWindow {
             return p;
         });
         Fili.copyText(out.join("\n"));
+    }
+    // Onglets: chaque onglet garde son dossier (l'historique est celui de la fenêtre). La barre d'onglets n'apparaît
+    // qu'à partir de deux onglets.
+    property var tabs: [{ path: "" }]
+    property int tabIndex: 0
+    function newTab() {
+        const t = tabs.slice();
+        t[tabIndex] = { path: folder.shown };
+        t.splice(tabIndex + 1, 0, { path: folder.shown });
+        tabs = t;
+        tabIndex = tabIndex + 1;
+        files.focusList();
+    }
+    function switchTab(i) {
+        if (i === tabIndex || i < 0 || i >= tabs.length)
+            return;
+        const t = tabs.slice();
+        t[tabIndex] = { path: folder.shown };
+        tabs = t;
+        tabIndex = i;
+        open(t[i].path);
+    }
+    function closeTab(i) {
+        if (tabs.length < 2)
+            return;
+        const t = tabs.slice();
+        t[tabIndex] = { path: folder.shown };
+        t.splice(i, 1);
+        const next = Math.min(i === tabIndex ? i : (i < tabIndex ? tabIndex - 1 : tabIndex), t.length - 1);
+        tabs = t;
+        const moved = i === tabIndex;
+        tabIndex = next;
+        if (moved)
+            open(t[next].path);
+        files.focusList();
     }
     // Panneau d'aperçu (choix gardé dans l'état de l'utilisateur)
     property bool previewOn: Fili.previewShown()
@@ -576,10 +615,65 @@ ApplicationWindow {
         color: FiliTheme.nuit4
     }
 
+    // Onglets (à partir de deux): nom du dossier, × au survol; clic du milieu ferme
+    Rectangle {
+        id: tabBar
+        anchors { top: toolbarLine.bottom; left: sideLine.right; right: previewLine.left }
+        height: visible ? 30 : 0
+        visible: win.tabs.length > 1 && !win.picking
+        color: FiliTheme.nuit
+        Row {
+            anchors { fill: parent; leftMargin: FiliTheme.space2; topMargin: FiliTheme.space1; bottomMargin: FiliTheme.space1 }
+            spacing: FiliTheme.space1
+            Repeater {
+                model: win.tabs
+                Rectangle {
+                    required property var modelData
+                    required property int index
+                    readonly property bool current: index === win.tabIndex
+                    readonly property string path: current ? folder.shown : modelData.path
+                    width: Math.max(80, Math.min(180, (tabBar.width - 2 * FiliTheme.space2) / win.tabs.length - FiliTheme.space1))
+                    height: parent.height
+                    radius: FiliTheme.radiusControl
+                    color: current ? FiliTheme.nuit3 : tabArea.containsMouse ? FiliTheme.nuit2 : "transparent"
+                    Text {
+                        anchors { left: parent.left; leftMargin: FiliTheme.space3; right: closeX.left; rightMargin: FiliTheme.space1; verticalCenter: parent.verticalCenter }
+                        text: path === "/" ? "/" : path === Fili.home() ? Fili.home().split("/").pop() : path.split("/").pop()
+                        elide: Text.ElideRight
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.sizeList
+                        font.weight: current ? FiliTheme.weightAccent : Font.Normal
+                        color: current ? FiliTheme.brume : FiliTheme.brume2
+                    }
+                    MouseArea {
+                        id: tabArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                        onClicked: e => e.button === Qt.MiddleButton ? win.closeTab(index) : win.switchTab(index)
+                    }
+                    Text {
+                        id: closeX
+                        visible: tabArea.containsMouse || xHit.containsMouse || current
+                        anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                        text: "×"
+                        font.pixelSize: 16
+                        color: xHit.containsMouse ? FiliTheme.cendre : FiliTheme.ardoise
+                        MouseArea {
+                            id: xHit
+                            anchors { fill: parent; margins: -5 }
+                            hoverEnabled: true
+                            onClicked: win.closeTab(index)
+                        }
+                    }
+                }
+            }
+        }
+    }
     // Résultats affichés à la place du dossier (recherche de l'assistant)
     Rectangle {
         id: resultsBar
-        anchors { top: toolbarLine.bottom; left: sideLine.right; right: parent.right }
+        anchors { top: tabBar.bottom; left: sideLine.right; right: parent.right }
         height: folder.results !== "" ? 28 : 0
         visible: folder.results !== ""
         color: FiliTheme.nuit2
