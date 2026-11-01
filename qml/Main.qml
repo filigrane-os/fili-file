@@ -189,7 +189,9 @@ ApplicationWindow {
     Action { id: aCopy; text: Fili.tr("Copy"); shortcut: "Ctrl+C"; enabled: win.canAct; onTriggered: folder.copy(files.targetsText()) }
     Action { id: aPaste; text: Fili.tr("Paste"); shortcut: "Ctrl+V"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.paste() }
     Action { id: aDuplicate; text: Fili.tr("Duplicate"); shortcut: "Ctrl+D"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.duplicate(files.targetsText()) }
-    Action { id: aRename; text: Fili.tr("Rename"); shortcut: "F2"; enabled: win.canAct && !folder.inTrash; onTriggered: files.startRename() }
+    // F2: renommer sur place; avec plusieurs éléments sélectionnés, renommer en lot
+    Action { id: aRename; text: Fili.tr("Rename"); shortcut: "F2"; enabled: win.canAct && !folder.inTrash; onTriggered: Object.keys(files.selected).length > 1 ? bulkBox.open() : files.startRename() }
+    Action { id: aBulk; text: Fili.tr("Rename Items…"); enabled: win.canAct && !folder.inTrash && Object.keys(files.selected).length > 1; onTriggered: bulkBox.open() }
     Action { id: aSelectAll; text: Fili.tr("Select All"); shortcut: "Ctrl+A"; enabled: win.canAct; onTriggered: files.selectAll() }
     Action { id: aInvert; text: Fili.tr("Invert Selection"); shortcut: "Ctrl+Shift+I"; enabled: win.canAct; onTriggered: files.invertSelection() }
     Action { id: aMatch; text: Fili.tr("Select Matching…"); shortcut: "Ctrl+Shift+M"; enabled: win.canAct && !win.picking; onTriggered: matchBox.open() }
@@ -217,7 +219,7 @@ ApplicationWindow {
     // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
     readonly property var menuActions: ({
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
-        "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename,
+        "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "search": aSearch
     })
@@ -288,7 +290,7 @@ ApplicationWindow {
     // Pas de barre de menus dans la fenêtre: le menu vit dans la fili-bar (repli appmenu/fili-file.json, commandes ci-dessus)
 
     // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
-    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible || matchBox.visible || conflictBox.visible
+    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible || matchBox.visible || bulkBox.visible || conflictBox.visible
     function trashSelection() {
         const row = folder.trash(files.targetsText(), files.currentIndex);
         files.reloaded();
@@ -347,7 +349,7 @@ ApplicationWindow {
                 list.push({ id: "addfav", label: Fili.tr("Add to Favorites") });
             }
             if (!trash)
-                list.push({ id: "rename", label: Fili.tr("Rename"), hint: "F2", enabled: one });
+                list.push({ id: "rename", label: one ? Fili.tr("Rename") : Fili.tr("Rename Items…"), hint: "F2" });
             if (!trash)
                 list.push({ id: "duplicate", label: Fili.tr("Duplicate"), hint: "Ctrl+D" });
             if (trash)
@@ -445,7 +447,7 @@ ApplicationWindow {
         else if (id === "paste")
             folder.paste();
         else if (id === "rename")
-            files.startRename();
+            aRename.trigger();
         else if (id === "duplicate")
             folder.duplicate(t);
         else if (id === "info")
@@ -1040,6 +1042,203 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
                     color: FiliTheme.brume2
+                }
+            }
+        }
+    }
+    // Renommage en lot (F2 avec plusieurs éléments): remplacer du texte, numéroter, changer la casse; aperçu avant/après
+    component BulkField: Rectangle {
+        property alias text: input.text
+        property string label
+        signal edited()
+        width: parent ? parent.width : 100
+        height: 26
+        radius: FiliTheme.radiusControl
+        color: FiliTheme.nuit
+        border.width: 1
+        border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+        Text {
+            visible: input.text === ""
+            anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+            text: parent.label
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.size
+            color: FiliTheme.ardoise
+        }
+        TextInput {
+            id: input
+            anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+            verticalAlignment: TextInput.AlignVCenter
+            clip: true
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.size
+            color: FiliTheme.brume
+            selectByMouse: true
+            onTextEdited: parent.edited()
+            Keys.onEscapePressed: bulkBox.visible = false
+            Keys.onReturnPressed: bulkBox.apply()
+            Keys.onEnterPressed: bulkBox.apply()
+        }
+    }
+    Rectangle {
+        id: bulkBox
+        property string paths: ""
+        property string mode: "replace"
+        property string caseMode: "lower"
+        property var plan: []
+        readonly property bool changed: plan.some(r => !r.same)
+        readonly property bool valid: plan.length > 0 && plan.every(r => r.ok)
+        function open() {
+            paths = Object.keys(files.selected).join("\n");
+            findField.text = "";
+            replaceField.text = "";
+            patternField.text = "{name} {n}";
+            padField.text = "2";
+            startField.text = "1";
+            mode = "replace";
+            caseMode = "lower";
+            refresh();
+            visible = true;
+            findField.forceFocus();
+        }
+        function refresh() {
+            const a = mode === "replace" ? findField.text : mode === "number" ? patternField.text : caseMode;
+            const b = mode === "replace" ? replaceField.text : padField.text;
+            plan = JSON.parse(folder.bulkPreview(paths, mode, a, b, parseInt(startField.text) || 1));
+        }
+        function apply() {
+            if (!changed || !valid)
+                return;
+            const a = mode === "replace" ? findField.text : mode === "number" ? patternField.text : caseMode;
+            const b = mode === "replace" ? replaceField.text : padField.text;
+            if (folder.bulkApply(paths, mode, a, b, parseInt(startField.text) || 1))
+                visible = false;
+        }
+        anchors.fill: parent
+        visible: false
+        z: 200
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        focus: visible
+        onVisibleChanged: if (!visible) files.focusList()
+        Keys.onEscapePressed: visible = false
+        onModeChanged: refresh()
+        MouseArea {
+            anchors.fill: parent
+            onClicked: bulkBox.visible = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 460
+            height: bulkCard.implicitHeight + 2 * FiliTheme.space4
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            MouseArea { anchors.fill: parent }
+            Column {
+                id: bulkCard
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
+                spacing: FiliTheme.space3
+                Text {
+                    width: parent.width
+                    text: Fili.tr("Rename %1 items").replace("%1", bulkBox.plan.length)
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.brume
+                }
+                Row {
+                    spacing: FiliTheme.space2
+                    TextButton { label: Fili.tr("Replace Text"); primary: bulkBox.mode === "replace"; onClicked: { bulkBox.mode = "replace"; findField.forceFocus(); } }
+                    TextButton { label: Fili.tr("Number"); primary: bulkBox.mode === "number"; onClicked: { bulkBox.mode = "number"; patternField.forceFocus(); } }
+                    TextButton { label: Fili.tr("Change Case"); primary: bulkBox.mode === "case"; onClicked: bulkBox.mode = "case" }
+                }
+                Column {
+                    width: parent.width
+                    spacing: FiliTheme.space2
+                    visible: bulkBox.mode === "replace"
+                    BulkField { id: findField; label: Fili.tr("Find"); onEdited: bulkBox.refresh(); function forceFocus() { forceActiveFocus(); } }
+                    BulkField { id: replaceField; label: Fili.tr("Replace with"); onEdited: bulkBox.refresh() }
+                }
+                Column {
+                    width: parent.width
+                    spacing: FiliTheme.space2
+                    visible: bulkBox.mode === "number"
+                    BulkField { id: patternField; label: Fili.tr("Name, with {name} and {n}"); onEdited: bulkBox.refresh(); function forceFocus() { forceActiveFocus(); } }
+                    Row {
+                        spacing: FiliTheme.space2
+                        BulkField { id: startField; width: 120; label: Fili.tr("Start at"); onEdited: bulkBox.refresh() }
+                        BulkField { id: padField; width: 160; label: Fili.tr("Digits"); onEdited: bulkBox.refresh() }
+                    }
+                }
+                Row {
+                    visible: bulkBox.mode === "case"
+                    spacing: FiliTheme.space2
+                    TextButton { label: Fili.tr("lowercase"); primary: bulkBox.caseMode === "lower"; onClicked: { bulkBox.caseMode = "lower"; bulkBox.refresh(); } }
+                    TextButton { label: Fili.tr("UPPERCASE"); primary: bulkBox.caseMode === "upper"; onClicked: { bulkBox.caseMode = "upper"; bulkBox.refresh(); } }
+                    TextButton { label: Fili.tr("Capitalize Words"); primary: bulkBox.caseMode === "title"; onClicked: { bulkBox.caseMode = "title"; bulkBox.refresh(); } }
+                }
+                Rectangle {
+                    width: parent.width
+                    height: Math.min(bulkBox.plan.length, 8) * 22 + 2 * FiliTheme.space1
+                    radius: FiliTheme.radiusControl
+                    color: FiliTheme.nuit
+                    border.width: 1
+                    border.color: FiliTheme.nuit4
+                    ListView {
+                        anchors { fill: parent; margins: FiliTheme.space1 }
+                        clip: true
+                        model: bulkBox.plan
+                        boundsBehavior: Flickable.StopAtBounds
+                        delegate: Item {
+                            required property var modelData
+                            width: ListView.view.width
+                            height: 22
+                            Text {
+                                anchors { left: parent.left; leftMargin: FiliTheme.space2; right: arrow.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                                text: modelData.from
+                                elide: Text.ElideMiddle
+                                font.family: FiliTheme.font
+                                font.pixelSize: FiliTheme.sizeList
+                                color: FiliTheme.brume2
+                            }
+                            Text {
+                                id: arrow
+                                anchors { horizontalCenter: parent.horizontalCenter; verticalCenter: parent.verticalCenter }
+                                text: "→"
+                                font.pixelSize: FiliTheme.sizeList
+                                color: FiliTheme.ardoise
+                            }
+                            Text {
+                                anchors { left: arrow.right; leftMargin: FiliTheme.space2; right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                                text: modelData.to === "" ? "—" : modelData.to
+                                elide: Text.ElideMiddle
+                                font.family: FiliTheme.font
+                                font.pixelSize: FiliTheme.sizeList
+                                color: !modelData.ok ? FiliTheme.cendre : modelData.same ? FiliTheme.ardoise : FiliTheme.brume
+                            }
+                        }
+                    }
+                }
+                Text {
+                    width: parent.width
+                    visible: bulkBox.changed && !bulkBox.valid
+                    wrapMode: Text.Wrap
+                    text: Fili.tr("Some new names are not valid or already exist")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.cendre
+                }
+                Row {
+                    anchors.right: parent.right
+                    spacing: FiliTheme.space2
+                    TextButton { label: Fili.tr("Cancel"); onClicked: bulkBox.visible = false }
+                    TextButton {
+                        label: Fili.tr("Rename")
+                        primary: true
+                        opacity: bulkBox.changed && bulkBox.valid ? 1 : 0.4
+                        onClicked: bulkBox.apply()
+                    }
                 }
             }
         }

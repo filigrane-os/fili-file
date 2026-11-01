@@ -139,6 +139,81 @@ pub fn valid_name(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\0'])
 }
 
+// Renomme plusieurs éléments d'un coup, même quand les noms s'échangent (a -> b et b -> a): tout passe d'abord par un
+// nom provisoire, puis chacun prend son nom final. En cas d'échec, ce qui a bougé est remis (au mieux) et l'erreur rendue.
+pub fn rename_many(pairs: &[(PathBuf, PathBuf)]) -> io::Result<()> {
+    let mut stage: Vec<(PathBuf, PathBuf, PathBuf)> = Vec::new();
+    for (i, (old, new)) in pairs.iter().enumerate() {
+        let tmp = old.with_file_name(format!(".fili-rename-{}-{i}", std::process::id()));
+        if let Err(e) = fs::rename(old, &tmp) {
+            for (o, _, t) in stage.iter().rev() {
+                let _ = fs::rename(t, o);
+            }
+            return Err(e);
+        }
+        stage.push((old.clone(), new.clone(), tmp));
+    }
+    for k in 0..stage.len() {
+        let (_, new, tmp) = &stage[k];
+        if exists(new) || fs::rename(tmp, new).is_err() {
+            // Remet tout: les finis (new -> old) puis les provisoires (tmp -> old)
+            for (o, n, _) in stage[..k].iter().rev() {
+                let _ = fs::rename(n, o);
+            }
+            for (o, _, t) in stage[k..].iter().rev() {
+                let _ = fs::rename(t, o);
+            }
+            return Err(io::Error::from(io::ErrorKind::AlreadyExists));
+        }
+    }
+    Ok(())
+}
+
+// Nouveau nom d'un élément pour le renommage en lot. L'extension d'un fichier est gardée.
+//  mode "replace": remplace a par b dans le nom (sans l'extension)
+//  mode "number": a = modèle avec {name} (nom d'origine) et {n} (numéro, commence à start, rempli de zéros sur b chiffres)
+//  mode "case": a = "lower", "upper" ou "title" (première lettre de chaque mot)
+pub fn bulk_name(name: &str, is_dir: bool, mode: &str, a: &str, b: &str, index: usize, start: i64) -> String {
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 && !is_dir => (&name[..i], &name[i..]),
+        _ => (name, ""),
+    };
+    let new_stem = match mode {
+        "replace" if !a.is_empty() => stem.replace(a, b),
+        "number" => {
+            let width = b.trim().parse::<usize>().unwrap_or(0).min(12);
+            let n = format!("{:0width$}", start + index as i64);
+            let pattern = if a.is_empty() { "{name}" } else { a };
+            pattern.replace("{name}", stem).replace("{n}", &n)
+        }
+        "case" => match a {
+            "lower" => stem.to_lowercase(),
+            "upper" => stem.to_uppercase(),
+            "title" => {
+                let mut out = String::new();
+                let mut start_of_word = true;
+                for c in stem.chars() {
+                    if c.is_alphanumeric() {
+                        if start_of_word {
+                            out.extend(c.to_uppercase());
+                        } else {
+                            out.extend(c.to_lowercase());
+                        }
+                        start_of_word = false;
+                    } else {
+                        out.push(c);
+                        start_of_word = true;
+                    }
+                }
+                out
+            }
+            _ => stem.to_string(),
+        },
+        _ => stem.to_string(),
+    };
+    format!("{new_stem}{ext}")
+}
+
 // Renomme src en new_name dans son dossier; un nom pris est refusé (AlreadyExists)
 pub fn rename(src: &Path, new_name: &str) -> io::Result<PathBuf> {
     if !valid_name(new_name) {
@@ -372,6 +447,35 @@ mod tests {
         assert_eq!(unique(&d, "a.txt", "copy", false), d.join("a copy 2.txt"));
         // Un dossier à point dans le nom: pas d'extension
         assert_eq!(unique(&d, "v1.2", "copy", true), d.join("v1.2 copy"));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn bulk_names() {
+        assert_eq!(bulk_name("IMG_001.jpg", false, "replace", "IMG", "Vacances", 0, 1), "Vacances_001.jpg");
+        // L'extension n'est jamais touchée
+        assert_eq!(bulk_name("a.jpg.jpg", false, "replace", "jpg", "png", 0, 1), "a.png.jpg");
+        assert_eq!(bulk_name("photo.jpg", false, "number", "Photo {n}", "3", 4, 8), "Photo 012.jpg");
+        assert_eq!(bulk_name("photo.jpg", false, "number", "{name}-{n}", "", 0, 1), "photo-1.jpg");
+        assert_eq!(bulk_name("MON FICHIER.TXT", false, "case", "lower", "", 0, 1), "mon fichier.TXT");
+        assert_eq!(bulk_name("mon fichier-de_test.txt", false, "case", "title", "", 0, 1), "Mon Fichier-De_Test.txt");
+        // Un dossier à point dans le nom n'a pas d'extension; un fichier caché garde son point de tête
+        assert_eq!(bulk_name("v1.2", true, "replace", "1", "9", 0, 1), "v9.2");
+        assert_eq!(bulk_name(".bashrc", false, "case", "upper", "", 0, 1), ".BASHRC");
+    }
+
+    #[test]
+    fn renames_many_even_when_names_swap() {
+        let d = tmp("many");
+        fs::write(d.join("a"), "A").unwrap();
+        fs::write(d.join("b"), "B").unwrap();
+        rename_many(&[(d.join("a"), d.join("b")), (d.join("b"), d.join("a"))]).unwrap();
+        assert_eq!((fs::read_to_string(d.join("a")).unwrap(), fs::read_to_string(d.join("b")).unwrap()), ("B".into(), "A".into()));
+        // Cible déjà prise par un élément hors du lot: rien ne bouge
+        fs::write(d.join("c"), "C").unwrap();
+        assert!(rename_many(&[(d.join("a"), d.join("c"))]).is_err());
+        assert_eq!(fs::read_to_string(d.join("a")).unwrap(), "B");
+        assert_eq!(fs::read_to_string(d.join("c")).unwrap(), "C");
         fs::remove_dir_all(&d).unwrap();
     }
 

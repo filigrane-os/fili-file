@@ -177,6 +177,14 @@ pub mod qobject {
         fn compress(self: Pin<&mut FolderModel>, paths: &QString);
         #[qinvokable]
         fn cancel(self: Pin<&mut FolderModel>);
+        // Renommage en lot (modes replace, number, case; voir ops::bulk_name). L'aperçu rend du JSON
+        // [{from, to, ok, same}] dans l'ordre d'affichage (ok = nom valide et libre); l'application renomme ce qui change
+        #[qinvokable]
+        #[cxx_name = "bulkPreview"]
+        fn bulk_preview(self: &FolderModel, paths: &QString, mode: &QString, a: &QString, b: &QString, start: i32) -> QString;
+        #[qinvokable]
+        #[cxx_name = "bulkApply"]
+        fn bulk_apply(self: Pin<&mut FolderModel>, paths: &QString, mode: &QString, a: &QString, b: &QString, start: i32) -> bool;
         // Tâches en cours et en attente (JSON [{label, progress}], progress -2 = en attente) et annulation de l'une d'elles
         #[qinvokable]
         fn tasks(self: &FolderModel) -> QString;
@@ -725,6 +733,8 @@ enum Undo {
     Moved(Vec<(PathBuf, PathBuf)>),
     // (chemin, anciens droits)
     Mode(PathBuf, u32),
+    // Renommage en lot: (ancien chemin, nouveau chemin)
+    Renames(Vec<(PathBuf, PathBuf)>),
 }
 
 // Que faire d'un nom déjà pris dans la destination
@@ -1654,6 +1664,66 @@ impl FolderModel {
     }
 
     // Tâches pour la fenêtre des tâches, en JSON: la tâche en cours d'abord, puis la file [{label, progress}]
+    // Nouveaux noms du lot (dans l'ordre d'affichage), avec leur validité: nom valide, pas de doublon dans le lot, pas
+    // d'élément existant hors du lot qui porte déjà ce nom
+    fn bulk_plan(&self, paths: &QString, mode: &str, a: &str, b: &str, start: i32) -> Vec<(PathBuf, String, bool)> {
+        let mut list = paths_of(paths);
+        let order = |p: &String| self.rows.iter().position(|e| &e.path == p).unwrap_or(usize::MAX);
+        list.sort_by_key(order);
+        let planned: Vec<(PathBuf, String)> = list
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let path = PathBuf::from(p);
+                let name = base(p);
+                let new = ops::bulk_name(&name, path.is_dir(), mode, a, b, i, start as i64);
+                (path, new)
+            })
+            .collect();
+        planned
+            .iter()
+            .map(|(path, new)| {
+                let target = path.with_file_name(new);
+                let same_count = planned.iter().filter(|(q, n)| q.with_file_name(n) == target).count();
+                let taken_outside = target != *path && ops::exists(&target) && !planned.iter().any(|(q, _)| *q == target);
+                (path.clone(), new.clone(), ops::valid_name(new) && same_count == 1 && !taken_outside)
+            })
+            .collect()
+    }
+
+    pub fn bulk_preview(&self, paths: &QString, mode: &QString, a: &QString, b: &QString, start: i32) -> QString {
+        let plan = self.bulk_plan(paths, &mode.to_string(), &a.to_string(), &b.to_string(), start);
+        let body: Vec<String> = plan
+            .iter()
+            .map(|(p, new, ok)| format!("{{\"from\":{},\"to\":{},\"ok\":{ok},\"same\":{}}}", json(&base(&p.to_string_lossy())), json(new), base(&p.to_string_lossy()) == *new))
+            .collect();
+        QString::from(&format!("[{}]", body.join(",")))
+    }
+
+    pub fn bulk_apply(mut self: Pin<&mut Self>, paths: &QString, mode: &QString, a: &QString, b: &QString, start: i32) -> bool {
+        let plan = self.bulk_plan(paths, &mode.to_string(), &a.to_string(), &b.to_string(), start);
+        if plan.iter().any(|(_, _, ok)| !ok) {
+            self.as_mut().fail(i18n::tr("Some new names are not valid or already exist").into());
+            return false;
+        }
+        let pairs: Vec<(PathBuf, PathBuf)> = plan.into_iter().filter(|(p, n, _)| base(&p.to_string_lossy()) != *n).map(|(p, n, _)| (p.clone(), p.with_file_name(n))).collect();
+        if pairs.is_empty() {
+            return true;
+        }
+        match ops::rename_many(&pairs) {
+            Ok(()) => {
+                self.as_mut().push_undo(Undo::Renames(pairs));
+                self.as_mut().settle(None, 0);
+                self.as_mut().reloaded();
+                true
+            }
+            Err(e) => {
+                self.as_mut().fail(i18n::trf("Cannot rename: %1", &[&fs::error(&e)]));
+                false
+            }
+        }
+    }
+
     pub fn tasks(&self) -> QString {
         let mut list = Vec::new();
         if self.busy {
@@ -2090,6 +2160,10 @@ impl FolderModel {
             Undo::Moved(pairs) => pairs.iter().rev().try_for_each(|(src, dst)| {
                 ops::move_into(dst, src.parent().unwrap_or(Path::new("/")), &mut |_| true).map(|_| ())
             }),
+            Undo::Renames(pairs) => {
+                let back: Vec<(PathBuf, PathBuf)> = pairs.into_iter().map(|(old, new)| (new, old)).collect();
+                ops::rename_many(&back)
+            }
             Undo::Mode(p, mode) => {
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(&p, std::fs::Permissions::from_mode(mode))
