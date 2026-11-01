@@ -1058,11 +1058,23 @@ ApplicationWindow {
         const t = files.targets().filter(path => files.selected[path]);
         const list = t.length > 0 ? t : [folder.path];
         infoCard.rows = JSON.parse(folder.info(list.join("\n")));
+        infoCard.mode = list.length === 1 ? folder.permMode(list[0]) : -1;
+        infoCard.path = list[0];
         infoCard.visible = true;
         folder.startInfoSize(list.join("\n"));
+        if (infoCard.rows.some(r => r[0] === "SHA-256"))
+            folder.startInfoHash(list[0]);
     }
     Connections {
         target: folder
+        function onInfoHash(text) {
+            const r = infoCard.rows.slice();
+            const i = r.findIndex(x => x[0] === "SHA-256");
+            if (i >= 0 && infoCard.visible) {
+                r[i] = [r[i][0], text];
+                infoCard.rows = r;
+            }
+        }
         function onInfoSize(text) {
             const r = infoCard.rows.slice();
             const i = r.findIndex(x => x[0] === Fili.tr("Size"));
@@ -1075,6 +1087,21 @@ ApplicationWindow {
     Rectangle {
         id: infoCard
         property var rows: []
+        // Droits modifiables (0..511) de l'élément seul affiché, -1 si on ne peut pas les changer
+        property int mode: -1
+        property string path: ""
+        function toggleBit(bit) {
+            const text = folder.setPerm(path, mode ^ bit);
+            if (text === "")
+                return;
+            mode = mode ^ bit;
+            const r = rows.slice();
+            const i = r.findIndex(x => x[0] === Fili.tr("Permissions"));
+            if (i >= 0) {
+                r[i] = [r[i][0], text];
+                rows = r;
+            }
+        }
         anchors.fill: parent
         visible: false
         z: 200
@@ -1095,7 +1122,7 @@ ApplicationWindow {
         Rectangle {
             anchors.centerIn: parent
             width: 420
-            height: grid.implicitHeight + okRow.height + 3 * FiliTheme.space4
+            height: grid.implicitHeight + okRow.height + 3 * FiliTheme.space4 + (infoCard.mode >= 0 ? permBox.height + FiliTheme.space3 : 0)
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
             border.width: 1
@@ -1120,6 +1147,55 @@ ApplicationWindow {
                         font.pixelSize: FiliTheme.sizeList
                         font.weight: label ? FiliTheme.weightAccent : Font.Normal
                         color: label ? FiliTheme.brume2 : FiliTheme.brume
+                    }
+                }
+            }
+            // Droits: trois lignes (propriétaire, groupe, autres) de trois cases lecture / écriture / exécution
+            Column {
+                id: permBox
+                visible: infoCard.mode >= 0
+                anchors { left: parent.left; top: grid.bottom; leftMargin: FiliTheme.space4 + 110 + FiliTheme.space3; topMargin: FiliTheme.space3 }
+                spacing: FiliTheme.space1
+                Repeater {
+                    model: [{ label: Fili.tr("Owner"), shift: 6 }, { label: Fili.tr("Group"), shift: 3 }, { label: Fili.tr("Others"), shift: 0 }]
+                    Row {
+                        required property var modelData
+                        spacing: FiliTheme.space1
+                        Text {
+                            width: 64
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.label
+                            font.family: FiliTheme.font
+                            font.pixelSize: FiliTheme.sizeList
+                            color: FiliTheme.brume2
+                        }
+                        Repeater {
+                            model: [{ ch: "r", bit: 4 }, { ch: "w", bit: 2 }, { ch: "x", bit: 1 }]
+                            Rectangle {
+                                required property var modelData
+                                readonly property int bit: modelData.bit << parent.modelData.shift
+                                readonly property bool on: (infoCard.mode & bit) !== 0
+                                width: 28
+                                height: 22
+                                radius: FiliTheme.radiusControl
+                                color: on ? FiliTheme.nuit4 : permArea.containsMouse ? FiliTheme.nuit3 : FiliTheme.nuit
+                                border.width: 1
+                                border.color: on ? FiliTheme.voile : FiliTheme.nuit4
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.ch
+                                    font.family: FiliTheme.mono
+                                    font.pixelSize: FiliTheme.sizeList
+                                    color: on ? FiliTheme.brume : FiliTheme.ardoise
+                                }
+                                MouseArea {
+                                    id: permArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: infoCard.toggleBit(parent.bit)
+                                }
+                            }
+                        }
                     }
                 }
             }

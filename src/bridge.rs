@@ -192,6 +192,21 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "infoSize"]
         fn info_size(self: Pin<&mut FolderModel>, text: &QString);
+        // Empreinte SHA-256 d'un fichier, calculée à part (sha256sum), rendue par infoHash
+        #[qinvokable]
+        #[cxx_name = "startInfoHash"]
+        fn start_info_hash(self: Pin<&mut FolderModel>, path: &QString);
+        #[qsignal]
+        #[cxx_name = "infoHash"]
+        fn info_hash(self: Pin<&mut FolderModel>, text: &QString);
+        // Droits (rwx, 0..511) d'un fichier ou dossier qui nous appartient, -1 sinon (lien, autre propriétaire)
+        #[qinvokable]
+        #[cxx_name = "permMode"]
+        fn perm_mode(self: &FolderModel, path: &QString) -> i32;
+        // Change les droits (annulable); rend le texte « rwxr-xr-x (755) », vide en cas d'échec
+        #[qinvokable]
+        #[cxx_name = "setPerm"]
+        fn set_perm(self: Pin<&mut FolderModel>, path: &QString, mode: i32) -> QString;
     }
 
     unsafe extern "RustQt" {
@@ -700,6 +715,8 @@ enum Undo {
     Created(Vec<PathBuf>),
     // (origine, destination)
     Moved(Vec<(PathBuf, PathBuf)>),
+    // (chemin, anciens droits)
+    Mode(PathBuf, u32),
 }
 
 // Que faire d'un nom déjà pris dans la destination
@@ -1635,6 +1652,11 @@ impl FolderModel {
                 rows.push((i18n::tr("Name").into(), base(one)));
                 rows.push((i18n::tr("Kind").into(), if m.is_symlink() { i18n::tr("Alias").into() } else { icons::kind(&base(one), is_dir) }));
                 rows.push((i18n::tr("Size").into(), if is_dir { "…".into() } else { fs::size(m.len()) }));
+                if m.is_symlink()
+                    && let Ok(t) = std::fs::read_link(p)
+                {
+                    rows.push((i18n::tr("Points to").into(), t.to_string_lossy().into_owned()));
+                }
                 rows.push((i18n::tr("Where").into(), p.parent().map_or("/".into(), |d| d.to_string_lossy().into_owned())));
                 if let Ok(t) = m.created() {
                     rows.push((i18n::tr("Created").into(), fs::date(t.duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64), now)));
@@ -1642,6 +1664,9 @@ impl FolderModel {
                 rows.push((i18n::tr("Modified").into(), fs::date(m.mtime(), now)));
                 rows.push((i18n::tr("Permissions").into(), format!("{} ({:o})", fs::permissions(m.mode()), m.mode() & 0o777)));
                 rows.push((i18n::tr("Owner").into(), fs::owner(m.uid())));
+                if target.is_file() {
+                    rows.push(("SHA-256".into(), "…".into()));
+                }
             }
             many => {
                 rows.push((i18n::tr("Name").into(), fs::count(many.len())));
@@ -1651,6 +1676,48 @@ impl FolderModel {
         }
         let body: Vec<String> = rows.iter().map(|(k, v)| format!("[{},{}]", json(k), json(v))).collect();
         QString::from(&format!("[{}]", body.join(",")))
+    }
+
+    pub fn start_info_hash(self: Pin<&mut Self>, path: &QString) {
+        let path = path.to_string();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let out = Command::new("sha256sum").arg("--").arg(&path).stdin(Stdio::null()).stderr(Stdio::null()).output();
+            let text = out
+                .ok()
+                .filter(|o| o.status.success())
+                .and_then(|o| String::from_utf8_lossy(&o.stdout).split_whitespace().next().map(String::from))
+                .unwrap_or_else(|| "—".into());
+            let _ = qt.queue(move |m| m.info_hash(&QString::from(&text)));
+        });
+    }
+
+    pub fn perm_mode(&self, path: &QString) -> i32 {
+        use std::os::unix::fs::MetadataExt;
+        match std::fs::symlink_metadata(path.to_string()) {
+            Ok(m) if !m.is_symlink() && m.uid() == unsafe { libc::geteuid() } => (m.mode() & 0o777) as i32,
+            _ => -1,
+        }
+    }
+
+    pub fn set_perm(mut self: Pin<&mut Self>, path: &QString, mode: i32) -> QString {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let p = PathBuf::from(path.to_string());
+        let result = std::fs::symlink_metadata(&p).and_then(|m| {
+            let old = m.mode() & 0o7777;
+            let new = (old & !0o777) | (mode as u32 & 0o777);
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(new)).map(|()| (old, new))
+        });
+        match result {
+            Ok((old, new)) => {
+                self.as_mut().push_undo(Undo::Mode(p, old));
+                QString::from(&format!("{} ({:o})", fs::permissions(new), new & 0o777))
+            }
+            Err(e) => {
+                self.as_mut().fail(i18n::trf("Cannot change permissions: %1", &[&fs::error(&e)]));
+                QString::default()
+            }
+        }
     }
 
     // Taille totale (dossiers compris) calculée à part, rendue par le signal infoSize
@@ -1964,6 +2031,10 @@ impl FolderModel {
             Undo::Moved(pairs) => pairs.iter().rev().try_for_each(|(src, dst)| {
                 ops::move_into(dst, src.parent().unwrap_or(Path::new("/")), &mut |_| true).map(|_| ())
             }),
+            Undo::Mode(p, mode) => {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&p, std::fs::Permissions::from_mode(mode))
+            }
         };
         self.as_mut().settle(None, 0);
         self.as_mut().reloaded();
