@@ -217,11 +217,14 @@ pub fn serve() -> zbus::Result<()> {
         .serve_at("/org/freedesktop/FileManager1", FileManager)?
         .build()?;
     LAST.store(now(), Ordering::SeqCst);
+    // Dort jusqu'à l'échéance de l'inactivité (au lieu de se réveiller toutes les 5 s); une requête repousse l'échéance
     loop {
-        std::thread::sleep(Duration::from_secs(5));
-        if !BUSY.load(Ordering::SeqCst) && now().saturating_sub(LAST.load(Ordering::SeqCst)) > IDLE.as_secs() {
+        let idle = now().saturating_sub(LAST.load(Ordering::SeqCst));
+        if !BUSY.load(Ordering::SeqCst) && idle > IDLE.as_secs() {
             return Ok(());
         }
+        let wait = if BUSY.load(Ordering::SeqCst) { IDLE.as_secs() } else { (IDLE.as_secs() + 1).saturating_sub(idle).max(1) };
+        std::thread::sleep(Duration::from_secs(wait));
     }
 }
 

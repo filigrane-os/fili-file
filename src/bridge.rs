@@ -618,6 +618,26 @@ fn spawn_detached(cmd: &mut Command) {
     }
 }
 
+// Miniatures déjà vues sur le disque: data() est appelée à chaque affichage d'une ligne, un stat par appel serait perdu
+static THUMBS_SEEN: std::sync::Mutex<Option<HashSet<PathBuf>>> = std::sync::Mutex::new(None);
+
+fn thumb_known(t: &Path) -> bool {
+    let mut g = THUMBS_SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    let seen = g.get_or_insert_with(HashSet::new);
+    if seen.contains(t) {
+        return true;
+    }
+    let ok = t.exists();
+    if ok {
+        seen.insert(t.to_path_buf());
+    }
+    ok
+}
+
+fn thumb_exists(e: &fs::Entry) -> bool {
+    thumb_known(&thumb_path(e))
+}
+
 // Miniature d'un PDF: première page par pdftoppm, gardée dans ~/.cache/filigrane/thumbs (nom = chemin, date, taille)
 fn thumb_path(e: &fs::Entry) -> PathBuf {
     use std::hash::{Hash, Hasher};
@@ -1034,7 +1054,7 @@ impl FolderModel {
             .iter()
             .filter(|e| icons::is_pdf(e))
             .map(|e| (e.path.clone(), thumb_path(e)))
-            .filter(|(_, t)| !t.exists())
+            .filter(|(_, t)| !thumb_known(t))
             .take(40)
             .collect();
         if todo.is_empty() || THUMBING.swap(true, Ordering::SeqCst) {
@@ -2267,7 +2287,7 @@ impl FolderModel {
             })),
             ROLE_HIDDEN => QVariant::from(&e.hidden()),
             ROLE_THUMB => QVariant::from(&QString::from(&if icons::is_pdf(e) { format!("file://{}", thumb_path(e).display()) } else { String::new() })),
-            ROLE_THUMB_READY => QVariant::from(&(icons::is_pdf(e) && thumb_path(e).exists())),
+            ROLE_THUMB_READY => QVariant::from(&(icons::is_pdf(e) && thumb_exists(e))),
             ROLE_IMAGE => QVariant::from(&icons::is_image(e)),
             ROLE_KIND => QVariant::from(&QString::from(&e.kind)),
             ROLE_CREATED => QVariant::from(&QString::from(&fs::date(e.created, self.now))),
