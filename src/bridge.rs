@@ -370,6 +370,9 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "unmountVolume"]
         fn unmount_volume(self: Pin<&mut Fili>, dev: &QString);
+        // Lecteur réseau (gvfs): adresse smb://, sftp://, davs://, ftp://, nfs://; réponse par mounted / volumeError
+        #[cxx_name = "connectServer"]
+        fn connect_server(self: Pin<&mut Fili>, uri: &QString, user: &QString, password: &QString);
         #[qinvokable]
         fn tr(self: &Fili, text: &QString) -> QString;
         // Icône de dossier à la couleur d'accentuation (autres icônes inchangées)
@@ -2373,6 +2376,24 @@ impl Fili {
         });
     }
 
+    pub fn connect_server(self: Pin<&mut Self>, uri: &QString, user: &QString, password: &QString) {
+        let (uri, user, password) = (uri.to_string(), user.to_string(), password.to_string());
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let r = volumes::connect(&uri, &user, &password);
+            let _ = qt.queue(move |mut f| match r {
+                Ok(path) => {
+                    f.as_mut().places_changed();
+                    f.as_mut().mounted(&QString::from(&path));
+                }
+                Err(e) => {
+                    let msg = i18n::trf("Cannot connect to “%1”: %2", &[&uri, &e]);
+                    f.as_mut().volume_error(&QString::from(&msg));
+                }
+            });
+        });
+    }
+
     pub fn unmount_volume(self: Pin<&mut Self>, dev: &QString) {
         let dev = dev.to_string();
         let qt = self.qt_thread();
@@ -2588,6 +2609,10 @@ impl Fili {
         // Volumes amovibles: non montés, un clic les monte (path vide, dev renseigné)
         for v in volumes::list() {
             items.push((devices, v.name, v.mount.unwrap_or_default(), "drive-removable-media", v.dev));
+        }
+        // Lecteurs réseau connectés (gvfs, NFS, CIFS, sshfs): éjectables comme les volumes
+        for v in volumes::network() {
+            items.push((devices, v.name, v.mount.unwrap_or_default(), "folder-remote", v.dev));
         }
         let _ = ops::ensure_trash(&ops::home_trash());
         let trash = if ops::trash_is_empty() { "user-trash" } else { "user-trash-full" };

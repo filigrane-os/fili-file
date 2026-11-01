@@ -211,6 +211,7 @@ ApplicationWindow {
     Action { id: aForward; text: Fili.tr("Forward"); shortcut: "Alt+Right"; enabled: folder.canForward; onTriggered: win.show(folder.forward()) }
     Action { id: aUp; text: Fili.tr("Enclosing Folder"); shortcut: "Alt+Up"; onTriggered: win.show(folder.up()) }
     Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
+    Action { id: aConnect; text: Fili.tr("Connect to Server…"); shortcut: "Ctrl+K"; onTriggered: connectBox.open() }
     // « / » comme Ctrl+F (façon vim, yazi); sans libellé: la barre de menus ne montre que Ctrl+F
     Action { id: aSearchSlash; shortcut: "/"; enabled: win.canAct; onTriggered: searchInput.forceActiveFocus() }
     Action { id: aSearch; text: Fili.tr("Search"); shortcut: "Ctrl+F"; onTriggered: searchInput.forceActiveFocus() }
@@ -221,7 +222,7 @@ ApplicationWindow {
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
-        "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "search": aSearch
+        "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
     })
     // Copie dans le presse-papiers (texte) le chemin, le nom, le nom sans extension ou le dossier parent des éléments
     // sélectionnés, un par ligne
@@ -1042,6 +1043,113 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
                     color: FiliTheme.brume2
+                }
+            }
+        }
+    }
+    // « Se connecter au serveur… » (Ctrl+K): lecteur réseau par gvfs (smb://, sftp://, davs://, ftp://, nfs://); le dossier monté s'ouvre
+    // à la réponse (Fili.mounted), une erreur s'affiche dans le message passager (Fili.volumeError)
+    Rectangle {
+        id: connectBox
+        property bool busy: false
+        function open() {
+            busy = false;
+            serverField.text = "";
+            userField.text = "";
+            passField.text = "";
+            visible = true;
+        }
+        function apply() {
+            if (busy || serverField.text.trim() === "")
+                return;
+            busy = true;
+            Fili.connectServer(serverField.text, userField.text, passField.text);
+        }
+        anchors.fill: parent
+        visible: false
+        z: 200
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        onVisibleChanged: if (visible) serverField.field.forceActiveFocus(); else files.focusList()
+        Connections {
+            target: Fili
+            function onMounted() { connectBox.busy = false; connectBox.visible = false; }
+            function onVolumeError() { connectBox.busy = false; }
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: connectBox.visible = false
+        }
+        component ConnectField: Rectangle {
+            property alias text: input.text
+            property alias field: input
+            property string label
+            property bool secret: false
+            property Item next
+            width: parent ? parent.width : 100
+            height: 26
+            radius: FiliTheme.radiusControl
+            color: FiliTheme.nuit
+            border.width: 1
+            border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+            Text {
+                visible: input.text === ""
+                anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                text: parent.label
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.size
+                color: FiliTheme.ardoise
+            }
+            TextInput {
+                id: input
+                anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+                verticalAlignment: TextInput.AlignVCenter
+                clip: true
+                echoMode: parent.secret ? TextInput.Password : TextInput.Normal
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.size
+                color: FiliTheme.brume
+                selectByMouse: true
+                onAccepted: connectBox.apply()
+                KeyNavigation.tab: parent.next ? parent.next.field : null
+                Keys.onEscapePressed: connectBox.visible = false
+            }
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 380
+            height: connectCard.implicitHeight + 2 * FiliTheme.space4
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            Column {
+                id: connectCard
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
+                spacing: FiliTheme.space3
+                Text {
+                    width: parent.width
+                    text: Fili.tr("Connect to Server")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.brume
+                }
+                ConnectField { id: serverField; label: Fili.tr("smb://server/share"); next: userField }
+                ConnectField { id: userField; label: Fili.tr("User (optional)"); next: passField }
+                ConnectField { id: passField; label: Fili.tr("Password (optional)"); secret: true; next: serverField }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: connectBox.busy ? Fili.tr("Connecting…") : Fili.tr("smb://, sftp://, davs://, ftp://, nfs://. The connection stays in the sidebar until you eject it.")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
+                }
+                Row {
+                    spacing: FiliTheme.space2
+                    anchors.right: parent.right
+                    TextButton { label: Fili.tr("Cancel"); onClicked: connectBox.visible = false }
+                    TextButton { label: Fili.tr("Connect"); primary: true; onClicked: connectBox.apply() }
                 }
             }
         }
