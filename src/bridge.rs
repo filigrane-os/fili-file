@@ -699,6 +699,9 @@ fn preview(path: &str) -> String {
 }
 
 static THUMBING: AtomicBool = AtomicBool::new(false);
+// Relecture du dossier par inotify en cours / à refaire (voir live_reload)
+static RELOADING: AtomicBool = AtomicBool::new(false);
+static RELOAD_AGAIN: AtomicBool = AtomicBool::new(false);
 // Numéro de l'index en cours de construction; tout changement l'annule
 static INDEX_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -987,13 +990,16 @@ impl FolderModel {
 
     // Même dossier relu: seules les lignes ajoutées, retirées ou modifiées bougent, la vue garde sa position
     fn apply(mut self: Pin<&mut Self>) {
-        type Key = (String, u64, i64, bool);
-        let key = |e: &fs::Entry| -> Key { (e.path.clone(), e.size, e.mtime, e.is_dir) };
+        type Key<'a> = (&'a str, u64, i64, bool);
+        fn key(e: &fs::Entry) -> Key<'_> {
+            (&e.path, e.size, e.mtime, e.is_dir)
+        }
         let new = self.filtered();
         let new_keys: HashSet<Key> = new.iter().map(key).collect();
-        let old_keys: HashSet<Key> = self.rows.iter().map(key).collect();
-        let changes = self.rows.iter().filter(|e| !new_keys.contains(&key(e))).count()
-            + new.iter().filter(|e| !old_keys.contains(&key(e))).count();
+        let changes = {
+            let old_keys: HashSet<Key> = self.rows.iter().map(key).collect();
+            self.rows.iter().filter(|e| !new_keys.contains(&key(e))).count() + new.iter().filter(|e| !old_keys.contains(&key(e))).count()
+        };
         if changes > 200 {
             unsafe { self.as_mut().begin_reset_model() };
             self.as_mut().rust_mut().rows = new;
@@ -1133,17 +1139,52 @@ impl FolderModel {
         }
     }
 
-    // Changement vu par inotify: relecture, ou, si le dossier a disparu, le plus proche dossier qui existe
+    // Changement vu par inotify: relecture du dossier sur un fil (un gros dossier ne gèle pas la fenêtre), ou, si le
+    // dossier a disparu, le plus proche dossier qui existe. Une seule relecture à la fois: un changement qui arrive
+    // pendant ce temps en demande une autre dès la fin de la première.
     fn live_reload(mut self: Pin<&mut Self>) {
         if self.dir.is_empty() {
             return;
         }
-        if !self.as_mut().reload_rows() {
-            let mut p = PathBuf::from(&self.dir);
-            while !p.is_dir() && p.pop() {}
-            self.as_mut().navigate(p, None);
+        // Résultats affichés (assistant): relecture des seuls résultats, sur place
+        if !self.results.is_empty() {
+            self.as_mut().reload_rows();
+            self.as_mut().reloaded();
+            return;
         }
-        self.as_mut().reloaded();
+        if RELOADING.swap(true, Ordering::SeqCst) {
+            RELOAD_AGAIN.store(true, Ordering::SeqCst);
+            return;
+        }
+        let (dir, qt) = (self.dir.clone(), self.qt_thread());
+        std::thread::spawn(move || {
+            let listing = fs::list(Path::new(&dir));
+            let _ = qt.queue(move |mut m| {
+                RELOADING.store(false, Ordering::SeqCst);
+                if m.dir == dir {
+                    match listing {
+                        Ok(all) => {
+                            m.as_mut().rust_mut().all = all;
+                            if m.filter.is_empty() {
+                                m.as_mut().drop_index();
+                            } else {
+                                m.as_mut().start_index();
+                            }
+                            m.as_mut().apply();
+                        }
+                        Err(_) => {
+                            let mut p = PathBuf::from(&m.dir);
+                            while !p.is_dir() && p.pop() {}
+                            m.as_mut().navigate(p, None);
+                        }
+                    }
+                    m.as_mut().reloaded();
+                }
+                if RELOAD_AGAIN.swap(false, Ordering::SeqCst) {
+                    m.live_reload();
+                }
+            });
+        });
     }
 
     // Charge dir; select: nom à sélectionner. Échec: le dossier affiché ne change pas, l'erreur va dans la barre d'état

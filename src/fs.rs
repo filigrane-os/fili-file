@@ -31,8 +31,12 @@ impl Entry {
 pub fn entry(path: &Path) -> Option<Entry> {
     // Un lien prend le type de sa cible (lien vers un dossier = dossier); lien cassé: le lien lui-même
     let m = fs::metadata(path).or_else(|_| fs::symlink_metadata(path)).ok()?;
+    Some(build(path, &m))
+}
+
+fn build(path: &Path, m: &fs::Metadata) -> Entry {
     let name = path.file_name().map_or("/".into(), |n| n.to_string_lossy().into_owned());
-    Some(Entry {
+    Entry {
         path: path.to_string_lossy().into_owned(),
         is_dir: m.is_dir(),
         size: m.len(),
@@ -43,11 +47,22 @@ pub fn entry(path: &Path) -> Option<Entry> {
         uid: m.uid(),
         kind: crate::icons::kind(&name, m.is_dir()),
         name,
-    })
+    }
 }
 
+// Lecture d'un dossier: les métadonnées viennent du descripteur du dossier (plus rapide qu'un stat par chemin
+// complet); seuls les liens passent par la résolution de leur cible
 pub fn list(dir: &Path) -> io::Result<Vec<Entry>> {
-    Ok(fs::read_dir(dir)?.filter_map(|e| entry(&e.ok()?.path())).collect())
+    Ok(fs::read_dir(dir)?
+        .filter_map(|e| {
+            let e = e.ok()?;
+            let path = e.path();
+            match e.metadata() {
+                Ok(m) if !m.file_type().is_symlink() => Some(build(&path, &m)),
+                _ => entry(&path),
+            }
+        })
+        .collect())
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
