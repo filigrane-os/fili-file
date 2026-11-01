@@ -380,10 +380,10 @@ pub mod qobject {
         fn share_protocols_ready(self: Pin<&mut Fili>, json: &QString);
         #[qinvokable]
         #[cxx_name = "sharePeers"]
-        fn share_peers(self: Pin<&mut Fili>, proto: &QString);
+        fn share_peers(self: Pin<&mut Fili>, proto: &QString, tag: &QString);
         #[qsignal]
         #[cxx_name = "sharePeersReady"]
-        fn share_peers_ready(self: Pin<&mut Fili>, proto: &QString, json: &QString);
+        fn share_peers_ready(self: Pin<&mut Fili>, proto: &QString, tag: &QString, json: &QString);
         #[qinvokable]
         #[cxx_name = "shareSend"]
         fn share_send(self: &Fili, proto: &QString, id: &QString, name: &QString, paths: &QString);
@@ -603,16 +603,18 @@ fn json(s: &str) -> String {
 
 // Lance un programme détaché (ne meurt pas avec fili-file), ramassé par un fil pour ne pas laisser de zombie
 fn spawn(program: &str, arg: &str, dir: &Path) {
-    let child = Command::new(program)
-        .arg(arg)
-        .current_dir(dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .process_group(0)
-        .spawn();
-    if let Ok(mut child) = child {
-        std::thread::spawn(move || child.wait());
+    spawn_detached(Command::new(program).arg(arg).current_dir(dir));
+}
+
+// Lance une commande détachée (propre groupe de processus, flux fermés) et la fait ramasser par un fil. Un échec de
+// lancement (programme absent) est écrit sur la sortie d'erreur de fili-file plutôt que perdu.
+fn spawn_detached(cmd: &mut Command) {
+    let child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).process_group(0).spawn();
+    match child {
+        Ok(mut child) => {
+            std::thread::spawn(move || child.wait());
+        }
+        Err(e) => eprintln!("fili-file: cannot run {}: {e}", cmd.get_program().to_string_lossy()),
     }
 }
 
@@ -1914,17 +1916,7 @@ impl FolderModel {
         let Some(app) = apps::desktop(&id) else { return };
         let argv = apps::command(&app, &path);
         let Some((program, args)) = argv.split_first() else { return };
-        let child = Command::new(program)
-            .args(args)
-            .current_dir(&self.dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .process_group(0)
-            .spawn();
-        if let Ok(mut child) = child {
-            std::thread::spawn(move || child.wait());
-        }
+        spawn_detached(Command::new(program).args(args).current_dir(&self.dir));
     }
 
     pub fn all_archives(&self, paths: &QString) -> bool {
@@ -2424,26 +2416,20 @@ impl Fili {
         });
     }
 
-    pub fn share_peers(self: Pin<&mut Self>, proto: &QString) {
-        let proto = proto.to_string();
+    // `tag` identifie le demandeur (Partager…, À proximité et son tour de scan): la réponse le porte
+    pub fn share_peers(self: Pin<&mut Self>, proto: &QString, tag: &QString) {
+        let (proto, tag) = (proto.to_string(), tag.to_string());
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let json = share_run(&["peers", &proto]);
-            let _ = qt.queue(move |mut f| f.as_mut().share_peers_ready(&QString::from(&proto), &QString::from(&json)));
+            let _ = qt.queue(move |mut f| {
+                f.as_mut().share_peers_ready(&QString::from(&proto), &QString::from(&tag), &QString::from(&json))
+            });
         });
     }
 
     pub fn share_pick(&self, proto: &QString, id: &QString, name: &QString) {
-        let child = Command::new(bin("fili-share"))
-            .args(["send".to_string(), proto.to_string(), id.to_string(), name.to_string()])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .process_group(0)
-            .spawn();
-        if let Ok(mut child) = child {
-            std::thread::spawn(move || child.wait());
-        }
+        spawn_detached(Command::new(bin("fili-share")).args(["send", &proto.to_string(), &id.to_string(), &name.to_string()]));
     }
 
     pub fn receive_info(self: Pin<&mut Self>) {
@@ -2474,16 +2460,7 @@ impl Fili {
     pub fn share_send(&self, proto: &QString, id: &QString, name: &QString, paths: &QString) {
         let mut args = vec!["send-files".to_string(), proto.to_string(), id.to_string(), name.to_string()];
         args.extend(paths_of(paths));
-        let child = Command::new(bin("fili-share"))
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .process_group(0)
-            .spawn();
-        if let Ok(mut child) = child {
-            std::thread::spawn(move || child.wait());
-        }
+        spawn_detached(Command::new(bin("fili-share")).args(args));
     }
 
     pub fn connect_server(self: Pin<&mut Self>, uri: &QString, user: &QString, password: &QString) {

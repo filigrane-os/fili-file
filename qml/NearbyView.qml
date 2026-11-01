@@ -30,20 +30,48 @@ Rectangle {
         return out;
     }
 
+    // Un tour = infos de réception (protocoles disponibles), puis un scan par protocole. Pas de nouveau tour tant que
+    // le précédent n'est pas fini; les réponses portent l'étiquette de leur tour, les autres sont ignorées.
+    property int round: 0
+    property bool wantScan: false
     function refresh() {
+        if (pending > 0 || wantScan)
+            return;
+        wantScan = true;
         Fili.receiveInfo();
-        const ids = protocols.length > 0 ? protocols.filter(p => p.available).map(p => p.id) : ["bluetooth", "localsend"];
+    }
+    function scan() {
+        wantScan = false;
+        const ids = protocols.filter(p => p.available).map(p => p.id);
+        round++;
         pending = ids.length;
-        ids.forEach(id => Fili.sharePeers(id));
+        ids.forEach(id => Fili.sharePeers(id, "nearby" + round));
     }
     function when(t) {
         return Qt.formatDateTime(new Date(t * 1000), "d MMM, hh:mm");
     }
+    // Seuls les fichiers locaux (file://) sont envoyés; un nom avec saut de ligne ne passerait pas par la liste
     function pathsOf(urls) {
-        return urls.map(u => decodeURIComponent(u.toString().replace(/^file:\/\//, ""))).join("\n");
+        const out = [];
+        for (const u of urls) {
+            const s = u.toString();
+            if (!s.startsWith("file://"))
+                continue;
+            try {
+                const p = decodeURIComponent(s.slice(7));
+                if (p.indexOf("\n") < 0)
+                    out.push(p);
+            } catch (e) {}
+        }
+        return out;
     }
     function send(device, urls) {
-        Fili.shareSend(device.proto, device.id, device.name, pathsOf(urls));
+        const paths = pathsOf(urls);
+        if (paths.length === 0) {
+            view.notice(Fili.tr("Nothing to send: drop files from a folder."));
+            return;
+        }
+        Fili.shareSend(device.proto, device.id, device.name, paths.join("\n"));
         view.notice(Fili.tr("Sending to %1…").replace("%1", device.name));
     }
 
@@ -64,16 +92,20 @@ Rectangle {
                     view.info = i;
                 view.received = JSON.parse(received);
             } catch (e) {}
+            if (view.wantScan)
+                view.scan();
         }
-        function onSharePeersReady(proto, json) {
-            if (!view.visible)
+        function onSharePeersReady(proto, tag, json) {
+            if (tag !== "nearby" + view.round || view.pending === 0)
                 return;
+            const p = Object.assign({}, view.peers);
             try {
-                const p = Object.assign({}, view.peers);
                 p[proto] = JSON.parse(json);
-                view.peers = p;
-            } catch (e) {}
-            view.pending = Math.max(0, view.pending - 1);
+            } catch (e) {
+                p[proto] = [];
+            }
+            view.peers = p;
+            view.pending--;
         }
     }
 

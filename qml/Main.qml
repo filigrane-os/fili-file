@@ -122,6 +122,8 @@ ApplicationWindow {
     property string nearbyFrom: ""
     function open(path) {
         if (path === "nearby:") {
+            if (picking)
+                return;
             nearbyFrom = folder.shown;
             nearby = true;
             nearbyView.forceActiveFocus();
@@ -180,7 +182,7 @@ ApplicationWindow {
 
 
     // Commandes de la barre de menus (exposée au menu global de la fili-bar par AT-SPI); chaque raccourci vit ici, une seule fois
-    readonly property bool canAct: !win.typing && !win.picking
+    readonly property bool canAct: !win.typing && !win.picking && !win.nearby
     Action { id: aNewFolder; text: Fili.tr("New Folder"); shortcut: "Ctrl+Shift+N"; enabled: win.canAct && !folder.inTrash; onTriggered: win.newFolder() }
     Action { id: aOpen; text: Fili.tr("Open"); enabled: win.canAct && files.targets().length === 1; onTriggered: win.show(folder.activate(files.currentIndex)) }
     Action { id: aInfo; text: Fili.tr("Get Info"); shortcut: "Ctrl+I"; enabled: win.canAct; onTriggered: win.showInfo() }
@@ -490,6 +492,7 @@ ApplicationWindow {
     }
     Shortcut { sequence: "Escape"; enabled: !win.typing && folder.busy; onActivated: folder.cancel() }
     Shortcut { sequence: "Escape"; enabled: win.picking && !win.typing && !folder.busy; onActivated: Fili.pickCancel() }
+    Shortcut { sequence: "Escape"; enabled: win.nearby && !win.picking && !win.typing; onActivated: win.nearby = false }
     Shortcut { sequence: "Ctrl+A"; enabled: win.picking && !win.typing && Fili.pickMultiple(); onActivated: files.selectAll() }
 
     // Boutons précédent/suivant de la souris, partout dans la fenêtre
@@ -625,7 +628,7 @@ ApplicationWindow {
         id: sidebar
         anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: parent.left }
         width: FiliTheme.sidebarWidth
-        current: win.nearby ? "nearby:" : folder.shown
+        current: win.nearby && !win.picking ? "nearby:" : folder.shown
         onOpen: p => win.open(p)
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
         onContext: (path, removable, x, y) => win.openPathMenu(path, x, y, false, removable)
@@ -734,7 +737,6 @@ ApplicationWindow {
             noticeTimer.restart();
         }
         onOpenPath: p => win.open(p)
-        Keys.onEscapePressed: win.nearby = false
     }
     FileList {
         id: files
@@ -1109,7 +1111,7 @@ ApplicationWindow {
             peers = [];
             if (current && current.available) {
                 loading = true;
-                Fili.sharePeers(id);
+                Fili.sharePeers(id, "share");
             } else {
                 loading = false;
             }
@@ -1139,8 +1141,8 @@ ApplicationWindow {
                 else
                     shareBox.loading = false;
             }
-            function onSharePeersReady(p, json) {
-                if (!shareBox.visible || p !== shareBox.proto)
+            function onSharePeersReady(p, tag, json) {
+                if (tag !== "share" || !shareBox.visible || p !== shareBox.proto)
                     return;
                 shareBox.peers = JSON.parse(json);
                 shareBox.loading = false;
