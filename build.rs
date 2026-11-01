@@ -15,6 +15,7 @@ fn main() {
                 "qml/Sidebar.qml",
                 "qml/PathBar.qml",
                 "qml/FileList.qml",
+                "qml/Preview.qml",
                 "qml/IconButton.qml",
                 "qml/TextButton.qml",
                 "qml/ContextMenu.qml",

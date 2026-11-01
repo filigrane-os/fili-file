@@ -225,6 +225,10 @@ pub fn is_image(e: &Entry) -> bool {
     e.size < 20 << 20 && e.name.rsplit_once('.').is_some_and(|(_, x)| IMAGES.contains(&x.to_lowercase().as_str()))
 }
 
+pub fn is_image_name(name: &str) -> bool {
+    name.rsplit_once('.').is_some_and(|(_, x)| IMAGES.contains(&x.to_lowercase().as_str()))
+}
+
 pub fn is_pdf(e: &Entry) -> bool {
     e.name.to_lowercase().ends_with(".pdf")
 }

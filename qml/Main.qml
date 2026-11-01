@@ -1,5 +1,5 @@
 // Fenêtre de fili-file: barre d'outils (précédent, suivant, chemin), barre latérale, liste, barre d'état.
-// Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin, Ctrl+F recherche floue récursive, Ctrl+H fichiers cachés, F5 relire,
+// Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin, Ctrl+F recherche floue récursive, Ctrl+H fichiers cachés, Ctrl+Maj+P panneau d'aperçu, F5 relire,
 // Ctrl+C / Ctrl+X / Ctrl+V copier, couper, coller, F2 renommer, Ctrl+Maj+N nouveau dossier, Suppr ou Ctrl+Retour
 // arrière corbeille, Ctrl+Z annuler, Ctrl+A tout sélectionner, Échap annule la copie en cours,
 // Ctrl+1 / Ctrl+2 vue en liste / en grille, Ctrl+Maj+Suppr vide la corbeille, Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
@@ -190,6 +190,7 @@ ApplicationWindow {
     Action { id: aTerminal; text: Fili.tr("Open Terminal Here"); shortcut: "Ctrl+Alt+T"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.terminal(files.targets().length === 1 ? files.targets()[0] : "") }
     Action { id: aList; text: Fili.tr("View as List"); shortcut: "Ctrl+1"; checkable: true; checked: !files.tiles; onTriggered: files.setViewMode("list") }
     Action { id: aGrid; text: Fili.tr("View as Icons"); shortcut: "Ctrl+2"; checkable: true; checked: files.tiles; onTriggered: files.setViewMode("grid") }
+    Action { id: aPreview; text: Fili.tr("Show Preview"); shortcut: "Ctrl+Shift+P"; checkable: true; checked: win.previewOn; enabled: !win.picking; onTriggered: win.togglePreview() }
     Action { id: aHidden; text: Fili.tr("Show Hidden Files"); shortcut: "Ctrl+H"; checkable: true; checked: folder.showHidden; onTriggered: win.show(folder.toggleHidden(files.currentIndex)) }
     Action { id: aRefresh; text: Fili.tr("Reload"); shortcut: "F5"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
     Action { id: aRefreshAlt; shortcut: "Ctrl+R"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
@@ -204,9 +205,15 @@ ApplicationWindow {
     readonly property var menuActions: ({
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename,
-        "select-all": aSelectAll, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden,
+        "select-all": aSelectAll, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "search": aSearch
     })
+    // Panneau d'aperçu (choix gardé dans l'état de l'utilisateur)
+    property bool previewOn: Fili.previewShown()
+    function togglePreview() {
+        previewOn = !previewOn;
+        Fili.setPreviewShown(previewOn);
+    }
     function runAction(name) {
         const a = menuActions[name];
         if (a && a.enabled)
@@ -555,7 +562,7 @@ ApplicationWindow {
     }
     FileList {
         id: files
-        anchors { top: resultsBar.bottom; bottom: pickbar.top; left: sideLine.right; right: parent.right }
+        anchors { top: resultsBar.bottom; bottom: pickbar.top; left: sideLine.right; right: previewLine.left }
         folder: folder
         windowActive: win.active
         onOpenRow: row => win.openRow(row)
@@ -563,6 +570,24 @@ ApplicationWindow {
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
         onContext: (x, y) => win.openMenu(files.mapToItem(null, x, y))
         onHeaderContext: (x, y) => win.openColumnsMenu(files.mapToItem(null, x, y))
+    }
+    Rectangle {
+        id: previewLine
+        anchors { top: toolbarLine.bottom; bottom: pickbar.top; right: preview.left }
+        width: preview.visible ? 1 : 0
+        color: FiliTheme.nuit4
+    }
+    Preview {
+        id: preview
+        // Largeur 300 au plus; la liste garde au moins 320 (en dessous de 160 le panneau disparaît)
+        readonly property real room: win.width - FiliTheme.sidebarWidth - 1 - 320
+        visible: win.previewOn && !win.picking && room >= 160
+        anchors { top: toolbarLine.bottom; bottom: pickbar.top; right: parent.right }
+        width: visible ? Math.min(300, room) : 0
+        path: {
+            const keys = Object.keys(files.selected);
+            return keys.length === 1 ? keys[0] : keys.length === 0 && files.currentIndex >= 0 ? folder.pathAt(files.currentIndex) : "";
+        }
     }
     ContextMenu {
         id: menu

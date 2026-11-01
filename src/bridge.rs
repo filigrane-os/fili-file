@@ -285,8 +285,18 @@ pub mod qobject {
         #[cxx_name = "setViewMode"]
         fn set_view_mode(self: &Fili, mode: &QString);
         #[qinvokable]
+        #[cxx_name = "previewShown"]
+        fn preview_shown(self: &Fili) -> bool;
+        #[qinvokable]
+        #[cxx_name = "setPreviewShown"]
+        fn set_preview_shown(self: &Fili, on: bool);
+        #[qinvokable]
         #[cxx_name = "pathExists"]
         fn path_exists(self: &Fili, path: &QString) -> bool;
+        // Aperçu d'un fichier: première ligne = genre (image, pdf, text, folder, none), reste = texte ou chemin de l'image
+        #[qinvokable]
+        #[cxx_name = "previewInfo"]
+        fn preview_info(self: &Fili, path: &QString) -> QString;
         #[qinvokable]
         #[cxx_name = "pickCancel"]
         fn pick_cancel(self: &Fili);
@@ -531,6 +541,77 @@ fn thumb_path(e: &fs::Entry) -> PathBuf {
     (&e.path, e.mtime, e.size).hash(&mut h);
     let cache = env::var("XDG_CACHE_HOME").unwrap_or_else(|_| format!("{}/.cache", home()));
     PathBuf::from(cache).join(format!("filigrane/thumbs/{:016x}.png", h.finish()))
+}
+
+// Aperçu du panneau latéral: "genre\ncontenu". Texte: 6 Kio au plus, seulement de l'UTF-8 sans octet nul.
+// PDF: première page en 480 px par pdftoppm, gardée dans le cache des miniatures.
+fn preview(path: &str) -> String {
+    use std::io::Read;
+    let p = Path::new(path);
+    let Ok(meta) = std::fs::metadata(p) else { return "none\n".into() };
+    if meta.is_dir() {
+        let Ok(rd) = std::fs::read_dir(p) else { return "none\n".into() };
+        let mut names: Vec<(bool, String)> = rd
+            .flatten()
+            .map(|e| (e.path().is_dir(), e.file_name().to_string_lossy().into_owned()))
+            .filter(|(_, n)| !n.starts_with('.'))
+            .collect();
+        let total = names.len();
+        names.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.to_lowercase().cmp(&b.1.to_lowercase())));
+        let mut out = String::from("folder\n");
+        for (d, n) in names.iter().take(30) {
+            out.push_str(n);
+            if *d {
+                out.push('/');
+            }
+            out.push('\n');
+        }
+        if total > 30 {
+            out.push_str(&format!("… {}\n", total - 30));
+        }
+        return out;
+    }
+    let name = path.rsplit('/').next().unwrap_or("");
+    if icons::is_image_name(name) {
+        return if meta.len() < 20 << 20 { format!("image\nfile://{path}") } else { "none\n".into() };
+    }
+    if name.to_lowercase().ends_with(".pdf") {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (path, meta.len(), meta.modified().ok(), "preview").hash(&mut h);
+        let cache = env::var("XDG_CACHE_HOME").unwrap_or_else(|_| format!("{}/.cache", home()));
+        let stem = PathBuf::from(cache).join(format!("filigrane/thumbs/{:016x}", h.finish()));
+        let png = stem.with_extension("png");
+        if !png.exists() {
+            if let Some(dir) = png.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let _ = Command::new("pdftoppm")
+                .args(["-png", "-f", "1", "-l", "1", "-scale-to", "480", "-singlefile", path])
+                .arg(&stem)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+        return if png.exists() { format!("image\nfile://{}", png.display()) } else { "none\n".into() };
+    }
+    let mut buf = Vec::new();
+    if std::fs::File::open(p).and_then(|f| f.take(6144).read_to_end(&mut buf)).is_err() || buf.contains(&0) {
+        return "none\n".into();
+    }
+    let text = match String::from_utf8(buf) {
+        Ok(t) => t,
+        Err(e) => {
+            // Coupure au milieu d'un caractère à la fin: on garde le début valide
+            let n = e.utf8_error().valid_up_to();
+            if e.utf8_error().error_len().is_some() || n + 4 < e.as_bytes().len() {
+                return "none\n".into();
+            }
+            String::from_utf8_lossy(&e.as_bytes()[..n]).into_owned()
+        }
+    };
+    format!("text\n{text}")
 }
 
 static THUMBING: AtomicBool = AtomicBool::new(false);
@@ -2052,6 +2133,26 @@ impl Fili {
 
     pub fn path_exists(&self, path: &QString) -> bool {
         ops::exists(Path::new(&path.to_string()))
+    }
+
+    pub fn preview_shown(&self) -> bool {
+        view_file().with_file_name("fili-file-preview").exists()
+    }
+
+    pub fn set_preview_shown(&self, on: bool) {
+        let f = view_file().with_file_name("fili-file-preview");
+        if on {
+            if let Some(dir) = f.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let _ = std::fs::write(f, "1");
+        } else {
+            let _ = std::fs::remove_file(f);
+        }
+    }
+
+    pub fn preview_info(&self, path: &QString) -> QString {
+        QString::from(&preview(&path.to_string()))
     }
 
     pub fn pick_cancel(&self) {
