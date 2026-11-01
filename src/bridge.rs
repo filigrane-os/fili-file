@@ -33,6 +33,8 @@ pub mod qobject {
         #[qproperty(QString, status, READ, NOTIFY = changed)]
         #[qproperty(QString, error, READ, NOTIFY = changed)]
         #[qproperty(QString, filter, READ, NOTIFY = changed)]
+        // Titre des résultats affichés à la place du contenu du dossier (vide: dossier normal)
+        #[qproperty(QString, results, READ, NOTIFY = changed)]
         #[qproperty(bool, busy, READ, NOTIFY = changed)]
         // Avancement de l'opération en cours (0 à 1), -1 tant que le total n'est pas connu
         #[qproperty(f64, progress, READ, NOTIFY = changed)]
@@ -55,6 +57,14 @@ pub mod qobject {
         // Les déplacements rendent la ligne à sélectionner ensuite (-1: rien n'a changé)
         #[qinvokable]
         fn go(self: Pin<&mut FolderModel>, path: &QString) -> i32;
+        // Affiche une liste de fichiers (chemins séparés par des retours à la ligne) à la place du dossier, sous un titre
+        #[qinvokable]
+        #[cxx_name = "showResults"]
+        fn show_results(self: Pin<&mut FolderModel>, title: &QString, paths: &QString);
+        // Revient au contenu du dossier
+        #[qinvokable]
+        #[cxx_name = "closeResults"]
+        fn close_results(self: Pin<&mut FolderModel>);
         #[qinvokable]
         fn activate(self: Pin<&mut FolderModel>, row: i32) -> i32;
         #[qinvokable]
@@ -215,6 +225,9 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "placesChanged"]
         fn places_changed(self: Pin<&mut Fili>);
+        // Commande de l'assistant (fili-file ctl): verbe, argument, corps
+        #[qsignal]
+        fn command(self: Pin<&mut Fili>, verb: &QString, arg: &QString, body: &QString);
         // Volume monté à la demande de mount_volume (chemin) ou erreur (texte)
         #[qsignal]
         fn mounted(self: Pin<&mut Fili>, path: &QString);
@@ -532,6 +545,7 @@ pub struct FolderModelRust {
     status: QString,
     error: QString,
     filter: QString,
+    results: QString,
     // Filtre du sélecteur de fichiers (index dans pick::Pick::filters, -1: aucun)
     pick_filter: i32,
     busy: bool,
@@ -786,6 +800,17 @@ impl FolderModel {
         if self.dir.is_empty() {
             return;
         }
+        // Résultats affichés: on ne relit pas le dossier, on retire ce qui a disparu et on relit le reste
+        if !self.results.is_empty() {
+            let all: Vec<fs::Entry> = self
+                .all
+                .iter()
+                .filter_map(|e| fs::entry(Path::new(&e.path)).map(|n| fs::Entry { name: e.name.clone(), ..n }))
+                .collect();
+            self.as_mut().rust_mut().all = all;
+            self.as_mut().apply();
+            return;
+        }
         if !self.as_mut().reload_rows() {
             let mut p = PathBuf::from(&self.dir);
             while !p.is_dir() && p.pop() {}
@@ -809,6 +834,7 @@ impl FolderModel {
                 r.dir = dir;
                 r.error = QString::default();
                 r.filter = QString::default();
+                r.results = QString::default();
                 self.as_mut().rebuild();
                 self.as_mut().queue_thumbs();
                 let row = select.map_or(0, |n| self.row_of(n));
@@ -841,6 +867,7 @@ impl FolderModel {
             (target, select)
         };
         if dir.to_string_lossy() == self.dir {
+            self.as_mut().close_results();
             return select.map_or(-1, |n| self.row_of(&n));
         }
         let previous = self.dir.clone();
@@ -855,6 +882,44 @@ impl FolderModel {
                 row
             }
             Err(()) => -1,
+        }
+    }
+
+    pub fn show_results(mut self: Pin<&mut Self>, title: &QString, paths: &QString) {
+        if self.dir.is_empty() {
+            return;
+        }
+        let found: Vec<fs::Entry> = paths_of(paths).iter().take(2000).filter_map(|p| fs::entry(Path::new(p))).collect();
+        // Nom = chemin relatif au plus proche dossier commun (deux résultats peuvent porter le même nom)
+        let mut common: Vec<&str> = Vec::new();
+        for (i, e) in found.iter().enumerate() {
+            let parts: Vec<&str> = e.path.split('/').collect();
+            let dirs = &parts[..parts.len() - 1];
+            if i == 0 {
+                common = dirs.to_vec();
+            } else {
+                let n = common.iter().zip(dirs).take_while(|(a, b)| a == b).count();
+                common.truncate(n);
+            }
+        }
+        let prefix = format!("{}/", common.join("/"));
+        let all: Vec<fs::Entry> = found
+            .iter()
+            .map(|e| fs::Entry { name: e.path.strip_prefix(&prefix).unwrap_or(&e.path).to_string(), ..e.clone() })
+            .collect();
+        let mut r = self.as_mut().rust_mut();
+        r.all = all;
+        r.filter = QString::default();
+        r.results = if title.is_empty() { QString::from("…") } else { title.clone() };
+        self.as_mut().rebuild();
+        self.as_mut().changed();
+    }
+
+    pub fn close_results(mut self: Pin<&mut Self>) {
+        if !self.results.is_empty() {
+            self.as_mut().rust_mut().results = QString::default();
+            self.as_mut().reload_rows();
+            self.as_mut().changed();
         }
     }
 
@@ -1671,6 +1736,15 @@ impl cxx_qt::Initialize for Fili {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().light = read_light();
         self.as_mut().rust_mut().accent = QString::from(&read_accent());
+        // Commandes de l'assistant (pas dans le sélecteur de fichiers)
+        if pick::get().is_none() {
+            let cmd = self.qt_thread();
+            crate::context::serve(move |verb, arg, body| {
+                let _ = cmd.queue(move |mut f| {
+                    f.as_mut().command(&QString::from(&verb), &QString::from(&arg), &QString::from(&body));
+                });
+            });
+        }
         // Montages: /proc/self/mountinfo signale chaque changement par POLLPRI
         let mounts = self.qt_thread();
         std::thread::spawn(move || {

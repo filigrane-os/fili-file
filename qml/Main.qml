@@ -135,6 +135,19 @@ Window {
         target: folder
         function onChanged() { contextTimer.restart(); }
     }
+    // Commandes de l'assistant (fili-file ctl): aller à un endroit, afficher des résultats
+    Connections {
+        target: Fili
+        function onCommand(verb, arg, body) {
+            if (verb === "goto") {
+                win.open(arg);
+            } else if (verb === "show") {
+                folder.showResults(arg, body);
+                files.select(0);
+                files.focusList();
+            }
+        }
+    }
     Component.onDestruction: Fili.publishContext("", "")
 
     Component.onCompleted: {
@@ -483,9 +496,34 @@ Window {
         color: FiliTheme.nuit4
     }
 
+    // Résultats affichés à la place du dossier (recherche de l'assistant)
+    Rectangle {
+        id: resultsBar
+        anchors { top: toolbarLine.bottom; left: sideLine.right; right: parent.right }
+        height: folder.results !== "" ? 28 : 0
+        visible: folder.results !== ""
+        color: FiliTheme.nuit2
+        Text {
+            anchors { left: parent.left; leftMargin: FiliTheme.margin; right: closeResults.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            elide: Text.ElideRight
+            text: Fili.tr("Results") + ": " + folder.results
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.sizeList
+            color: FiliTheme.brume
+        }
+        TextButton {
+            id: closeResults
+            anchors { right: parent.right; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
+            label: Fili.tr("Close results")
+            onClicked: {
+                folder.closeResults();
+                files.focusList();
+            }
+        }
+    }
     FileList {
         id: files
-        anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: sideLine.right; right: parent.right }
+        anchors { top: resultsBar.bottom; bottom: pickbar.top; left: sideLine.right; right: parent.right }
         folder: folder
         windowActive: win.active
         onOpenRow: row => win.openRow(row)

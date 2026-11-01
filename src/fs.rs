@@ -28,27 +28,26 @@ impl Entry {
     }
 }
 
+pub fn entry(path: &Path) -> Option<Entry> {
+    // Un lien prend le type de sa cible (lien vers un dossier = dossier); lien cassé: le lien lui-même
+    let m = fs::metadata(path).or_else(|_| fs::symlink_metadata(path)).ok()?;
+    let name = path.file_name().map_or("/".into(), |n| n.to_string_lossy().into_owned());
+    Some(Entry {
+        path: path.to_string_lossy().into_owned(),
+        is_dir: m.is_dir(),
+        size: m.len(),
+        mtime: m.mtime(),
+        exec: m.is_file() && m.permissions().mode() & 0o111 != 0,
+        created: m.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(m.mtime(), |d| d.as_secs() as i64),
+        mode: m.permissions().mode() & 0o777,
+        uid: m.uid(),
+        kind: crate::icons::kind(&name, m.is_dir()),
+        name,
+    })
+}
+
 pub fn list(dir: &Path) -> io::Result<Vec<Entry>> {
-    let mut out = Vec::new();
-    for e in fs::read_dir(dir)? {
-        let Ok(e) = e else { continue };
-        let path = e.path();
-        // Un lien prend le type de sa cible (lien vers un dossier = dossier); lien cassé: le lien lui-même
-        let Ok(m) = fs::metadata(&path).or_else(|_| fs::symlink_metadata(&path)) else { continue };
-        out.push(Entry {
-            name: e.file_name().to_string_lossy().into_owned(),
-            path: path.to_string_lossy().into_owned(),
-            is_dir: m.is_dir(),
-            size: m.len(),
-            mtime: m.mtime(),
-            exec: m.is_file() && m.permissions().mode() & 0o111 != 0,
-            created: m.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(m.mtime(), |d| d.as_secs() as i64),
-            mode: m.permissions().mode() & 0o777,
-            uid: m.uid(),
-            kind: crate::icons::kind(&e.file_name().to_string_lossy(), m.is_dir()),
-        });
-    }
-    Ok(out)
+    Ok(fs::read_dir(dir)?.filter_map(|e| entry(&e.ok()?.path())).collect())
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]

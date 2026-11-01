@@ -17,6 +17,15 @@ mod watch;
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 
 fn main() {
+    // Commande à une instance ouverte (assistant): fili-file ctl goto|show ...
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).is_some_and(|a| a == "ctl") {
+        if let Err(e) = context::ctl(&args[2..]) {
+            eprintln!("fili-file ctl: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
     // Service du portail FileChooser: sans interface, lancé par D-Bus (voir portal.rs)
     if std::env::args().any(|a| a == "--portal") {
         if let Err(e) = portal::serve() {
