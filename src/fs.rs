@@ -181,6 +181,7 @@ pub fn glob_match(name: &str, pattern: &str) -> bool {
     p[j..].iter().all(|&c| c == '*')
 }
 
+#[cfg(test)]
 // Le nom contient needle, sans casse ni accents (filtre du dossier)
 pub fn contains(name: &str, needle: &str) -> bool {
     let n: String = name.chars().map(fold).collect();

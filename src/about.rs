@@ -1,7 +1,6 @@
 // Fiche « À propos de Casier »: Casier est le nom affiché de fili-file (alias), fili-file reste le nom du programme.
 // Libellés traduits (i18n::tr), valeurs telles quelles.
 
-pub const NAME: &str = "Casier";
 pub const BINARY: &str = "fili-file";
 
 pub fn version() -> String {
@@ -32,6 +31,6 @@ mod tests {
     #[test]
     fn version_starts_with_the_crate_version() {
         assert!(super::version().starts_with(env!("CARGO_PKG_VERSION")));
-        assert!(super::rows().iter().any(|(k, v)| v == "fili-file"));
+        assert!(super::rows().iter().any(|(_, v)| v == "fili-file"));
     }
 }

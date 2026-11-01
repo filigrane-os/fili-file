@@ -210,6 +210,7 @@ ApplicationWindow {
     Action { id: aBack; text: Fili.tr("Back"); shortcut: "Alt+Left"; enabled: folder.canBack; onTriggered: win.show(folder.back()) }
     Action { id: aForward; text: Fili.tr("Forward"); shortcut: "Alt+Right"; enabled: folder.canForward; onTriggered: win.show(folder.forward()) }
     Action { id: aUp; text: Fili.tr("Enclosing Folder"); shortcut: "Alt+Up"; onTriggered: win.show(folder.up()) }
+    Action { id: aShare; text: Fili.tr("Share…"); enabled: win.canAct && !folder.inTrash && !win.picking && win.shareable().length > 0; onTriggered: shareBox.open() }
     Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
     Action { id: aConnect; text: Fili.tr("Connect to Server…"); shortcut: "Ctrl+K"; onTriggered: connectBox.open() }
     // « / » comme Ctrl+F (façon vim, yazi); sans libellé: la barre de menus ne montre que Ctrl+F
@@ -219,11 +220,15 @@ ApplicationWindow {
     // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
     // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
     readonly property var menuActions: ({
-        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
+        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "share": aShare, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
     })
+    // Fichiers de la sélection qu'on peut envoyer (les dossiers ne sont pas envoyés tels quels)
+    function shareable() {
+        return files.targets().filter(p => !folder.pathIsDir(p));
+    }
     // Copie dans le presse-papiers (texte) le chemin, le nom, le nom sans extension ou le dossier parent des éléments
     // sélectionnés, un par ligne
     function copyAs(kind) {
@@ -362,6 +367,7 @@ ApplicationWindow {
                 if (archives)
                     list.push({ id: "extract", label: Fili.tr("Extract Here") });
                 list.push({ id: "compress", label: Fili.tr("Compress") });
+                list.push({ id: "share", label: Fili.tr("Share…"), enabled: t.some(p => !folder.pathIsDir(p)) });
             }
             list.push({ separator: true });
             list.push({ id: "info", label: Fili.tr("Get Info"), hint: "Ctrl+I" });
@@ -463,6 +469,8 @@ ApplicationWindow {
             folder.extract(t);
         else if (id === "compress")
             folder.compress(t);
+        else if (id === "share")
+            aShare.trigger();
         else if (id === "newfolder")
             win.newFolder();
         else if (id === "empty")
@@ -1043,6 +1051,156 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
                     color: FiliTheme.brume2
+                }
+            }
+        }
+    }
+    // « Partager… »: envoie les fichiers sélectionnés à un appareil Bluetooth appairé ou à un pair LocalSend du réseau local
+    // (fili-share). Le script notifie la fin de l'envoi.
+    Rectangle {
+        id: shareBox
+        property var paths: []
+        property var protocols: []
+        property string proto: ""
+        property var peers: []
+        property bool loading: false
+        readonly property var current: protocols.find(p => p.id === proto) || null
+        function open() {
+            paths = win.shareable();
+            peers = [];
+            protocols = [];
+            proto = "";
+            loading = true;
+            visible = true;
+            Fili.shareProtocols();
+        }
+        function choose(id) {
+            proto = id;
+            peers = [];
+            if (current && current.available) {
+                loading = true;
+                Fili.sharePeers(id);
+            } else {
+                loading = false;
+            }
+        }
+        function send(peer) {
+            Fili.shareSend(proto, peer.id, peer.name, paths.join("\n"));
+            visible = false;
+            win.notice = Fili.tr("Sending to %1…").replace("%1", peer.name);
+            noticeTimer.restart();
+        }
+        anchors.fill: parent
+        visible: false
+        z: 200
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        onVisibleChanged: if (!visible) files.focusList()
+        Keys.onEscapePressed: visible = false
+        Connections {
+            target: Fili
+            function onShareProtocolsReady(json) {
+                const all = JSON.parse(json).filter(p => p.id === "bluetooth" || p.id === "localsend");
+                shareBox.protocols = all;
+                const first = all.find(p => p.available) || all[0];
+                if (first)
+                    shareBox.choose(first.id);
+                else
+                    shareBox.loading = false;
+            }
+            function onSharePeersReady(p, json) {
+                if (p !== shareBox.proto)
+                    return;
+                shareBox.peers = JSON.parse(json);
+                shareBox.loading = false;
+            }
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: shareBox.visible = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 380
+            height: shareCard.implicitHeight + 2 * FiliTheme.space4
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            MouseArea { anchors.fill: parent }
+            Column {
+                id: shareCard
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
+                spacing: FiliTheme.space3
+                Text {
+                    width: parent.width
+                    elide: Text.ElideMiddle
+                    text: shareBox.paths.length === 1 ? Fili.tr("Share “%1”").replace("%1", shareBox.paths[0].split("/").pop())
+                                                       : Fili.tr("Share %1 files").replace("%1", shareBox.paths.length)
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.brume
+                }
+                Row {
+                    spacing: FiliTheme.space2
+                    Repeater {
+                        model: shareBox.protocols
+                        TextButton {
+                            required property var modelData
+                            label: modelData.label
+                            primary: modelData.id === shareBox.proto
+                            opacity: modelData.available ? 1 : 0.5
+                            onClicked: shareBox.choose(modelData.id)
+                        }
+                    }
+                }
+                Text {
+                    visible: shareBox.current !== null && !shareBox.current.available
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: shareBox.current ? shareBox.current.why : ""
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
+                }
+                Text {
+                    visible: shareBox.current !== null && shareBox.current.available && (shareBox.loading || shareBox.peers.length === 0)
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: shareBox.loading ? Fili.tr("Searching…")
+                          : shareBox.proto === "bluetooth" ? Fili.tr("No paired device. Pair one in the Bluetooth panel.")
+                                                             : Fili.tr("No device found on this network. LocalSend must be open on the other device.")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
+                }
+                Repeater {
+                    model: shareBox.loading ? [] : shareBox.peers
+                    Rectangle {
+                        required property var modelData
+                        width: shareCard.width
+                        height: 26
+                        radius: FiliTheme.radiusControl
+                        color: peerArea.containsMouse ? FiliTheme.nuit3 : "transparent"
+                        Text {
+                            anchors { left: parent.left; leftMargin: FiliTheme.space2; right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                            text: modelData.name
+                            elide: Text.ElideRight
+                            font.family: FiliTheme.font
+                            font.pixelSize: FiliTheme.size
+                            color: FiliTheme.brume
+                        }
+                        MouseArea {
+                            id: peerArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: shareBox.send(modelData)
+                        }
+                    }
+                }
+                Row {
+                    anchors.right: parent.right
+                    TextButton { label: Fili.tr("Cancel"); onClicked: shareBox.visible = false }
                 }
             }
         }

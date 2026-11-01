@@ -370,6 +370,23 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "unmountVolume"]
         fn unmount_volume(self: Pin<&mut Fili>, dev: &QString);
+        // Partage (fili-share): protocoles et pairs en JSON par shareProtocolsReady / sharePeersReady (fil à part, la
+        // recherche LocalSend dure 2 s); shareSend envoie les fichiers (un chemin par ligne) en tâche détachée
+        #[qinvokable]
+        #[cxx_name = "shareProtocols"]
+        fn share_protocols(self: Pin<&mut Fili>);
+        #[qsignal]
+        #[cxx_name = "shareProtocolsReady"]
+        fn share_protocols_ready(self: Pin<&mut Fili>, json: &QString);
+        #[qinvokable]
+        #[cxx_name = "sharePeers"]
+        fn share_peers(self: Pin<&mut Fili>, proto: &QString);
+        #[qsignal]
+        #[cxx_name = "sharePeersReady"]
+        fn share_peers_ready(self: Pin<&mut Fili>, proto: &QString, json: &QString);
+        #[qinvokable]
+        #[cxx_name = "shareSend"]
+        fn share_send(self: &Fili, proto: &QString, id: &QString, name: &QString, paths: &QString);
         // Lecteur réseau (gvfs): adresse smb://, sftp://, davs://, ftp://, nfs://; réponse par mounted / volumeError
         #[cxx_name = "connectServer"]
         fn connect_server(self: Pin<&mut Fili>, uri: &QString, user: &QString, password: &QString);
@@ -677,6 +694,14 @@ fn archive_stem(name: &str) -> Option<String> {
         }
     }
     None
+}
+
+// Sortie de `fili-share ARGS` (JSON); liste vide si le script manque ou échoue
+fn share_run(args: &[&str]) -> String {
+    match Command::new(bin("fili-share")).args(args).stdin(Stdio::null()).stderr(Stdio::null()).output() {
+        Ok(o) if !o.stdout.is_empty() => String::from_utf8_lossy(&o.stdout).into_owned(),
+        _ => "[]".into(),
+    }
 }
 
 fn bin(name: &str) -> String {
@@ -2374,6 +2399,38 @@ impl Fili {
                 }
             });
         });
+    }
+
+    pub fn share_protocols(self: Pin<&mut Self>) {
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let json = share_run(&["protocols"]);
+            let _ = qt.queue(move |mut f| f.as_mut().share_protocols_ready(&QString::from(&json)));
+        });
+    }
+
+    pub fn share_peers(self: Pin<&mut Self>, proto: &QString) {
+        let proto = proto.to_string();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let json = share_run(&["peers", &proto]);
+            let _ = qt.queue(move |mut f| f.as_mut().share_peers_ready(&QString::from(&proto), &QString::from(&json)));
+        });
+    }
+
+    pub fn share_send(&self, proto: &QString, id: &QString, name: &QString, paths: &QString) {
+        let mut args = vec!["send-files".to_string(), proto.to_string(), id.to_string(), name.to_string()];
+        args.extend(paths_of(paths));
+        let child = Command::new(bin("fili-share"))
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .process_group(0)
+            .spawn();
+        if let Ok(mut child) = child {
+            std::thread::spawn(move || child.wait());
+        }
     }
 
     pub fn connect_server(self: Pin<&mut Self>, uri: &QString, user: &QString, password: &QString) {
