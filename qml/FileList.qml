@@ -395,7 +395,14 @@ Rectangle {
             readonly property bool stripe: !tile && index % 2 === 1
             width: tile ? grid.cellWidth - FiliTheme.space2 : view.width - 2 * FiliTheme.space2
             height: tile ? grid.cellHeight - FiliTheme.space2 : FiliTheme.rowHeight
+            // Lignes sélectionnées contiguës (liste): un seul bloc, arrondi en haut de la première et en bas de la dernière
+            readonly property bool selAbove: sel && !tile && index > 0 && view.selected[view.folder.pathAt(index - 1)] === true
+            readonly property bool selBelow: sel && !tile && index < view.active.count - 1 && view.selected[view.folder.pathAt(index + 1)] === true
             radius: tile ? FiliTheme.radiusControl + 2 : FiliTheme.radiusControl
+            topLeftRadius: selAbove ? 0 : radius
+            topRightRadius: selAbove ? 0 : radius
+            bottomLeftRadius: selBelow ? 0 : radius
+            bottomRightRadius: selBelow ? 0 : radius
             color: sel || drop.containsDrag ? FiliTheme.nuit3 : area.containsMouse ? FiliTheme.nuit2 : stripe ? FiliTheme.alpha(FiliTheme.nuit2, 0.55) : "transparent"
             border.width: drop.containsDrag ? 1 : current && view.active.activeFocus && Fili.keyNav ? 1 : 0
             border.color: FiliTheme.voile
