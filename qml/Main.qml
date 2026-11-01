@@ -1,5 +1,5 @@
 // Fenêtre de fili-file: barre d'outils (précédent, suivant, chemin), barre latérale, liste, barre d'état.
-// Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin, Ctrl+F recherche floue récursive, Ctrl+H fichiers cachés, Ctrl+Maj+P panneau d'aperçu, F5 relire,
+// Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin (propositions façon fzf: Haut/Bas, Tab, Entrée), Ctrl+F ou / recherche floue récursive, Ctrl+H fichiers cachés, Ctrl+Maj+P panneau d'aperçu, F5 relire,
 // Ctrl+C / Ctrl+X / Ctrl+V copier, couper, coller, F2 renommer, Ctrl+Maj+N nouveau dossier, Suppr ou Ctrl+Retour
 // arrière corbeille, Ctrl+Z annuler, Ctrl+A tout sélectionner, Échap annule la copie en cours,
 // Ctrl+1 / Ctrl+2 vue en liste / en grille, Ctrl+Maj+Suppr vide la corbeille, Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
@@ -202,6 +202,8 @@ ApplicationWindow {
     Action { id: aForward; text: Fili.tr("Forward"); shortcut: "Alt+Right"; enabled: folder.canForward; onTriggered: win.show(folder.forward()) }
     Action { id: aUp; text: Fili.tr("Enclosing Folder"); shortcut: "Alt+Up"; onTriggered: win.show(folder.up()) }
     Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
+    // « / » comme Ctrl+F (façon vim, yazi); sans libellé: la barre de menus ne montre que Ctrl+F
+    Action { id: aSearchSlash; shortcut: "/"; enabled: win.canAct; onTriggered: searchInput.forceActiveFocus() }
     Action { id: aSearch; text: Fili.tr("Search"); shortcut: "Ctrl+F"; onTriggered: searchInput.forceActiveFocus() }
 
     // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
@@ -704,6 +706,8 @@ ApplicationWindow {
     // Barre d'état: nombre d'éléments et espace libre, ou l'erreur de la dernière action
     Rectangle {
         id: statusbar
+        // Au-dessus de la liste pendant la saisie d'un chemin: ses propositions débordent vers le haut
+        z: pathBar.editing ? 150 : 0
         anchors.bottom: parent.bottom
         width: parent.width
         height: FiliTheme.statusHeight

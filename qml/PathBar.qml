@@ -13,11 +13,33 @@ Item {
     signal context(string path, real x, real y)
     signal done()
 
+    // Propositions façon fzf pour ce qui est tapé (Haut/Bas choisissent, Tab complète, Entrée valide la proposition choisie
+    // ou, sans choix, le texte tel quel)
+    property var suggestions: []
+    property int selected: -1
+    function shown(p) {
+        const h = Fili.home();
+        return p === h ? "~" : p.startsWith(h + "/") ? "~" + p.slice(h.length) : p;
+    }
+    function refresh() {
+        suggestions = editing ? JSON.parse(Fili.pathSuggest(input.text)) : [];
+        selected = -1;
+    }
+    // Remplace le texte par la proposition i (un « / » en fin pour un dossier, où l'on continue de taper)
+    function accept(i) {
+        const c = suggestions[i];
+        input.text = shown(c.path) + (c.dir ? "/" : "");
+        input.cursorPosition = input.text.length;
+        refresh();
+    }
+    onEditingChanged: if (!editing) suggestions = []
+
     function edit() {
         input.text = path === Fili.home() ? "~/" : path.startsWith(Fili.home() + "/") ? "~" + path.slice(Fili.home().length) + "/" : path + "/";
         editing = true;
         input.forceActiveFocus();
         input.cursorPosition = input.text.length;
+        refresh();
     }
 
     readonly property var crumbs: {
@@ -116,11 +138,65 @@ Item {
             color: FiliTheme.brume
             selectionColor: FiliTheme.nuit4
             selectedTextColor: FiliTheme.brume
+            onTextEdited: bar.refresh()
             onAccepted: {
-                bar.open(text);
+                if (bar.selected >= 0) {
+                    const c = bar.suggestions[bar.selected];
+                    bar.open(c.path);
+                } else
+                    bar.open(text);
             }
             Keys.onEscapePressed: bar.done()
+            Keys.onDownPressed: if (bar.suggestions.length > 0) bar.selected = (bar.selected + 1) % bar.suggestions.length
+            Keys.onUpPressed: if (bar.suggestions.length > 0) bar.selected = bar.selected <= 0 ? bar.suggestions.length - 1 : bar.selected - 1
+            Keys.onTabPressed: e => {
+                if (bar.suggestions.length > 0)
+                    bar.accept(bar.selected >= 0 ? bar.selected : 0);
+                e.accepted = true;
+            }
             onActiveFocusChanged: if (!activeFocus) bar.editing = false
+        }
+    }
+
+    // Liste des propositions, au-dessus du champ (la barre d'état est en bas de la fenêtre)
+    Rectangle {
+        visible: bar.editing && bar.suggestions.length > 0
+        anchors { left: parent.left; right: parent.right; bottom: parent.top; bottomMargin: FiliTheme.space2 }
+        height: Math.min(bar.suggestions.length, 8) * 26 + 2 * FiliTheme.space1
+        radius: FiliTheme.radiusControl
+        color: FiliTheme.nuit2
+        border.width: 1
+        border.color: FiliTheme.nuit4
+        ListView {
+            id: sugList
+            anchors { fill: parent; margins: FiliTheme.space1 }
+            clip: true
+            model: bar.suggestions
+            interactive: false
+            currentIndex: bar.selected
+            onCurrentIndexChanged: positionViewAtIndex(currentIndex < 0 ? 0 : currentIndex, ListView.Contain)
+            delegate: Rectangle {
+                required property var modelData
+                required property int index
+                width: sugList.width
+                height: 26
+                radius: FiliTheme.radiusControl
+                color: index === bar.selected || sugArea.containsMouse ? FiliTheme.nuit3 : "transparent"
+                Text {
+                    anchors { left: parent.left; leftMargin: FiliTheme.space2; right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                    text: modelData.name + (modelData.dir ? "/" : "")
+                    elide: Text.ElideRight
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    color: modelData.dir ? FiliTheme.brume : FiliTheme.brume2
+                }
+                MouseArea {
+                    id: sugArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: bar.open(modelData.path)
+                }
+            }
         }
     }
 }

@@ -324,6 +324,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "copyText"]
         fn copy_text(self: &Fili, text: &QString);
+        // Propositions de chemins pour ce que l'utilisateur tape dans le champ du chemin (JSON: [{name, path, dir}])
+        #[qinvokable]
+        #[cxx_name = "pathSuggest"]
+        fn path_suggest(self: &Fili, text: &QString) -> QString;
         #[qinvokable]
         #[cxx_name = "mountVolume"]
         fn mount_volume(self: Pin<&mut Fili>, dev: &QString);
@@ -765,6 +769,32 @@ fn parse_clip(text: &str, gnome: bool) -> (Vec<String>, Option<bool>) {
     }
     let items = rest.iter().filter(|l| l.starts_with("file://")).map(|l| normalize(l, "/").to_string_lossy().into_owned()).collect();
     (items, cut)
+}
+
+// Chemins proposés pour un texte tapé: le dossier est la partie avant le dernier « / » (~ et .. compris), le reste est
+// cherché façon fzf dans les noms de ce dossier (les fichiers cachés seulement si le reste commence par un point).
+// Rend (nom, chemin complet, dossier?): meilleurs scores d'abord, dossiers avant fichiers à score égal.
+fn suggest(text: &str, limit: usize) -> Vec<(String, String, bool)> {
+    let t = text.trim_start();
+    let (dir, needle) = match t.rfind('/') {
+        Some(i) => (&t[..=i], &t[i + 1..]),
+        None => ("~/", t),
+    };
+    let dir = normalize(dir, "/");
+    let Ok(rd) = std::fs::read_dir(&dir) else { return Vec::new() };
+    let mut found: Vec<(i64, bool, String, String)> = Vec::new();
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') && !needle.starts_with('.') {
+            continue;
+        }
+        let score = if needle.is_empty() { Some(0) } else { fs::fuzzy(&name, needle) };
+        let Some(score) = score else { continue };
+        let path = dir.join(&name);
+        found.push((score, path.is_dir(), name, path.to_string_lossy().into_owned()));
+    }
+    found.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then_with(|| a.2.to_lowercase().cmp(&b.2.to_lowercase())));
+    found.into_iter().take(limit).map(|(_, d, n, p)| (n, p, d)).collect()
 }
 
 fn base(p: &str) -> String {
@@ -2262,6 +2292,14 @@ impl Fili {
         default_favorites().iter().any(|(d, _)| *d == p) || bookmarks().iter().any(|(b, _)| *b == p)
     }
 
+    pub fn path_suggest(&self, text: &QString) -> QString {
+        let list: Vec<String> = suggest(&text.to_string(), 40)
+            .into_iter()
+            .map(|(name, path, dir)| format!("{{\"name\":{},\"path\":{},\"dir\":{dir}}}", json(&name), json(&path)))
+            .collect();
+        QString::from(&format!("[{}]", list.join(",")))
+    }
+
     // Presse-papiers Wayland par wl-copy (qui reste en arrière-plan tant que le texte est la sélection)
     pub fn copy_text(&self, text: &QString) {
         let text = text.to_string();
@@ -2380,6 +2418,25 @@ mod tests {
         assert_eq!(parse_clip("cut\nfile:///tmp/a%20b\nfile:///tmp/c", true), (vec!["/tmp/a b".into(), "/tmp/c".into()], Some(true)));
         assert_eq!(parse_clip("copy\nfile:///tmp/a", true), (vec!["/tmp/a".into()], Some(false)));
         assert_eq!(parse_clip("# x\r\nfile:///tmp/a\r\nhttp://x/y\r\n", false), (vec!["/tmp/a".into()], None));
+    }
+
+    #[test]
+    fn suggests_paths_like_fzf() {
+        let d = std::env::temp_dir().join(format!("fili-file-suggest-{}", std::process::id()));
+        std::fs::create_dir_all(d.join("Documents")).unwrap();
+        std::fs::create_dir_all(d.join("Downloads")).unwrap();
+        std::fs::write(d.join("notes.txt"), "x").unwrap();
+        std::fs::write(d.join(".secret"), "x").unwrap();
+        let base = d.to_string_lossy().into_owned();
+        let names = |t: &str| suggest(t, 10).into_iter().map(|(n, _, dir)| format!("{n}{}", if dir { "/" } else { "" })).collect::<Vec<_>>();
+        assert_eq!(names(&format!("{base}/")), vec!["Documents/", "Downloads/", "notes.txt"]);
+        assert_eq!(names(&format!("{base}/dow")), vec!["Downloads/"]);
+        assert_eq!(names(&format!("{base}/dcs")), vec!["Documents/"]);
+        // Un point: les fichiers cachés entrent, et le nom qui commence par le point passe devant
+        assert_eq!(names(&format!("{base}/."))[0], ".secret");
+        assert!(!names(&format!("{base}/n")).contains(&".secret".to_string()));
+        assert!(names(&format!("{base}/zzz")).is_empty());
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]
