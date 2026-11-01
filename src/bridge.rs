@@ -51,6 +51,9 @@ pub mod qobject {
         // Le contenu du dossier a changé sur le disque (ou après une opération): la vue remet sa sélection en place
         #[qsignal]
         fn reloaded(self: Pin<&mut FolderModel>);
+        // Un nom existe déjà dans la destination: la vue demande quoi faire (resolveConflict); names = un nom par ligne
+        #[qsignal]
+        fn conflict(self: Pin<&mut FolderModel>, names: &QString, dest: &QString);
 
         // L'index récursif du dossier est prêt: la recherche couvre tous les niveaux
         #[qsignal]
@@ -128,6 +131,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "refreshPaste"]
         fn refresh_paste(self: Pin<&mut FolderModel>);
+        // Réponse à `conflict`: "replace" (l'ancien va à la corbeille), "both" (suffixe « copie »), "skip", "cancel"
+        #[qinvokable]
+        #[cxx_name = "resolveConflict"]
+        fn resolve_conflict(self: Pin<&mut FolderModel>, choice: &QString);
         #[qinvokable]
         #[cxx_name = "dropItems"]
         fn drop_items(self: Pin<&mut FolderModel>, urls: &QString, dest: &QString, copy: bool);
@@ -669,6 +676,8 @@ pub struct FolderModelRust {
     undo: Vec<Undo>,
     cancel: Arc<AtomicBool>,
     watcher: Option<Watcher>,
+    // Copie ou déplacement en attente de la réponse à `conflict`
+    pending: Option<(Vec<String>, String, Mode)>,
 }
 
 // Ce que Ctrl+Z défait (le plus récent en dernier, 20 au plus)
@@ -680,6 +689,14 @@ enum Undo {
     Created(Vec<PathBuf>),
     // (origine, destination)
     Moved(Vec<(PathBuf, PathBuf)>),
+}
+
+// Que faire d'un nom déjà pris dans la destination
+#[derive(Clone, Copy, PartialEq)]
+enum Policy {
+    Both,
+    Replace,
+    Skip,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -1389,7 +1406,40 @@ impl FolderModel {
 
     // Copie ou déplacement en arrière-plan: avancement dans la barre d'état, annulation (Échap) qui retire la copie
     // en cours; ce qui est déjà fini reste (et Ctrl+Z le défait).
+    // Un nom déjà pris ailleurs que dans le dossier source: on demande (remplacer, garder les deux, ignorer).
     fn start_job(mut self: Pin<&mut Self>, items: Vec<String>, dest: String, mode: Mode) {
+        if items.is_empty() {
+            return;
+        }
+        if self.busy {
+            return self.fail(i18n::tr("Another operation is in progress").into());
+        }
+        let clashes: Vec<String> = items
+            .iter()
+            .filter(|i| {
+                let src = Path::new(i);
+                src.parent() != Some(Path::new(&dest)) && src.file_name().is_some_and(|n| ops::exists(&Path::new(&dest).join(n)))
+            })
+            .map(|i| base(i))
+            .collect();
+        if clashes.is_empty() {
+            return self.run_job(items, dest, mode, Policy::Both);
+        }
+        self.as_mut().rust_mut().pending = Some((items, dest.clone(), mode));
+        self.conflict(&QString::from(&clashes.join("\n")), &QString::from(&dest));
+    }
+
+    pub fn resolve_conflict(mut self: Pin<&mut Self>, choice: &QString) {
+        let Some((items, dest, mode)) = self.as_mut().rust_mut().pending.take() else { return };
+        match choice.to_string().as_str() {
+            "replace" => self.run_job(items, dest, mode, Policy::Replace),
+            "both" => self.run_job(items, dest, mode, Policy::Both),
+            "skip" => self.run_job(items, dest, mode, Policy::Skip),
+            _ => {}
+        }
+    }
+
+    fn run_job(mut self: Pin<&mut Self>, items: Vec<String>, dest: String, mode: Mode, policy: Policy) {
         if items.is_empty() {
             return;
         }
@@ -1413,7 +1463,7 @@ impl FolderModel {
             let dest = PathBuf::from(dest);
             let total = items.iter().map(|p| ops::tree_size(Path::new(p))).sum::<u64>().max(1);
             let (mut done, mut last) = (0u64, Instant::now());
-            let (mut moved, mut created, mut error) = (Vec::new(), Vec::new(), None);
+            let (mut moved, mut created, mut replaced, mut error) = (Vec::new(), Vec::new(), Vec::new(), None);
             for item in &items {
                 if cancel.load(Ordering::Relaxed) {
                     break;
@@ -1444,7 +1494,27 @@ impl FolderModel {
                     }
                     !cancel.load(Ordering::Relaxed)
                 };
-                let r = if as_move { ops::move_into(src, &dest, &mut progress) } else { ops::copy_into(src, &dest, &mut progress) };
+                // Nom déjà pris: ignorer, ou mettre l'ancien à la corbeille (Ctrl+Z le rend), sinon un nom libre
+                let target = dest.join(src.file_name().unwrap_or_default());
+                let clash = target != src && ops::exists(&target);
+                if clash && policy == Policy::Skip {
+                    continue;
+                }
+                if clash && policy == Policy::Replace {
+                    match ops::trash(&target) {
+                        Ok(t) => replaced.push(t),
+                        Err(e) => {
+                            error = Some(i18n::trf("Cannot replace “%1”: %2", &[&base(item), &fs::error(&e)]));
+                            break;
+                        }
+                    }
+                }
+                let r = match (as_move, clash && policy == Policy::Replace) {
+                    (true, true) => ops::move_to(src, target, &mut progress),
+                    (false, true) => ops::copy_to(src, target, &mut progress),
+                    (true, false) => ops::move_into(src, &dest, &mut progress),
+                    (false, false) => ops::copy_into(src, &dest, &mut progress),
+                };
                 match r {
                     Ok(dst) if as_move => moved.push((src.to_path_buf(), dst)),
                     Ok(dst) => created.push(dst),
@@ -1468,6 +1538,10 @@ impl FolderModel {
                     r.job = QString::default();
                     r.error = QString::from(&error.unwrap_or_default());
                 }
+                // Les remplacés d'abord: Ctrl+Z défait la copie, un second Ctrl+Z rend l'ancien
+                if !replaced.is_empty() {
+                    m.as_mut().push_undo(Undo::Trash(replaced));
+                }
                 if !moved.is_empty() {
                     m.as_mut().push_undo(Undo::Moved(moved));
                 }
@@ -1486,7 +1560,7 @@ impl FolderModel {
             return;
         }
         let dir = self.dir.clone();
-        self.start_job(paths_of(paths), dir, Mode::Copy);
+        self.run_job(paths_of(paths), dir, Mode::Copy, Policy::Both);
     }
 
     pub fn terminal(&self, path: &QString) {

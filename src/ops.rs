@@ -97,7 +97,11 @@ pub fn remove_tree(p: &Path) -> io::Result<()> {
 // Copie sous un nom libre de dir; la copie interrompue ou en échec est retirée
 pub fn copy_into(src: &Path, dir: &Path, progress: Progress) -> io::Result<PathBuf> {
     let name = src.file_name().ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?.to_string_lossy();
-    let dst = unique(dir, &name, tr("copy"), src.is_dir());
+    copy_to(src, unique(dir, &name, tr("copy"), src.is_dir()), progress)
+}
+
+// Copie vers dst (chemin précis, déjà libre ou vidé par l'appelant)
+pub fn copy_to(src: &Path, dst: PathBuf, progress: Progress) -> io::Result<PathBuf> {
     if let Err(e) = copy_tree(src, &dst, progress) {
         let _ = remove_tree(&dst);
         return Err(e);
@@ -108,7 +112,11 @@ pub fn copy_into(src: &Path, dir: &Path, progress: Progress) -> io::Result<PathB
 // Déplace src dans dir (nom libre): renommage, ou copie puis suppression d'un autre volume
 pub fn move_into(src: &Path, dir: &Path, progress: Progress) -> io::Result<PathBuf> {
     let name = src.file_name().ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?.to_string_lossy();
-    let dst = unique(dir, &name, tr("copy"), src.is_dir());
+    move_to(src, unique(dir, &name, tr("copy"), src.is_dir()), progress)
+}
+
+// Déplace vers dst (chemin précis, déjà libre ou vidé par l'appelant)
+pub fn move_to(src: &Path, dst: PathBuf, progress: Progress) -> io::Result<PathBuf> {
     match fs::rename(src, &dst) {
         Ok(()) => Ok(dst),
         Err(e) if e.raw_os_error() == Some(libc::EXDEV) => {
@@ -364,6 +372,22 @@ mod tests {
         assert_eq!(unique(&d, "a.txt", "copy", false), d.join("a copy 2.txt"));
         // Un dossier à point dans le nom: pas d'extension
         assert_eq!(unique(&d, "v1.2", "copy", true), d.join("v1.2 copy"));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn copy_to_and_move_to_use_the_exact_path() {
+        unsafe { std::env::set_var("FILI_LANG", "en") };
+        let d = tmp("exact");
+        fs::create_dir_all(d.join("a")).unwrap();
+        fs::create_dir_all(d.join("b")).unwrap();
+        fs::write(d.join("a/f.txt"), "new").unwrap();
+        // Le nom a été libéré par l'appelant (l'ancien est parti à la corbeille: voir trash_and_restore)
+        let target = d.join("b/f.txt");
+        let dst = copy_to(&d.join("a/f.txt"), target.clone(), &mut all).unwrap();
+        assert_eq!((dst, fs::read_to_string(&target).unwrap()), (target, "new".into()));
+        let moved = move_to(&d.join("a/f.txt"), d.join("b/g.txt"), &mut all).unwrap();
+        assert!(exists(&moved) && !exists(&d.join("a/f.txt")));
         fs::remove_dir_all(&d).unwrap();
     }
 

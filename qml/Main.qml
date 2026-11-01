@@ -190,6 +190,10 @@ ApplicationWindow {
     Action { id: aTerminal; text: Fili.tr("Open Terminal Here"); shortcut: "Ctrl+Alt+T"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.terminal(files.targets().length === 1 ? files.targets()[0] : "") }
     Action { id: aList; text: Fili.tr("View as List"); shortcut: "Ctrl+1"; checkable: true; checked: !files.tiles; onTriggered: files.setViewMode("list") }
     Action { id: aGrid; text: Fili.tr("View as Icons"); shortcut: "Ctrl+2"; checkable: true; checked: files.tiles; onTriggered: files.setViewMode("grid") }
+    Action { id: aCopyPath; text: Fili.tr("Copy Full Path"); shortcut: "Ctrl+Shift+C"; enabled: win.canAct && files.targets().length > 0; onTriggered: win.copyAs("path") }
+    Action { id: aCopyName; text: Fili.tr("Copy Name"); shortcut: "Ctrl+Alt+C"; enabled: win.canAct && files.targets().length > 0; onTriggered: win.copyAs("name") }
+    Action { id: aCopyStem; text: Fili.tr("Copy Name Without Extension"); enabled: win.canAct && files.targets().length > 0; onTriggered: win.copyAs("stem") }
+    Action { id: aCopyParent; text: Fili.tr("Copy Parent Folder"); enabled: win.canAct && files.targets().length > 0; onTriggered: win.copyAs("parent") }
     Action { id: aPreview; text: Fili.tr("Show Preview"); shortcut: "Ctrl+Shift+P"; checkable: true; checked: win.previewOn; enabled: !win.picking; onTriggered: win.togglePreview() }
     Action { id: aHidden; text: Fili.tr("Show Hidden Files"); shortcut: "Ctrl+H"; checkable: true; checked: folder.showHidden; onTriggered: win.show(folder.toggleHidden(files.currentIndex)) }
     Action { id: aRefresh; text: Fili.tr("Reload"); shortcut: "F5"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
@@ -205,9 +209,26 @@ ApplicationWindow {
     readonly property var menuActions: ({
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename,
-        "select-all": aSelectAll, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview,
+        "select-all": aSelectAll, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "search": aSearch
     })
+    // Copie dans le presse-papiers (texte) le chemin, le nom, le nom sans extension ou le dossier parent des éléments
+    // sélectionnés, un par ligne
+    function copyAs(kind) {
+        const name = p => p.split("/").pop();
+        const out = files.targets().map(p => {
+            if (kind === "name")
+                return name(p);
+            if (kind === "stem") {
+                const n = name(p), i = n.lastIndexOf(".");
+                return i > 0 && !folder.pathIsDir(p) ? n.slice(0, i) : n;
+            }
+            if (kind === "parent")
+                return p.slice(0, p.lastIndexOf("/")) || "/";
+            return p;
+        });
+        Fili.copyText(out.join("\n"));
+    }
     // Panneau d'aperçu (choix gardé dans l'état de l'utilisateur)
     property bool previewOn: Fili.previewShown()
     function togglePreview() {
@@ -268,7 +289,15 @@ ApplicationWindow {
             list.push({ id: "paste", label: Fili.tr("Paste"), hint: "Ctrl+V", enabled: folder.canPaste && folder.results === "" });
         if (t.length > 0) {
             list.push({ separator: true });
-            list.push({ id: "copyfilepath", label: Fili.tr("Copy Full Path") });
+            list.push({
+                id: "copyas", label: Fili.tr("Copy Path As"),
+                children: [
+                    { id: "copyas:path", label: Fili.tr("Copy Full Path"), hint: "Ctrl+Shift+C" },
+                    { id: "copyas:name", label: Fili.tr("Copy Name"), hint: "Ctrl+Alt+C" },
+                    { id: "copyas:stem", label: Fili.tr("Copy Name Without Extension") },
+                    { id: "copyas:parent", label: Fili.tr("Copy Parent Folder") }
+                ]
+            });
             if (one && folder.pathIsDir(t[0]) && !Fili.isFavorite(t[0])) {
                 menuPath = t[0];
                 list.push({ id: "addfav", label: Fili.tr("Add to Favorites") });
@@ -353,8 +382,8 @@ ApplicationWindow {
             win.open(menuPath);
         else if (id === "copypath")
             Fili.copyText(menuPath);
-        else if (id === "copyfilepath")
-            Fili.copyText(files.targets().join("\n"));
+        else if (id.startsWith("copyas:"))
+            win.copyAs(id.slice(7));
         else if (id === "addfav")
             Fili.addFavorite(menuPath);
         else if (id === "remfav")
@@ -768,6 +797,99 @@ ApplicationWindow {
     }
 
     // Confirmation (vider la corbeille, remplacer un fichier): Entrée valide, Échap annule
+    // Un nom existe déjà dans la destination d'une copie ou d'un déplacement (Rust: signal conflict)
+    Connections {
+        target: folder
+        function onConflict(names, dest) {
+            const list = names.split("\n");
+            const where = dest.split("/").pop() || "/";
+            conflictBox.heading = list.length === 1 ? Fili.tr("“%1” already exists in “%2”.").replace("%1", list[0]).replace("%2", where) : Fili.tr("%1 items already exist in “%2”.").replace("%1", list.length).replace("%2", where);
+            conflictBox.body = Fili.tr("Replacing moves the existing item to the Trash (Ctrl+Z brings it back). Keep Both adds “copy” to the name.");
+            conflictBox.many = list.length > 1;
+            conflictBox.visible = true;
+        }
+    }
+    Rectangle {
+        id: conflictBox
+        property string heading
+        property string body
+        property bool many: false
+        function choose(c) {
+            visible = false;
+            folder.resolveConflict(c);
+        }
+        anchors.fill: parent
+        visible: false
+        z: 200
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        focus: visible
+        onVisibleChanged: if (visible) forceActiveFocus(); else files.focusList()
+        Keys.onPressed: e => {
+            if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter)
+                choose("both");
+            else if (e.key === Qt.Key_Escape)
+                choose("cancel");
+            else
+                return;
+            e.accepted = true;
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: conflictBox.choose("cancel")
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 380
+            height: conflictCard.implicitHeight + 2 * FiliTheme.space4
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            Column {
+                id: conflictCard
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
+                spacing: FiliTheme.space3
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: conflictBox.heading
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.brume
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: conflictBox.body
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
+                }
+                Row {
+                    anchors.right: parent.right
+                    spacing: FiliTheme.space2
+                    TextButton {
+                        label: Fili.tr("Cancel")
+                        onClicked: conflictBox.choose("cancel")
+                    }
+                    TextButton {
+                        label: conflictBox.many ? Fili.tr("Skip These") : Fili.tr("Skip")
+                        onClicked: conflictBox.choose("skip")
+                    }
+                    TextButton {
+                        label: Fili.tr("Replace")
+                        onClicked: conflictBox.choose("replace")
+                    }
+                    TextButton {
+                        label: Fili.tr("Keep Both")
+                        primary: true
+                        onClicked: conflictBox.choose("both")
+                    }
+                }
+            }
+        }
+    }
     function ask(heading, body, label, action) {
         confirm.heading = heading;
         confirm.body = body;
