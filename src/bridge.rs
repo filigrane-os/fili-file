@@ -387,6 +387,17 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "shareSend"]
         fn share_send(self: &Fili, proto: &QString, id: &QString, name: &QString, paths: &QString);
+        // Réception (fili-share receive-info / received): état des protocoles et fichiers reçus en JSON par
+        // receiveInfoReady(info, received); receiveSet active ou coupe un protocole puis renvoie l'état
+        #[qinvokable]
+        #[cxx_name = "receiveInfo"]
+        fn receive_info(self: Pin<&mut Fili>);
+        #[qsignal]
+        #[cxx_name = "receiveInfoReady"]
+        fn receive_info_ready(self: Pin<&mut Fili>, info: &QString, received: &QString);
+        #[qinvokable]
+        #[cxx_name = "receiveSet"]
+        fn receive_set(self: Pin<&mut Fili>, proto: &QString, on: bool);
         // Lecteur réseau (gvfs): adresse smb://, sftp://, davs://, ftp://, nfs://; réponse par mounted / volumeError
         #[cxx_name = "connectServer"]
         fn connect_server(self: Pin<&mut Fili>, uri: &QString, user: &QString, password: &QString);
@@ -2415,6 +2426,31 @@ impl Fili {
         std::thread::spawn(move || {
             let json = share_run(&["peers", &proto]);
             let _ = qt.queue(move |mut f| f.as_mut().share_peers_ready(&QString::from(&proto), &QString::from(&json)));
+        });
+    }
+
+    pub fn receive_info(self: Pin<&mut Self>) {
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let info = share_run(&["receive-info"]);
+            let received = share_run(&["received", "15"]);
+            let _ = qt.queue(move |mut f| f.as_mut().receive_info_ready(&QString::from(&info), &QString::from(&received)));
+        });
+    }
+
+    pub fn receive_set(self: Pin<&mut Self>, proto: &QString, on: bool) {
+        let proto = proto.to_string();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let _ = Command::new(bin("fili-share"))
+                .args(["receive", &proto, if on { "on" } else { "off" }])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            let info = share_run(&["receive-info"]);
+            let received = share_run(&["received", "15"]);
+            let _ = qt.queue(move |mut f| f.as_mut().receive_info_ready(&QString::from(&info), &QString::from(&received)));
         });
     }
 
