@@ -150,6 +150,37 @@ pub fn starts_with(name: &str, prefix: &str) -> bool {
     prefix.chars().map(fold).all(|c| n.next() == Some(c))
 }
 
+// Motif de sélection: « * » (suite de caractères) et « ? » (un caractère), sans casse; sans joker, le nom doit contenir le motif
+pub fn glob_match(name: &str, pattern: &str) -> bool {
+    let n: Vec<char> = name.to_lowercase().chars().collect();
+    let p: Vec<char> = pattern.trim().to_lowercase().chars().collect();
+    if p.is_empty() {
+        return false;
+    }
+    if !p.iter().any(|c| matches!(c, '*' | '?')) {
+        return name.to_lowercase().contains(&p.iter().collect::<String>());
+    }
+    // Retour arrière sur la dernière « * »
+    let (mut i, mut j, mut star, mut mark) = (0, 0, None, 0);
+    while i < n.len() {
+        if j < p.len() && (p[j] == '?' || p[j] == n[i]) {
+            i += 1;
+            j += 1;
+        } else if j < p.len() && p[j] == '*' {
+            star = Some(j);
+            mark = i;
+            j += 1;
+        } else if let Some(s) = star {
+            j = s + 1;
+            mark += 1;
+            i = mark;
+        } else {
+            return false;
+        }
+    }
+    p[j..].iter().all(|&c| c == '*')
+}
+
 // Le nom contient needle, sans casse ni accents (filtre du dossier)
 pub fn contains(name: &str, needle: &str) -> bool {
     let n: String = name.chars().map(fold).collect();
@@ -394,6 +425,18 @@ mod tests {
     fn permissions_like_ls() {
         assert_eq!(permissions(0o755), "rwxr-xr-x");
         assert_eq!(permissions(0o640), "rw-r-----");
+    }
+
+    #[test]
+    fn glob() {
+        assert!(glob_match("Rapport.PDF", "*.pdf"));
+        assert!(glob_match("a1.txt", "a?.txt"));
+        assert!(!glob_match("a12.txt", "a?.txt"));
+        assert!(glob_match("photo vacances.jpg", "vacances"));
+        assert!(glob_match("x", "*"));
+        assert!(!glob_match("notes.txt", "*.pdf"));
+        assert!(glob_match("a.tar.gz", "*.tar.*"));
+        assert!(!glob_match("a", ""));
     }
 
     #[test]

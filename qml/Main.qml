@@ -187,6 +187,9 @@ ApplicationWindow {
     Action { id: aDuplicate; text: Fili.tr("Duplicate"); shortcut: "Ctrl+D"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.duplicate(files.targetsText()) }
     Action { id: aRename; text: Fili.tr("Rename"); shortcut: "F2"; enabled: win.canAct && !folder.inTrash; onTriggered: files.startRename() }
     Action { id: aSelectAll; text: Fili.tr("Select All"); shortcut: "Ctrl+A"; enabled: win.canAct; onTriggered: files.selectAll() }
+    Action { id: aInvert; text: Fili.tr("Invert Selection"); shortcut: "Ctrl+Shift+I"; enabled: win.canAct; onTriggered: files.invertSelection() }
+    Action { id: aMatch; text: Fili.tr("Select Matching…"); shortcut: "Ctrl+Shift+M"; enabled: win.canAct && !win.picking; onTriggered: matchBox.open() }
+    Action { id: aSameKind; text: Fili.tr("Select Same Kind"); enabled: win.canAct && files.targets().length > 0; onTriggered: files.selectPaths(folder.sameKind(files.targetsText()).split("\n")) }
     Action { id: aTerminal; text: Fili.tr("Open Terminal Here"); shortcut: "Ctrl+Alt+T"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.terminal(files.targets().length === 1 ? files.targets()[0] : "") }
     Action { id: aList; text: Fili.tr("View as List"); shortcut: "Ctrl+1"; checkable: true; checked: !files.tiles; onTriggered: files.setViewMode("list") }
     Action { id: aGrid; text: Fili.tr("View as Icons"); shortcut: "Ctrl+2"; checkable: true; checked: files.tiles; onTriggered: files.setViewMode("grid") }
@@ -211,7 +214,7 @@ ApplicationWindow {
     readonly property var menuActions: ({
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename,
-        "select-all": aSelectAll, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
+        "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "search": aSearch
     })
     // Copie dans le presse-papiers (texte) le chemin, le nom, le nom sans extension ou le dossier parent des éléments
@@ -246,7 +249,7 @@ ApplicationWindow {
     // Pas de barre de menus dans la fenêtre: le menu vit dans la fili-bar (repli appmenu/fili-file.json, commandes ci-dessus)
 
     // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
-    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible
+    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible || matchBox.visible || conflictBox.visible
     function trashSelection() {
         const row = folder.trash(files.targetsText(), files.currentIndex);
         files.reloaded();
@@ -801,6 +804,77 @@ ApplicationWindow {
     }
 
     // Confirmation (vider la corbeille, remplacer un fichier): Entrée valide, Échap annule
+    // « Sélectionner selon un motif… »: *.pdf, photo*, a?.txt (sans joker: le nom contient le texte)
+    Rectangle {
+        id: matchBox
+        function open() {
+            patternInput.text = "";
+            visible = true;
+        }
+        function apply() {
+            visible = false;
+            if (patternInput.text.trim() !== "")
+                files.selectPaths(folder.matching(patternInput.text).split("\n"));
+        }
+        anchors.fill: parent
+        visible: false
+        z: 200
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        onVisibleChanged: if (visible) patternInput.forceActiveFocus(); else files.focusList()
+        MouseArea {
+            anchors.fill: parent
+            onClicked: matchBox.visible = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 340
+            height: matchCard.implicitHeight + 2 * FiliTheme.space4
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            Column {
+                id: matchCard
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
+                spacing: FiliTheme.space3
+                Text {
+                    width: parent.width
+                    text: Fili.tr("Select items matching")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.brume
+                }
+                Rectangle {
+                    width: parent.width
+                    height: 26
+                    radius: FiliTheme.radiusControl
+                    color: FiliTheme.nuit
+                    border.width: 1
+                    border.color: FiliTheme.voile
+                    TextInput {
+                        id: patternInput
+                        anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+                        verticalAlignment: TextInput.AlignVCenter
+                        clip: true
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.size
+                        color: FiliTheme.brume
+                        onAccepted: matchBox.apply()
+                        Keys.onEscapePressed: matchBox.visible = false
+                    }
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: Fili.tr("* stands for any text, ? for one character: *.pdf, photo*, a?.txt")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
+                }
+            }
+        }
+    }
     // Un nom existe déjà dans la destination d'une copie ou d'un déplacement (Rust: signal conflict)
     Connections {
         target: folder

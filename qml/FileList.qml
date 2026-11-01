@@ -99,6 +99,22 @@ Rectangle {
             s[folder.pathAt(i)] = true;
         selected = s;
     }
+    function selectPaths(list) {
+        const s = {};
+        for (const p of list)
+            if (p !== "")
+                s[p] = true;
+        selected = s;
+    }
+    function invertSelection() {
+        const s = {};
+        for (let i = 0; i < active.count; i++) {
+            const p = folder.pathAt(i);
+            if (!selected[p])
+                s[p] = true;
+        }
+        selected = s;
+    }
     // Chemins visés par une commande: la sélection, sinon la ligne courante
     function targets() {
         const keys = Object.keys(selected);

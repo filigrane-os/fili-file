@@ -111,6 +111,13 @@ pub mod qobject {
         fn find_name(self: &FolderModel, name: &QString) -> i32;
         #[qinvokable]
         fn has(self: &FolderModel, path: &QString) -> bool;
+        // Chemins (un par ligne) des lignes affichées dont le nom correspond au motif (* et ?), ou qui ont le même type
+        // que les chemins donnés
+        #[qinvokable]
+        fn matching(self: &FolderModel, pattern: &QString) -> QString;
+        #[qinvokable]
+        #[cxx_name = "sameKind"]
+        fn same_kind(self: &FolderModel, paths: &QString) -> QString;
         // Description de la sélection pour la barre d'état (un élément: nom et taille ou contenu)
         #[qinvokable]
         fn describe(self: &FolderModel, paths: &QString) -> QString;
@@ -1302,6 +1309,17 @@ impl FolderModel {
     pub fn has(&self, path: &QString) -> bool {
         let p = path.to_string();
         self.rows.iter().any(|e| e.path == p)
+    }
+
+    pub fn matching(&self, pattern: &QString) -> QString {
+        let p = pattern.to_string();
+        QString::from(&self.rows.iter().filter(|e| fs::glob_match(&e.name, &p)).map(|e| e.path.as_str()).collect::<Vec<_>>().join("\n"))
+    }
+
+    pub fn same_kind(&self, paths: &QString) -> QString {
+        let list = paths_of(paths);
+        let kinds: Vec<&str> = self.rows.iter().filter(|e| list.contains(&e.path)).map(|e| e.kind.as_str()).collect();
+        QString::from(&self.rows.iter().filter(|e| kinds.contains(&e.kind.as_str())).map(|e| e.path.as_str()).collect::<Vec<_>>().join("\n"))
     }
 
     pub fn describe(&self, paths: &QString) -> QString {
