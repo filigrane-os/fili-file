@@ -6,9 +6,10 @@
 // Mode sélecteur (fili-file --pick, lancé par le portail FileChooser): barre de validation en bas (nom en
 // enregistrement, filtres, Annuler, Ouvrir/Enregistrer); les opérations sur les fichiers sont désactivées.
 import QtQuick
+import QtQuick.Controls.Basic
 import Fili.Files
 
-Window {
+ApplicationWindow {
     id: win
     width: 900
     height: 560
@@ -158,18 +159,127 @@ Window {
             showInfo();
     }
 
-    Shortcut { sequence: "Alt+Left"; onActivated: win.show(folder.back()) }
-    Shortcut { sequence: "Alt+Right"; onActivated: win.show(folder.forward()) }
     Shortcut { sequence: "Ctrl+["; onActivated: win.show(folder.back()) }
     Shortcut { sequence: "Ctrl+]"; onActivated: win.show(folder.forward()) }
-    Shortcut { sequence: "Ctrl+L"; onActivated: pathBar.edit() }
-    Shortcut { sequence: "Ctrl+F"; onActivated: searchInput.forceActiveFocus() }
-    Shortcut { sequence: "Ctrl+1"; onActivated: files.setViewMode("list") }
-    Shortcut { sequence: "Ctrl+2"; onActivated: files.setViewMode("grid") }
-    Shortcut { sequence: "Ctrl+H"; onActivated: win.show(folder.toggleHidden(files.currentIndex)) }
-    Shortcut { sequence: "F5"; onActivated: win.show(folder.refresh(files.currentIndex)) }
-    Shortcut { sequence: "Ctrl+R"; onActivated: win.show(folder.refresh(files.currentIndex)) }
-    Shortcut { sequences: ["Ctrl+W", "Ctrl+Q"]; onActivated: Qt.quit() }
+
+
+    // Commandes de la barre de menus (exposée au menu global de la fili-bar par AT-SPI); chaque raccourci vit ici, une seule fois
+    readonly property bool canAct: !win.typing && !win.picking
+    Action { id: aNewFolder; text: Fili.tr("New Folder"); shortcut: "Ctrl+Shift+N"; enabled: win.canAct && !folder.inTrash; onTriggered: win.newFolder() }
+    Action { id: aOpen; text: Fili.tr("Open"); enabled: win.canAct && files.targets().length === 1; onTriggered: win.show(folder.activate(files.currentIndex)) }
+    Action { id: aInfo; text: Fili.tr("Get Info"); shortcut: "Ctrl+I"; enabled: win.canAct; onTriggered: win.showInfo() }
+    Action { id: aTrash; text: Fili.tr("Move to Trash"); shortcut: "Delete"; enabled: win.canAct && !folder.inTrash; onTriggered: win.trashSelection() }
+    Action { id: aTrashAlt; shortcut: "Ctrl+Backspace"; enabled: win.canAct; onTriggered: win.trashSelection() }
+    Action { id: aEmpty; text: Fili.tr("Empty Trash"); shortcut: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onTriggered: win.askEmpty() }
+    Action { id: aClose; text: Fili.tr("Close"); shortcut: "Ctrl+W"; onTriggered: Qt.quit() }
+    Action { id: aQuit; text: Fili.tr("Quit"); shortcut: "Ctrl+Q"; onTriggered: Qt.quit() }
+    Action { id: aUndo; text: Fili.tr("Undo"); shortcut: "Ctrl+Z"; enabled: win.canAct; onTriggered: folder.undo() }
+    Action { id: aCut; text: Fili.tr("Cut"); shortcut: "Ctrl+X"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.cut(files.targetsText()) }
+    Action { id: aCopy; text: Fili.tr("Copy"); shortcut: "Ctrl+C"; enabled: win.canAct; onTriggered: folder.copy(files.targetsText()) }
+    Action { id: aPaste; text: Fili.tr("Paste"); shortcut: "Ctrl+V"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.paste() }
+    Action { id: aDuplicate; text: Fili.tr("Duplicate"); shortcut: "Ctrl+D"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.duplicate(files.targetsText()) }
+    Action { id: aRename; text: Fili.tr("Rename"); shortcut: "F2"; enabled: win.canAct && !folder.inTrash; onTriggered: files.startRename() }
+    Action { id: aSelectAll; text: Fili.tr("Select All"); shortcut: "Ctrl+A"; enabled: win.canAct; onTriggered: files.selectAll() }
+    Action { id: aTerminal; text: Fili.tr("Open Terminal Here"); shortcut: "Ctrl+Alt+T"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.terminal(files.targets().length === 1 ? files.targets()[0] : "") }
+    Action { id: aList; text: Fili.tr("View as List"); shortcut: "Ctrl+1"; checkable: true; checked: !files.tiles; onTriggered: files.setViewMode("list") }
+    Action { id: aGrid; text: Fili.tr("View as Icons"); shortcut: "Ctrl+2"; checkable: true; checked: files.tiles; onTriggered: files.setViewMode("grid") }
+    Action { id: aHidden; text: Fili.tr("Show Hidden Files"); shortcut: "Ctrl+H"; checkable: true; checked: folder.showHidden; onTriggered: win.show(folder.toggleHidden(files.currentIndex)) }
+    Action { id: aRefresh; text: Fili.tr("Reload"); shortcut: "F5"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
+    Action { id: aRefreshAlt; shortcut: "Ctrl+R"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
+    Action { id: aBack; text: Fili.tr("Back"); shortcut: "Alt+Left"; enabled: folder.canBack; onTriggered: win.show(folder.back()) }
+    Action { id: aForward; text: Fili.tr("Forward"); shortcut: "Alt+Right"; enabled: folder.canForward; onTriggered: win.show(folder.forward()) }
+    Action { id: aUp; text: Fili.tr("Enclosing Folder"); shortcut: "Alt+Up"; onTriggered: win.show(folder.up()) }
+    Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
+    Action { id: aSearch; text: Fili.tr("Search"); shortcut: "Ctrl+F"; onTriggered: searchInput.forceActiveFocus() }
+
+    menuBar: MenuBar {
+        id: bar
+        implicitHeight: 24
+        background: Rectangle { color: FiliTheme.nuit; Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: FiliTheme.nuit4 } }
+        delegate: MenuBarItem {
+            id: mbi
+            implicitHeight: 24
+            padding: FiliTheme.space2
+            contentItem: Text {
+                text: mbi.text
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.size
+                color: FiliTheme.brume
+                verticalAlignment: Text.AlignVCenter
+            }
+            background: Rectangle { radius: FiliTheme.radiusControl; color: mbi.highlighted ? FiliTheme.nuit3 : "transparent" }
+        }
+        component FMenu: Menu {
+            id: m
+            implicitWidth: 240
+            background: Rectangle { color: FiliTheme.nuit2; border.width: 1; border.color: FiliTheme.nuit4; radius: FiliTheme.radiusControl }
+            delegate: MenuItem {
+                id: it
+                implicitHeight: 26
+                contentItem: Item {
+                    Text {
+                        anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                        text: (it.checked ? "✓ " : "") + it.text
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.size
+                        color: it.enabled ? FiliTheme.brume : FiliTheme.ardoise
+                    }
+                    Text {
+                        anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                        text: it.action ? it.action.shortcut : ""
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.sizeSmall
+                        color: FiliTheme.brume2
+                    }
+                }
+                arrow: Item {}
+                indicator: Item {}
+                background: Rectangle { radius: 4; color: it.highlighted ? FiliTheme.nuit3 : "transparent" }
+            }
+        }
+        FMenu {
+            title: Fili.tr("File")
+            MenuItem { action: aNewFolder }
+            MenuItem { action: aOpen }
+            MenuItem { action: aInfo }
+            MenuSeparator {}
+            MenuItem { action: aTrash }
+            MenuItem { action: aEmpty }
+            MenuSeparator {}
+            MenuItem { action: aClose }
+            MenuItem { action: aQuit }
+        }
+        FMenu {
+            title: Fili.tr("Edit")
+            MenuItem { action: aUndo }
+            MenuSeparator {}
+            MenuItem { action: aCut }
+            MenuItem { action: aCopy }
+            MenuItem { action: aPaste }
+            MenuItem { action: aDuplicate }
+            MenuItem { action: aRename }
+            MenuSeparator {}
+            MenuItem { action: aSelectAll }
+        }
+        FMenu {
+            title: Fili.tr("View")
+            MenuItem { action: aList }
+            MenuItem { action: aGrid }
+            MenuItem { action: aHidden }
+            MenuSeparator {}
+            MenuItem { action: aRefresh }
+        }
+        FMenu {
+            title: Fili.tr("Go")
+            MenuItem { action: aBack }
+            MenuItem { action: aForward }
+            MenuItem { action: aUp }
+            MenuItem { action: aPath }
+            MenuItem { action: aSearch }
+            MenuSeparator {}
+            MenuItem { action: aTerminal }
+        }
+    }
 
     // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
     readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible
@@ -342,18 +452,6 @@ Window {
             win.askEmpty();
         files.focusList();
     }
-    Shortcut { sequence: "Ctrl+C"; enabled: !win.typing && !win.picking; onActivated: folder.copy(files.targetsText()) }
-    Shortcut { sequence: "Ctrl+X"; enabled: !win.typing && !win.picking; onActivated: folder.cut(files.targetsText()) }
-    Shortcut { sequence: "Ctrl+V"; enabled: !win.typing && !win.picking; onActivated: folder.paste() }
-    Shortcut { sequence: "Ctrl+D"; enabled: !win.typing && !win.picking; onActivated: folder.duplicate(files.targetsText()) }
-    Shortcut { sequence: "Ctrl+I"; enabled: !win.typing && !win.picking; onActivated: win.showInfo() }
-    Shortcut { sequence: "Ctrl+Alt+T"; enabled: !win.typing && !win.picking; onActivated: folder.terminal(files.targets().length === 1 ? files.targets()[0] : "") }
-    Shortcut { sequence: "Ctrl+A"; enabled: !win.typing && !win.picking; onActivated: files.selectAll() }
-    Shortcut { sequence: "Ctrl+Z"; enabled: !win.typing && !win.picking; onActivated: folder.undo() }
-    Shortcut { sequence: "F2"; enabled: !win.typing && !win.picking; onActivated: files.startRename() }
-    Shortcut { sequence: "Ctrl+Shift+N"; enabled: !win.typing && !win.picking; onActivated: win.newFolder() }
-    Shortcut { sequences: ["Delete", "Ctrl+Backspace"]; enabled: !win.typing && !win.picking; onActivated: win.trashSelection() }
-    Shortcut { sequence: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onActivated: win.askEmpty() }
     Shortcut { sequence: "Escape"; enabled: !win.typing && folder.busy; onActivated: folder.cancel() }
     Shortcut { sequence: "Escape"; enabled: win.picking && !win.typing && !folder.busy; onActivated: Fili.pickCancel() }
     Shortcut { sequence: "Ctrl+A"; enabled: win.picking && !win.typing && Fili.pickMultiple(); onActivated: files.selectAll() }

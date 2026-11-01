@@ -198,7 +198,7 @@ Rectangle {
                             const p = mapToItem(view, e.x, e.y);
                             view.headerContext(p.x, p.y);
                         } else
-                            view.select(view.folder.sortBy(col.modelData.sort, active.currentIndex));
+                            view.select(view.folder.sortBy(col.modelData.sort, view.currentIndex));
                     }
                 }
             }

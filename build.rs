@@ -18,7 +18,8 @@ fn main() {
                 "qml/KineticScroll.qml",
             ])
             .qml_file(QmlFile::from("qml/FiliTheme.qml").singleton(true))
-            .depend("QtQuick"),
+            .depend("QtQuick")
+            .depend("QtQuick.Controls"),
     )
     .qt_module("Quick")
     .files(["src/bridge.rs"])
