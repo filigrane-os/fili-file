@@ -121,6 +121,22 @@ Window {
         }
     }
 
+    // Contexte pour l'assistant (fili-context): dossier et sélection, écrits à chaque changement (regroupés)
+    Timer {
+        id: contextTimer
+        interval: 150
+        onTriggered: Fili.publishContext(folder.path, Object.keys(files.selected).join("\n"))
+    }
+    Connections {
+        target: files
+        function onSelectedChanged() { contextTimer.restart(); }
+    }
+    Connections {
+        target: folder
+        function onChanged() { contextTimer.restart(); }
+    }
+    Component.onDestruction: Fili.publishContext("", "")
+
     Component.onCompleted: {
         nameInput.text = Fili.pickName();
         show(folder.go(Fili.startPath()));

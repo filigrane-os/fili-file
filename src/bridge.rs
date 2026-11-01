@@ -311,6 +311,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "startInfo"]
         fn start_info(self: &Fili) -> bool;
+        // Contexte pour l'assistant (fili-context): dossier affiché et sélection (chemins séparés par des retours à la ligne);
+        // un dossier vide retire le contexte (fermeture)
+        #[qinvokable]
+        #[cxx_name = "publishContext"]
+        fn publish_context(self: &Fili, location: &QString, selection: &QString);
     }
 
     impl cxx_qt::Initialize for Fili {}
@@ -1941,6 +1946,15 @@ impl Fili {
 
     pub fn home(&self) -> QString {
         QString::from(&home())
+    }
+
+    pub fn publish_context(&self, location: &QString, selection: &QString) {
+        let loc = location.to_string();
+        if loc.is_empty() {
+            crate::context::clear();
+        } else {
+            crate::context::publish("fili-file", &loc, &paths_of(selection));
+        }
     }
 
     pub fn start_info(&self) -> bool {

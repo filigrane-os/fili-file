@@ -2,6 +2,7 @@
 // interface en QML avec les tokens du fili-shell (qml/FiliTheme.qml). Usage: fili-file [dossier | fichier | file://...]
 mod apps;
 mod bridge;
+mod context;
 mod fs;
 #[allow(dead_code)]
 #[path = "../../bar-stats/src/i18n.rs"]
