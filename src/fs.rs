@@ -90,22 +90,21 @@ impl Key {
     }
 }
 
-// Dossiers d'abord dans tous les ordres (Finder); les dossiers n'ont pas de taille utile, triés par nom
+// Tri global sur la colonne choisie: dossiers et fichiers mêlés. La taille d'un dossier n'est pas affichée: elle compte pour 0.
 pub fn sort(v: &mut [Entry], key: Key, desc: bool) {
+    let size = |e: &Entry| if e.is_dir { 0 } else { e.size };
     v.sort_by(|a, b| {
-        b.is_dir.cmp(&a.is_dir).then_with(|| {
-            let o = match key {
-                Key::Size if !a.is_dir => a.size.cmp(&b.size),
-                Key::Date => a.mtime.cmp(&b.mtime),
-                Key::Kind => natural(&a.kind, &b.kind),
-                Key::Created => a.created.cmp(&b.created),
-                Key::Permissions => a.mode.cmp(&b.mode),
-                Key::Owner => natural(&owner(a.uid), &owner(b.uid)),
-                _ => Ordering::Equal,
-            }
-            .then_with(|| natural(&a.name, &b.name));
-            if desc { o.reverse() } else { o }
-        })
+        let o = match key {
+            Key::Size => size(a).cmp(&size(b)),
+            Key::Date => a.mtime.cmp(&b.mtime),
+            Key::Kind => natural(&a.kind, &b.kind),
+            Key::Created => a.created.cmp(&b.created),
+            Key::Permissions => a.mode.cmp(&b.mode),
+            Key::Owner => natural(&owner(a.uid), &owner(b.uid)),
+            _ => Ordering::Equal,
+        }
+        .then_with(|| natural(&a.name, &b.name));
+        if desc { o.reverse() } else { o }
     });
 }
 
@@ -412,16 +411,17 @@ mod tests {
     }
 
     #[test]
-    fn folders_first_in_every_order() {
+    fn sort_mixes_folders_and_files() {
         let mut v = vec![e("b.txt", false, 5, 3), e("Z", true, 4096, 1), e("a.txt", false, 50, 2), e("c", true, 0, 9)];
         sort(&mut v, Key::Name, false);
-        assert_eq!(names(&v), ["c", "Z", "a.txt", "b.txt"]);
+        assert_eq!(names(&v), ["a.txt", "b.txt", "c", "Z"]);
         sort(&mut v, Key::Name, true);
         assert_eq!(names(&v), ["Z", "c", "b.txt", "a.txt"]);
+        // un dossier compte pour une taille de 0
         sort(&mut v, Key::Size, true);
-        assert_eq!(names(&v), ["Z", "c", "a.txt", "b.txt"]);
+        assert_eq!(names(&v), ["a.txt", "b.txt", "Z", "c"]);
         sort(&mut v, Key::Date, false);
-        assert_eq!(names(&v), ["Z", "c", "a.txt", "b.txt"]);
+        assert_eq!(names(&v), ["Z", "a.txt", "b.txt", "c"]);
     }
 
     #[test]
@@ -473,8 +473,8 @@ mod tests {
         std::os::unix::fs::symlink(dir.join("absent"), dir.join("cassé")).unwrap();
         let mut v = list(&dir).unwrap();
         sort(&mut v, Key::Name, false);
-        assert_eq!(names(&v), ["lien", "sub", ".cache", "cassé"]);
-        assert!(v[0].is_dir && v[2].hidden());
+        assert_eq!(names(&v), [".cache", "cassé", "lien", "sub"]);
+        assert!(v[0].hidden() && v[2].is_dir);
         fs::remove_dir_all(&dir).unwrap();
     }
 }
