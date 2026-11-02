@@ -2833,6 +2833,14 @@ impl Fili {
         for v in volumes::list() {
             items.push((devices, v.name, v.mount.unwrap_or_default(), "drive-removable-media", v.dev));
         }
+        // Téléphones et appareils photo MTP branchés: un clic les monte (gvfs)
+        for v in volumes::mtp_devices() {
+            items.push((devices, v.name, String::new(), "phone", v.dev));
+        }
+        // Serveurs déjà utilisés, pas connectés: un clic les reconnecte, ✕ les oublie
+        for v in volumes::saved_servers() {
+            items.push((devices, v.name, String::new(), "folder-remote", v.dev));
+        }
         // Lecteurs réseau connectés (gvfs, NFS, CIFS, sshfs): éjectables comme les volumes
         for v in volumes::network() {
             items.push((devices, v.name, v.mount.unwrap_or_default(), "folder-remote", v.dev));

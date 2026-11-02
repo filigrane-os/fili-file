@@ -121,12 +121,12 @@ Rectangle {
                 font.pixelSize: FiliTheme.size
                 color: row.sel ? FiliTheme.voile : FiliTheme.brume
             }
-            // Éjecter un volume monté
+            // Éjecter un volume monté; oublier un serveur mémorisé (non connecté)
             Text {
                 id: eject
-                visible: row.dev !== "" && row.path !== ""
+                visible: row.dev !== "" && (row.path !== "" || row.dev.startsWith("srv:"))
                 anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
-                text: "⏏"
+                text: row.path === "" ? "✕" : "⏏"
                 font.pixelSize: FiliTheme.size
                 color: ejectArea.containsMouse ? FiliTheme.brume : FiliTheme.ardoise
                 MouseArea {

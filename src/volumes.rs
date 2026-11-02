@@ -14,6 +14,10 @@ use std::{
 // Préfixes de `dev` pour les lignes qui ne sont pas des disques: montage gvfs ou montage système réseau
 pub const GVFS: &str = "gvfs:";
 pub const NET: &str = "net:";
+// Appareil MTP (téléphone, appareil photo) branché mais pas encore monté: « mtp:mtp://[usb:BUS,DEV]/ »
+pub const MTP: &str = "mtp:";
+// Serveur déjà utilisé mais pas connecté en ce moment: « srv:smb://nas/docs »; un clic le reconnecte
+pub const SRV: &str = "srv:";
 
 #[derive(Debug, PartialEq)]
 pub struct Volume {
@@ -99,6 +103,13 @@ fn udisks(action: &str, dev: &str) -> Result<String, String> {
 
 // Monte dev et rend son point de montage
 pub fn mount(dev: &str) -> Result<String, String> {
+    if let Some(uri) = dev.strip_prefix(MTP) {
+        return mount_mtp(uri);
+    }
+    if let Some(uri) = dev.strip_prefix(SRV) {
+        // Sans identifiant: gvfs reprend le mot de passe gardé dans le trousseau, s'il y en a un
+        return connect(uri, "", "");
+    }
     let out = udisks("mount", dev)?;
     out.split_once(" at ")
         .map(|(_, p)| p.trim().trim_end_matches('.').to_string())
@@ -106,6 +117,10 @@ pub fn mount(dev: &str) -> Result<String, String> {
 }
 
 pub fn unmount(dev: &str) -> Result<(), String> {
+    if let Some(uri) = dev.strip_prefix(SRV) {
+        forget_server(uri);
+        return Ok(());
+    }
     if let Some(path) = dev.strip_prefix(GVFS) {
         return run_plain("gio", &["mount", "-u", path]);
     }
@@ -113,6 +128,53 @@ pub fn unmount(dev: &str) -> Result<(), String> {
         return run_plain("umount", &[path]);
     }
     udisks("unmount", dev).map(|_| ())
+}
+
+// Appareils MTP branchés (marqués ID_MTP_DEVICE=1 par la règle udev de libmtp) et pas encore montés. Lus dans la base udev
+// (/run/udev/data/c189:N, N = 128 × (bus − 1) + (appareil − 1)): ni processus ni gvfs lancé tant qu'on ne clique pas.
+pub fn mtp_from_udev(file: &str, text: &str) -> Option<Volume> {
+    let minor: u32 = file.strip_prefix("c189:")?.parse().ok()?;
+    let get = |k: &str| text.lines().find_map(|l| l.strip_prefix(&format!("E:{k}="))).map(str::to_string);
+    if get("ID_MTP_DEVICE").as_deref() != Some("1") {
+        return None;
+    }
+    let unescape = |s: &str| s.replace("\\x20", " ").replace('_', " ");
+    let name = get("ID_MODEL_ENC").map(|m| unescape(&m)).filter(|m| !m.trim().is_empty()).unwrap_or_else(|| tr("Portable device").to_string());
+    Some(Volume { dev: format!("{MTP}mtp://[usb:{:03},{:03}]/", minor / 128 + 1, minor % 128 + 1), name, mount: None })
+}
+
+pub fn mtp_devices() -> Vec<Volume> {
+    // Déjà monté (entrée « mtp:host=… » de gvfs): la barre latérale montre celui-là
+    if std::fs::read_dir(gvfs_dir()).is_ok_and(|d| d.flatten().any(|e| e.file_name().to_string_lossy().starts_with("mtp:"))) {
+        return Vec::new();
+    }
+    let Ok(dir) = std::fs::read_dir("/run/udev/data") else { return Vec::new() };
+    let mut out: Vec<Volume> = dir
+        .flatten()
+        .filter_map(|e| {
+            let file = e.file_name().to_string_lossy().into_owned();
+            mtp_from_udev(&file, &std::fs::read_to_string(e.path()).ok()?)
+        })
+        .collect();
+    out.sort_by(|a, b| a.dev.cmp(&b.dev));
+    out
+}
+
+fn mount_mtp(uri: &str) -> Result<String, String> {
+    let o = Command::new("gio").args(["mount", uri]).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
+    if !o.status.success() {
+        let err = String::from_utf8_lossy(&o.stderr);
+        return Err(if err.to_lowercase().contains("mtp") || err.contains("busy") || err.contains("Unable") {
+            tr("Unlock the device and choose File Transfer (MTP) mode").to_string()
+        } else {
+            err.trim().rsplit(": ").next().unwrap_or("").to_string()
+        });
+    }
+    std::fs::read_dir(gvfs_dir())
+        .ok()
+        .and_then(|d| d.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).find(|n| n.starts_with("mtp:")))
+        .map(|n| format!("{}/{n}", gvfs_dir()))
+        .ok_or_else(|| tr("Mounted, but the folder was not found").to_string())
 }
 
 fn run_plain(prog: &str, args: &[&str]) -> Result<(), String> {
@@ -133,6 +195,10 @@ pub fn gvfs_name(entry: &str) -> String {
     let (scheme, rest) = entry.split_once(':').unwrap_or((entry, ""));
     let get = |k: &str| rest.split(',').find_map(|kv| kv.strip_prefix(&format!("{k}=")).map(str::to_string));
     let host = get("server").or_else(|| get("host")).unwrap_or_default();
+    // Téléphone: « SAMSUNG_Android_RF8N… » -> « SAMSUNG Android RF8N… »
+    if scheme == "mtp" && !host.is_empty() {
+        return host.replace('_', " ");
+    }
     match (get("share"), host.as_str()) {
         (Some(share), h) if !h.is_empty() => trf("%1 on %2", &[&share, &h]),
         (_, "") => entry.to_string(),
@@ -248,6 +314,84 @@ pub fn run_mount(cmd: &mut Command, user: &str, password: &str) -> Result<(), St
     Err(msg.trim().rsplit(": ").next().unwrap_or("").to_string())
 }
 
+// ---- serveurs mémorisés ---------------------------------------------------------------------------------
+// ~/.local/state/filigrane/fili-file-servers: une adresse par ligne, la plus récente en premier, 10 au plus. Jamais de mot de passe
+// (gvfs garde le sien dans le trousseau de session).
+fn servers_file() -> std::path::PathBuf {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let state = std::env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{home}/.local/state"));
+    std::path::PathBuf::from(state).join("filigrane/fili-file-servers")
+}
+
+fn read_servers() -> Vec<String> {
+    std::fs::read_to_string(servers_file()).unwrap_or_default().lines().map(str::trim).filter(|l| l.contains("://")).map(String::from).collect()
+}
+
+fn write_servers(list: &[String]) {
+    let f = servers_file();
+    if let Some(dir) = f.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(f, list.join("\n") + "\n");
+}
+
+// « smb://ana:secret@nas/docs » -> « smb://ana@nas/docs »
+pub fn without_password(uri: &str) -> String {
+    let Some((scheme, rest)) = uri.split_once("://") else { return uri.to_string() };
+    let (auth, tail) = rest.split_once('/').map_or((rest, None), |(a, t)| (a, Some(t)));
+    let auth = match auth.rsplit_once('@') {
+        Some((user, host)) => format!("{}@{host}", user.split(':').next().unwrap_or("")),
+        None => auth.to_string(),
+    };
+    match tail {
+        Some(t) => format!("{scheme}://{auth}/{t}"),
+        None => format!("{scheme}://{auth}"),
+    }
+}
+
+pub fn remember_server(uri: &str) {
+    let uri = without_password(uri.trim());
+    let mut list = read_servers();
+    list.retain(|u| *u != uri);
+    list.insert(0, uri);
+    list.truncate(10);
+    write_servers(&list);
+}
+
+pub fn forget_server(uri: &str) {
+    let mut list = read_servers();
+    list.retain(|u| u != uri);
+    write_servers(&list);
+}
+
+// Serveurs mémorisés qui ne sont pas connectés (un montage gvfs parle du même hôte, et du même partage pour SMB)
+pub fn saved_servers() -> Vec<Volume> {
+    let mounted: Vec<String> = std::fs::read_dir(gvfs_dir())
+        .map(|d| d.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+        .unwrap_or_default();
+    read_servers()
+        .into_iter()
+        .filter(|u| {
+            let rest = u.split_once("://").map_or("", |(_, r)| r);
+            let host = rest.split('/').next().unwrap_or("").rsplit('@').next().unwrap_or("");
+            let share = rest.split('/').nth(1).unwrap_or("");
+            !mounted.iter().any(|m| {
+                m.contains(&format!("={host}")) && (share.is_empty() || !u.starts_with("smb") || m.contains(&format!("share={share}")))
+            })
+        })
+        .map(|u| {
+            let rest = u.split_once("://").map_or("", |(_, r)| r);
+            let host = rest.split('/').next().unwrap_or("").rsplit('@').next().unwrap_or("");
+            let share = rest.split('/').nth(1).filter(|s| !s.is_empty());
+            let name = match share {
+                Some(sh) => trf("%1 on %2", &[&sh, &host]),
+                None => host.to_string(),
+            };
+            Volume { dev: format!("{SRV}{u}"), name, mount: None }
+        })
+        .collect()
+}
+
 // Se connecte à un serveur (smb://hôte/partage, sftp://hôte, davs://..., ftp://..., nfs://...) avec gvfs et rend le
 // dossier FUSE du montage. Un identifiant saisi est placé dans l'adresse; sans adresse complète: erreur.
 pub fn connect(uri: &str, user: &str, password: &str) -> Result<String, String> {
@@ -267,6 +411,7 @@ pub fn connect(uri: &str, user: &str, password: &str) -> Result<String, String> 
         c
     };
     run_mount(&mut cmd, user, password)?;
+    remember_server(&full);
     // Le nouveau dossier gvfs; sinon celui qui parle du même hôte (déjà monté)
     let now = network();
     let host = rest.split('/').next().unwrap_or("").rsplit('@').next().unwrap_or("").to_string();
@@ -280,6 +425,25 @@ pub fn connect(uri: &str, user: &str, password: &str) -> Result<String, String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mtp_phone_from_udev() {
+        unsafe { std::env::set_var("FILI_LANG", "en") };
+        let phone = "I:1\nE:ID_MTP_DEVICE=1\nE:ID_MODEL_ENC=Pixel\\x206\nE:ID_BUS=usb\n";
+        // c189:133 = bus 2, appareil 6
+        let v = mtp_from_udev("c189:133", phone).unwrap();
+        assert_eq!(v, Volume { dev: "mtp:mtp://[usb:002,006]/".into(), name: "Pixel 6".into(), mount: None });
+        assert_eq!(mtp_from_udev("c189:0", "E:ID_BUS=usb\n"), None);
+        assert_eq!(mtp_from_udev("b8:0", phone), None);
+        assert_eq!(gvfs_name("mtp:host=SAMSUNG_Android_RF8N"), "SAMSUNG Android RF8N");
+    }
+
+    #[test]
+    fn server_addresses() {
+        assert_eq!(without_password("smb://ana:secret@nas/docs"), "smb://ana@nas/docs");
+        assert_eq!(without_password("sftp://box"), "sftp://box");
+        assert_eq!(without_password("ftp://u:p@h"), "ftp://u@h");
+    }
 
     #[test]
     fn parses_lsblk() {
