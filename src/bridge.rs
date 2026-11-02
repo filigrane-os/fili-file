@@ -1359,6 +1359,11 @@ impl FolderModel {
         if e.is_dir {
             return self.navigate(PathBuf::from(&e.path), None);
         }
+        // Une archive s'extrait ici (fili-archive), avec la demande de mot de passe de Casier si elle est protégée
+        if archive_stem(&e.name).is_some() && !self.in_trash {
+            self.start_archive(vec![e.path.clone()], None, String::new());
+            return -1;
+        }
         spawn("xdg-open", &e.path, Path::new(&self.dir));
         -1
     }
