@@ -41,7 +41,7 @@ fn json(s: &str) -> String {
 const ABOUT: &str = "File manager. location = folder shown (results = title if a result list from ctl show replaces its content), selection = paths the user selected (absolute). \
 Act on files with normal shell tools (mv, cp, rg, sha256sum, tar...) using these paths; prefer the shell for batch work. \
 fili-file shows changes live (inotify), so no refresh call is needed. To change files use fili-tx (mv, mv - for batches, trash, mkdir, cp), never bare mv/rm: fili-tx undo reverts the whole request. \
-To take the user somewhere: fili-file ctl goto PATH (a file is selected in its folder). Menu commands (the fili-bar menu): fili-file ctl action new-folder|copy|paste|rename|trash|undo|reload|... acts on the user's selection. Every ctl command prints a JSON answer and exits 1 with the reason if it did not happen (unknown or disabled action, bad path). fili-file ctl state prints the window state (tabs, folder, selection, view, tasks, open dialog); fili-file ctl actions lists the commands with label, shortcut and whether they are enabled now. To show search results in this window: \
+To take the user somewhere: fili-file ctl goto PATH (a file is selected in its folder). Menu commands (the fili-bar menu): fili-file ctl action new-folder|copy|paste|rename|trash|undo|reload|... acts on the user's selection. Every ctl command prints a JSON answer and exits 1 with the reason if it did not happen (unknown or disabled action, bad path). fili-file ctl state prints the window state (tabs, folder, selection, view, tasks, open dialog); fili-file ctl actions lists the commands with label, shortcut and whether they are enabled now. Commands with an argument skip their dialog: ctl action rename NAME | new-folder NAME | select-matching GLOB | compress NAME[.zip|.7z|.tar.gz|.tar.xz|.tar.zst] | extract PASSWORD | search TEXT | path PATH. Selection: ctl select < paths (replaces), select --add < paths, select --none, select --pattern GLOB (paths must be in the folder shown). ctl reveal PATH opens the parent and selects the item; ctl tab new [PATH]|close [N]|switch N; ctl view list|icons; hidden on|off; preview on|off; sort name|size|modified|kind|created|permissions|owner [asc|desc]. To show search results in this window: \
 find them with fd/rg/find, then fili-file ctl show 'TITLE' < paths (one absolute path per line); both bring the window forward.";
 
 // results: titre de la liste de résultats affichée (vide: le dossier normal)
@@ -173,7 +173,9 @@ fn raise(pid: &str) {
     }
 }
 
-const USAGE: &str = "usage: fili-file ctl [--pid PID] goto PATH | show TITLE < paths | action NAME | state | actions";
+const USAGE: &str = "usage: fili-file ctl [--pid PID] goto PATH | reveal PATH | show TITLE < paths | action NAME [ARG] | state | actions | \
+select [--add | --none | --pattern GLOB] < paths | tab new [PATH] | tab close [N] | tab switch N | view list|icons | hidden on|off | \
+preview on|off | sort COLUMN [asc|desc]";
 
 // Sépare l'option --pid du reste des arguments
 fn split_pid(args: &[String]) -> (Option<String>, &[String]) {
@@ -183,33 +185,91 @@ fn split_pid(args: &[String]) -> (Option<String>, &[String]) {
     }
 }
 
-// fili-file ctl [--pid PID] <goto CHEMIN | show TITRE (chemins sur l'entrée standard) | action NOM | state | actions>
-// action: déclenche une commande de la barre de menus (new-folder, copy, paste, rename...), la fili-bar les propose
+// Ce que le client envoie: verbe, argument (champs séparés par une tabulation), corps (liste de chemins sur l'entrée
+// standard), et si l'absence d'instance autorise à en lancer une (aller quelque part le permet, agir sur une fenêtre non)
+struct Request {
+    verb: String,
+    arg: String,
+    stdin: bool,
+    launch: bool,
+}
+
+fn absolute(p: &str) -> String {
+    std::path::absolute(p).map_or_else(|_| p.to_string(), |p| p.to_string_lossy().into_owned())
+}
+
+// Analyse la ligne de commande de `ctl` (sans le --pid); les chemins relatifs deviennent absolus (dossier de l'appelant)
+fn parse(args: &[String]) -> Result<Request, String> {
+    let verb = args.first().ok_or(USAGE)?.as_str();
+    let rest = &args[1..];
+    let req = |arg: String, stdin: bool, launch: bool| Ok(Request { verb: verb.into(), arg, stdin, launch });
+    let enumerated = |ok: &[&str]| -> Result<String, String> {
+        match rest {
+            [v] if ok.contains(&v.as_str()) => Ok(v.clone()),
+            _ => Err(USAGE.into()),
+        }
+    };
+    match verb {
+        "goto" | "reveal" => match rest {
+            [path] if !path.is_empty() => req(absolute(path), false, true),
+            _ => Err(USAGE.into()),
+        },
+        "show" => req(rest.first().cloned().unwrap_or_default(), true, true),
+        // action NOM [ARGUMENT]: l'argument saute le dialogue de la commande (rename, select-matching, compress...)
+        "action" => match rest {
+            [name] if !name.is_empty() => req(name.clone(), false, false),
+            [name, arg @ ..] if !name.is_empty() => req(format!("{name}\t{}", arg.join(" ")), false, false),
+            _ => Err(USAGE.into()),
+        },
+        "state" | "actions" if rest.is_empty() => req(String::new(), false, false),
+        "select" => match rest {
+            [] => req("set".into(), true, false),
+            [f] if f == "--add" => req("add".into(), true, false),
+            [f] if f == "--none" => req("none".into(), false, false),
+            [f, glob] if f == "--pattern" && !glob.is_empty() => req(format!("pattern\t{glob}"), false, false),
+            _ => Err(USAGE.into()),
+        },
+        "tab" => match rest {
+            [c] if c == "new" || c == "close" => req(c.clone(), false, false),
+            [c, path] if c == "new" => req(format!("new\t{}", absolute(path)), false, false),
+            [c, n] if (c == "close" || c == "switch") && n.parse::<u32>().is_ok() => req(format!("{c}\t{n}"), false, false),
+            _ => Err(USAGE.into()),
+        },
+        "view" => req(enumerated(&["list", "icons"])?, false, false),
+        "hidden" | "preview" => req(enumerated(&["on", "off"])?, false, false),
+        "sort" => match rest {
+            [col] => req(col.clone(), false, false),
+            [col, dir] if dir == "asc" || dir == "desc" => req(format!("{col}\t{dir}"), false, false),
+            _ => Err(USAGE.into()),
+        },
+        _ => Err(USAGE.into()),
+    }
+}
+
+// fili-file ctl [--pid PID] <commande> (voir USAGE). Les commandes d'action (action, select, tab, view...) visent une
+// fenêtre ouverte et n'en lancent jamais; goto, reveal et show en lancent une s'il n'y en a pas.
 // state: JSON de l'état (onglets, dossier, sélection, tâches); actions: JSON des commandes (libellé, raccourci, activée)
 // Renvoie la réponse JSON de la fenêtre; Err si elle dit {"ok":false,...}
 pub fn ctl(args: &[String]) -> Result<String, String> {
     let (pid, args) = split_pid(args);
-    let (verb, arg) = (args.first().ok_or(USAGE)?, args.get(1).cloned().unwrap_or_default());
+    let Request { verb, arg, stdin, launch } = parse(args)?;
     let mut body = String::new();
-    match verb.as_str() {
-        "goto" | "action" if !arg.is_empty() => {}
-        "state" | "actions" => {}
-        "show" => {
-            let _ = std::io::stdin().take(4 << 20).read_to_string(&mut body);
+    if stdin {
+        let _ = std::io::stdin().take(4 << 20).read_to_string(&mut body);
+        // Chemins relatifs: relatifs au dossier de l'appelant, sauf pour show (liste déjà absolue, titre libre)
+        if verb == "select" {
+            body = body.lines().filter(|l| !l.is_empty()).map(absolute).collect::<Vec<_>>().join("\n");
         }
-        _ => return Err(USAGE.into()),
     }
-    // Chemin relatif: relatif au dossier de l'appelant, pas à celui de l'application
-    let arg = if verb == "goto" { std::path::absolute(&arg).map_or(arg, |p| p.to_string_lossy().into_owned()) } else { arg };
     let mut sock = target(pid.as_deref());
-    // Une commande de menu ou une lecture d'état vise une fenêtre ouverte: pas d'instance à lancer pour elle
-    if sock.is_none() && matches!(verb.as_str(), "action" | "state" | "actions") {
+    // Une commande qui agit sur la fenêtre ou lit son état vise une fenêtre ouverte: pas d'instance à lancer pour elle
+    if sock.is_none() && !launch {
         return Err("no fili-file window".into());
     }
     if sock.is_none() {
         // Aucune instance: on en lance une, puis on attend son socket
         std::process::Command::new(std::env::current_exe().map_err(|e| e.to_string())?)
-            .current_dir(if verb == "goto" { "/" } else { "." })
+            .current_dir(if verb == "goto" || verb == "reveal" { "/" } else { "." })
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -231,7 +291,7 @@ pub fn ctl(args: &[String]) -> Result<String, String> {
     let mut ack = String::new();
     let _ = c.read_to_string(&mut ack);
     let ack = ack.trim().to_string();
-    if verb != "state" && verb != "actions" {
+    if launch || verb == "action" || verb == "select" || verb == "tab" {
         raise(&sock.file_stem().unwrap_or_default().to_string_lossy());
     }
     if ack.starts_with("{\"ok\":true") { Ok(ack) } else { Err(ack_error(&ack)) }
@@ -296,6 +356,31 @@ mod tests {
         assert_eq!(ack_error("{\"ok\":false,\"error\":\"disabled: no selection\"}"), "disabled: no selection");
         assert_eq!(ack_error("{\"ok\":false,\"error\":\"a \\\"b\\\"\"}"), "a \"b\"");
         assert_eq!(ack_error(""), "no answer");
+    }
+
+    #[test]
+    fn analyse_des_commandes() {
+        let ok = |a: &[&str]| parse(&v(a)).map(|r| (r.verb, r.arg, r.stdin, r.launch));
+        let t = |verb: &str, arg: &str, stdin: bool, launch: bool| Ok((verb.to_string(), arg.to_string(), stdin, launch));
+        assert_eq!(ok(&["goto", "/tmp"]), t("goto", "/tmp", false, true));
+        assert_eq!(ok(&["reveal", "/tmp/a"]), t("reveal", "/tmp/a", false, true));
+        assert_eq!(ok(&["action", "copy"]), t("action", "copy", false, false));
+        assert_eq!(ok(&["action", "rename", "a b.txt"]), t("action", "rename\ta b.txt", false, false));
+        assert_eq!(ok(&["state"]), t("state", "", false, false));
+        assert_eq!(ok(&["select"]), t("select", "set", true, false));
+        assert_eq!(ok(&["select", "--add"]), t("select", "add", true, false));
+        assert_eq!(ok(&["select", "--none"]), t("select", "none", false, false));
+        assert_eq!(ok(&["select", "--pattern", "*.pdf"]), t("select", "pattern\t*.pdf", false, false));
+        assert_eq!(ok(&["tab", "new", "/tmp"]), t("tab", "new\t/tmp", false, false));
+        assert_eq!(ok(&["tab", "switch", "2"]), t("tab", "switch\t2", false, false));
+        assert_eq!(ok(&["tab", "close"]), t("tab", "close", false, false));
+        assert_eq!(ok(&["view", "icons"]), t("view", "icons", false, false));
+        assert_eq!(ok(&["hidden", "on"]), t("hidden", "on", false, false));
+        assert_eq!(ok(&["sort", "size", "desc"]), t("sort", "size\tdesc", false, false));
+        assert_eq!(ok(&["sort", "size"]), t("sort", "size", false, false));
+        for bad in [&["tab", "switch", "x"][..], &["tab", "switch"], &["view", "grid"], &["hidden", "yes"], &["sort", "size", "up"], &["select", "--bad"], &["goto"], &["state", "x"], &["inconnue"]] {
+            assert!(parse(&v(bad)).is_err(), "{bad:?}");
+        }
     }
 
     #[test]

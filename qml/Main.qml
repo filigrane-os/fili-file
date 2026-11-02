@@ -294,15 +294,129 @@ ApplicationWindow {
         previewOn = !previewOn;
         Fili.setPreviewShown(previewOn);
     }
-    // Déclenche une commande de menu; renvoie {ok} ou {ok:false, error} (inconnue, désactivée)
-    function runAction(name) {
+    // Déclenche une commande de menu; renvoie {ok} ou {ok:false, error} (inconnue, désactivée). Avec un argument
+    // (ctl action NOM ARG), les commandes à dialogue le sautent: rename NOM, select-matching MOTIF, compress NOM[.zip|.7z|
+    // .tar.gz|.tar.xz|.tar.zst], extract MOT_DE_PASSE, new-folder NOM, search TEXTE, path CHEMIN
+    function runAction(name, arg) {
         const a = menuActions[name];
         if (!a)
             return { ok: false, error: "unknown action: " + name + " (fili-file ctl actions lists them)" };
         if (!a.enabled)
             return { ok: false, error: "action disabled now: " + name + (win.typing ? " (a dialog or a text field is active)" : "") };
-        a.trigger();
+        if (arg === undefined || arg === "") {
+            a.trigger();
+            return { ok: true };
+        }
+        folder.clearError();
+        const failed = () => ({ ok: false, error: folder.error || (name + " failed") });
+        const t = files.targets();
+        switch (name) {
+        case "rename": {
+            if (t.length !== 1)
+                return { ok: false, error: "rename NAME needs exactly one selected item (" + t.length + " selected)" };
+            const r = folder.rename(t[0], arg);
+            if (r < 0)
+                return failed();
+            files.select(r);
+            return { ok: true };
+        }
+        case "new-folder": {
+            const row = folder.newFolder();
+            if (row < 0)
+                return failed();
+            const r = folder.rename(folder.pathAt(row), arg);
+            if (r < 0)
+                return failed();
+            files.select(r);
+            return { ok: true };
+        }
+        case "select-matching": {
+            const list = folder.matching(arg).split("\n").filter(p => p !== "");
+            files.selectPaths(list);
+            return { ok: true, selected: list.length };
+        }
+        case "compress": {
+            const m = /^(.*)\.(zip|7z|tar\.gz|tar\.xz|tar\.zst)$/.exec(arg);
+            folder.compress(files.targetsText(), m ? m[1] : arg, m ? m[2] : "zip", "normal", false, "");
+            return folder.error === "" ? { ok: true } : failed();
+        }
+        case "extract":
+            folder.extract(files.targetsText(), arg);
+            return folder.error === "" ? { ok: true } : failed();
+        case "search":
+            searchInput.text = arg;
+            return { ok: true, filter: folder.filter };
+        case "path":
+            return runCommand("goto", arg, "");
+        }
+        return { ok: false, error: name + " takes no argument" };
+    }
+    // Aller à un chemin; un fichier est sélectionné dans son dossier
+    function gotoPath(path) {
+        win.open(path);
+        return folder.error === "" ? { ok: true } : { ok: false, error: folder.error };
+    }
+    // Montrer un élément (dossier compris) dans son dossier parent, sélectionné
+    function reveal(path) {
+        const parent = path.replace(/\/[^\/]*\/?$/, "") || "/";
+        const r = gotoPath(parent);
+        if (!r.ok)
+            return r;
+        if (!folder.has(path))
+            return { ok: false, error: "not found in " + parent + ": " + path };
+        files.selectPaths([path]);
+        files.focusList();
         return { ok: true };
+    }
+    // Sélection: set (liste en corps), add, none, pattern (motif en argument); rend le nombre sélectionné et les chemins absents
+    function selectCommand(mode, arg, body) {
+        const list = body.split("\n").filter(p => p !== "");
+        const missing = list.filter(p => !folder.has(p));
+        if (mode === "none") {
+            files.selectPaths([]);
+        } else if (mode === "pattern") {
+            files.selectPaths(folder.matching(arg).split("\n"));
+        } else if (mode === "add") {
+            files.selectPaths(Object.keys(files.selected).concat(list.filter(p => folder.has(p))));
+        } else if (mode === "set") {
+            files.selectPaths(list.filter(p => folder.has(p)));
+        } else {
+            return { ok: false, error: "unknown selection mode: " + mode };
+        }
+        const n = Object.keys(files.selected).length;
+        if (missing.length > 0)
+            return { ok: false, error: "not in the folder shown (" + folder.shown + "): " + missing.slice(0, 5).join(", ") + (missing.length > 5 ? " …" : ""), selected: n };
+        return { ok: true, selected: n };
+    }
+    function onOff(arg) {
+        return arg === "on" ? true : arg === "off" ? false : undefined;
+    }
+    readonly property var sortKeys: ({ name: 0, size: 1, modified: 2, kind: 3, created: 4, permissions: 5, owner: 6 })
+    function tabCommand(arg) {
+        const parts = arg.split("\t");
+        const n = parts.length > 1 && /^\d+$/.test(parts[1]) ? parseInt(parts[1]) : -1;
+        switch (parts[0]) {
+        case "new":
+            if (picking)
+                return { ok: false, error: "no tabs in the file picker" };
+            newTab();
+            return parts[1] ? gotoPath(parts[1]) : { ok: true };
+        case "close": {
+            const i = parts.length > 1 ? n : tabIndex;
+            if (i < 0 || i >= tabs.length)
+                return { ok: false, error: "no such tab: " + (parts[1] || "") + " (0.." + (tabs.length - 1) + ")" };
+            if (tabs.length < 2)
+                return { ok: false, error: "last tab (the window stays open)" };
+            closeTab(i);
+            return { ok: true };
+        }
+        case "switch":
+            if (n < 0 || n >= tabs.length)
+                return { ok: false, error: "no such tab: " + (parts[1] || "") + " (0.." + (tabs.length - 1) + ")" };
+            switchTab(n);
+            return { ok: true };
+        }
+        return { ok: false, error: "usage: tab new [PATH] | close [N] | switch N" };
     }
     // Dialogue ouvert, sinon ""
     function dialogName() {
@@ -328,6 +442,8 @@ ApplicationWindow {
                 selection: Object.keys(files.selected),
                 view: files.tiles ? "icons" : "list",
                 hidden_shown: folder.showHidden,
+                filter: folder.filter,
+                sort: Object.keys(sortKeys).find(k => sortKeys[k] === folder.sortKey) + (folder.sortDesc ? " desc" : " asc"),
                 preview: win.previewOn,
                 tasks: win.tasks,
                 dialog: dialogName(),
@@ -343,22 +459,65 @@ ApplicationWindow {
         };
     }
     function runCommand(verb, arg, body) {
-        if (verb === "goto") {
-            win.open(arg);
-            return folder.error === "" ? { ok: true } : { ok: false, error: folder.error };
-        }
-        if (verb === "show") {
+        switch (verb) {
+        case "goto":
+            return gotoPath(arg);
+        case "reveal":
+            return reveal(arg);
+        case "show":
             folder.showResults(arg, body);
             files.select(0);
             files.focusList();
             return { ok: true };
+        case "action": {
+            const at = arg.indexOf("\t");
+            return at < 0 ? runAction(arg) : runAction(arg.slice(0, at), arg.slice(at + 1));
         }
-        if (verb === "action")
-            return runAction(arg);
-        if (verb === "state")
+        case "state":
             return stateObject();
-        if (verb === "actions")
+        case "actions":
             return actionList();
+        case "select": {
+            const at = arg.indexOf("\t");
+            return selectCommand(at < 0 ? arg : arg.slice(0, at), at < 0 ? "" : arg.slice(at + 1), body);
+        }
+        case "tab":
+            return tabCommand(arg);
+        case "view":
+            if (arg !== "list" && arg !== "icons")
+                return { ok: false, error: "usage: view list|icons" };
+            files.setViewMode(arg === "icons" ? "grid" : "list");
+            return { ok: true };
+        case "hidden": {
+            const want = onOff(arg);
+            if (want === undefined)
+                return { ok: false, error: "usage: hidden on|off" };
+            if (folder.showHidden !== want)
+                win.show(folder.toggleHidden(files.currentIndex));
+            return { ok: true };
+        }
+        case "preview": {
+            const want = onOff(arg);
+            if (want === undefined || picking)
+                return { ok: false, error: picking ? "no preview in the file picker" : "usage: preview on|off" };
+            if (previewOn !== want)
+                togglePreview();
+            return { ok: true };
+        }
+        case "sort": {
+            const parts = arg.split("\t");
+            const key = sortKeys[parts[0]];
+            const dir = parts[1] || "asc";
+            if (key === undefined || (dir !== "asc" && dir !== "desc"))
+                return { ok: false, error: "usage: sort name|size|modified|kind|created|permissions|owner [asc|desc]" };
+            // sortBy bascule le sens si la colonne est déjà celle du tri, sinon trie en croissant
+            if (folder.sortKey !== key || folder.sortDesc !== (dir === "desc"))
+                win.show(folder.sortBy(key, files.currentIndex));
+            if (folder.sortDesc !== (dir === "desc"))
+                win.show(folder.sortBy(key, files.currentIndex));
+            return { ok: true };
+        }
+        }
         return { ok: false, error: "unknown command: " + verb };
     }
 

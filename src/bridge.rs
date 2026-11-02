@@ -111,6 +111,10 @@ pub mod qobject {
         fn find_name(self: &FolderModel, name: &QString) -> i32;
         #[qinvokable]
         fn has(self: &FolderModel, path: &QString) -> bool;
+        // Efface le message d'erreur (une commande de ctl lit ensuite si elle a échoué)
+        #[qinvokable]
+        #[cxx_name = "clearError"]
+        fn clear_error(self: Pin<&mut FolderModel>);
         // Chemins (un par ligne) des lignes affichées dont le nom correspond au motif (* et ?), ou qui ont le même type
         // que les chemins donnés
         #[qinvokable]
@@ -1490,6 +1494,11 @@ impl FolderModel {
         self.rows.iter().position(|e| e.name == n).map_or(-1, |i| i as i32)
     }
 
+    pub fn clear_error(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().error = QString::default();
+        self.as_mut().changed();
+    }
+
     pub fn has(&self, path: &QString) -> bool {
         let p = path.to_string();
         self.rows.iter().any(|e| e.path == p)
@@ -2097,7 +2106,8 @@ impl FolderModel {
                 let name = if o.name.is_empty() || o.name.starts_with('.') { i18n::tr("Archive").to_string() } else { o.name.clone() };
                 let out = ops::unique(&dir, &format!("{name}.{}", o.format), "", false);
                 let mut args = base_args("pack");
-                args.extend(["-f", &o.format, "-l", &o.level].map(String::from));
+                // Pas de -f: avec -o, fili-archive déduit le format de l'extension (avec -f il ajouterait la sienne: x.zip.zip)
+                args.extend(["-l", &o.level].map(String::from));
                 if o.skip_hidden {
                     args.push("--no-hidden".into());
                 }
