@@ -124,6 +124,7 @@ Rectangle {
             // Éjecter un volume monté; oublier un serveur mémorisé (non connecté)
             Text {
                 id: eject
+                z: 2 // au-dessus de la zone de clic de la ligne, déclarée plus bas
                 visible: row.dev !== "" && (row.path !== "" || row.dev.startsWith("srv:"))
                 anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 text: row.path === "" ? "✕" : "⏏"
