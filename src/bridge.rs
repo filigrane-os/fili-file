@@ -2492,6 +2492,49 @@ impl cxx_qt::Initialize for Fili {
                 }
             }
         });
+        // Branchement et débranchement d'appareils (téléphone MTP...): udev réécrit sa base /run/udev/data; inotify, sans réveil au repos
+        let devices = self.qt_thread();
+        std::thread::spawn(move || unsafe {
+            let fd = libc::inotify_init1(libc::IN_CLOEXEC);
+            if fd < 0 {
+                return;
+            }
+            let dir = std::ffi::CString::new("/run/udev/data").unwrap();
+            let mask = libc::IN_CREATE | libc::IN_MOVED_TO | libc::IN_DELETE | libc::IN_MOVED_FROM;
+            if libc::inotify_add_watch(fd, dir.as_ptr(), mask) < 0 {
+                return;
+            }
+            let mut buf = [0u8; 4096];
+            // Seuls comptent les appareils USB (c189:…) et les disques (b…): ni batterie ni clavier ne rafraîchissent la barre latérale
+            let relevant = |buf: &[u8], n: usize| {
+                let (mut i, mut any) = (0, false);
+                while i + 16 <= n {
+                    let len = u32::from_ne_bytes(buf[i + 12..i + 16].try_into().unwrap()) as usize;
+                    let name = &buf[i + 16..(i + 16 + len).min(n)];
+                    any |= name.starts_with(b"c189:") || name.starts_with(b"b");
+                    i += 16 + len;
+                }
+                any
+            };
+            loop {
+                let n = libc::read(fd, buf.as_mut_ptr().cast(), buf.len());
+                if n <= 0 {
+                    return;
+                }
+                let mut hit = relevant(&buf, n as usize);
+                // Rafale d'événements (un branchement en écrit plusieurs): attendre le calme, puis relire les emplacements
+                let mut pfd = libc::pollfd { fd, events: libc::POLLIN, revents: 0 };
+                while libc::poll(&mut pfd, 1, 600) > 0 {
+                    let n = libc::read(fd, buf.as_mut_ptr().cast(), buf.len());
+                    if n > 0 {
+                        hit |= relevant(&buf, n as usize);
+                    }
+                }
+                if hit && devices.queue(|mut f| f.as_mut().places_changed()).is_err() {
+                    return;
+                }
+            }
+        });
         // Suivi du dossier d'état (inotify, fil bloqué sur read: aucun réveil tant que rien ne change)
         let qt = self.qt_thread();
         std::thread::spawn(move || {

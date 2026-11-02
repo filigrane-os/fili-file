@@ -14,7 +14,8 @@ use std::{
 // Préfixes de `dev` pour les lignes qui ne sont pas des disques: montage gvfs ou montage système réseau
 pub const GVFS: &str = "gvfs:";
 pub const NET: &str = "net:";
-// Appareil MTP (téléphone, appareil photo) branché mais pas encore monté: « mtp:mtp://[usb:BUS,DEV]/ »
+// Appareil MTP (téléphone, appareil photo) branché mais pas encore monté: « mtp:/dev/bus/usb/BUS/DEV » (l'adresse à monter,
+// mtp://FABRICANT_MODELE_SERIE/, est demandée à gio au moment du clic)
 pub const MTP: &str = "mtp:";
 // Serveur déjà utilisé mais pas connecté en ce moment: « srv:smb://nas/docs »; un clic le reconnecte
 pub const SRV: &str = "srv:";
@@ -140,7 +141,7 @@ pub fn mtp_from_udev(file: &str, text: &str) -> Option<Volume> {
     }
     let unescape = |s: &str| s.replace("\\x20", " ").replace('_', " ");
     let name = get("ID_MODEL_ENC").map(|m| unescape(&m)).filter(|m| !m.trim().is_empty()).unwrap_or_else(|| tr("Portable device").to_string());
-    Some(Volume { dev: format!("{MTP}mtp://[usb:{:03},{:03}]/", minor / 128 + 1, minor % 128 + 1), name, mount: None })
+    Some(Volume { dev: format!("{MTP}/dev/bus/usb/{:03}/{:03}", minor / 128 + 1, minor % 128 + 1), name, mount: None })
 }
 
 pub fn mtp_devices() -> Vec<Volume> {
@@ -160,8 +161,29 @@ pub fn mtp_devices() -> Vec<Volume> {
     out
 }
 
-fn mount_mtp(uri: &str) -> Result<String, String> {
-    let o = Command::new("gio").args(["mount", uri]).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
+// Adresse à monter d'un appareil: « Volume(0): … unix-device: '/dev/bus/usb/004/011' … activation_root=mtp://X/ » (gio mount -li)
+pub fn mtp_root(listing: &str, device: &str) -> Option<String> {
+    let mut found = false;
+    for line in listing.lines() {
+        let l = line.trim();
+        if l.starts_with("Volume(") || l.starts_with("Mount(") || l.starts_with("Drive(") {
+            found = false;
+        }
+        if l.strip_prefix("unix-device:").is_some_and(|d| d.trim().trim_matches('\'') == device) {
+            found = true;
+        }
+        if found && let Some(root) = l.strip_prefix("activation_root=") {
+            return Some(root.to_string());
+        }
+    }
+    None
+}
+
+fn mount_mtp(device: &str) -> Result<String, String> {
+    let listing = Command::new("gio").args(["mount", "-li"]).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
+    let uri = mtp_root(&String::from_utf8_lossy(&listing.stdout), device)
+        .ok_or_else(|| tr("Unlock the device and choose File Transfer (MTP) mode").to_string())?;
+    let o = Command::new("gio").args(["mount", &uri]).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
     if !o.status.success() {
         let err = String::from_utf8_lossy(&o.stderr);
         return Err(if err.to_lowercase().contains("mtp") || err.contains("busy") || err.contains("Unable") {
@@ -432,7 +454,11 @@ mod tests {
         let phone = "I:1\nE:ID_MTP_DEVICE=1\nE:ID_MODEL_ENC=Pixel\\x206\nE:ID_BUS=usb\n";
         // c189:133 = bus 2, appareil 6
         let v = mtp_from_udev("c189:133", phone).unwrap();
-        assert_eq!(v, Volume { dev: "mtp:mtp://[usb:002,006]/".into(), name: "Pixel 6".into(), mount: None });
+        assert_eq!(v, Volume { dev: "mtp:/dev/bus/usb/002/006".into(), name: "Pixel 6".into(), mount: None });
+        let listing = "Volume(0): Pixel 6\n  ids:\n   unix-device: '/dev/bus/usb/002/006'\n  activation_root=mtp://G_Pixel_6_ABC/\nVolume(1): autre\n   unix-device: '/dev/bus/usb/001/002'\n  activation_root=mtp://X/\n";
+        assert_eq!(mtp_root(listing, "/dev/bus/usb/002/006").as_deref(), Some("mtp://G_Pixel_6_ABC/"));
+        assert_eq!(mtp_root(listing, "/dev/bus/usb/001/002").as_deref(), Some("mtp://X/"));
+        assert_eq!(mtp_root(listing, "/dev/bus/usb/009/009"), None);
         assert_eq!(mtp_from_udev("c189:0", "E:ID_BUS=usb\n"), None);
         assert_eq!(mtp_from_udev("b8:0", phone), None);
         assert_eq!(gvfs_name("mtp:host=SAMSUNG_Android_RF8N"), "SAMSUNG Android RF8N");
