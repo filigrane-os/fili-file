@@ -418,9 +418,50 @@ ApplicationWindow {
         }
         return { ok: false, error: "usage: tab new [PATH] | close [N] | switch N" };
     }
+    // Répond au dialogue ouvert (ctl dialog accept|cancel; pour un conflit de nom aussi replace|skip|both): accept = le
+    // bouton par défaut, cancel = Échap. Les champs de saisie (renommage, chemin) et le menu contextuel ne se pilotent pas ici.
+    function dialogCommand(choice) {
+        const name = dialogName();
+        if (name === "")
+            return { ok: false, error: "no dialog open" };
+        if (choice !== "accept" && choice !== "cancel" && !(name === "conflict" && ["replace", "skip", "both"].indexOf(choice) >= 0))
+            return { ok: false, error: name === "conflict" ? "usage: dialog accept|cancel|replace|skip|both" : "usage: dialog accept|cancel" };
+        const accept = choice !== "cancel";
+        switch (name) {
+        case "conflict":
+            conflictBox.choose(choice === "accept" ? "both" : choice);
+            return { ok: true };
+        case "confirm":
+            confirm.visible = false;
+            if (accept)
+                confirm.action();
+            return { ok: true };
+        case "match":
+            accept ? matchBox.apply() : (matchBox.visible = false);
+            return { ok: true };
+        case "bulk":
+            accept ? bulkBox.apply() : (bulkBox.visible = false);
+            return { ok: true };
+        case "compress":
+            accept ? compressBox.apply() : (compressBox.visible = false);
+            return { ok: true };
+        case "info":
+        case "about":
+        case "password":
+        case "share":
+        case "connect": {
+            if (accept)
+                return { ok: false, error: "the " + name + " dialog has no default button for ctl (dialog cancel closes it)" };
+            const box = { info: infoCard, about: aboutCard, password: passwordBox, share: shareBox, connect: connectBox }[name];
+            box.visible = false;
+            return { ok: true };
+        }
+        }
+        return { ok: false, error: "the " + name + " field is answered by the user (or use action rename NAME, path PATH...)" };
+    }
     // Dialogue ouvert, sinon ""
     function dialogName() {
-        const open = { menu: menu.visible, confirm: confirm.visible, info: infoCard.visible, match: matchBox.visible, bulk: bulkBox.visible, conflict: conflictBox.visible, compress: compressBox.visible };
+        const open = { menu: menu.visible, confirm: confirm.visible, info: infoCard.visible, match: matchBox.visible, bulk: bulkBox.visible, conflict: conflictBox.visible, compress: compressBox.visible, password: passwordBox.visible, share: shareBox.visible, connect: connectBox.visible, about: aboutCard.visible };
         for (const k in open)
             if (open[k])
                 return k;
@@ -483,6 +524,8 @@ ApplicationWindow {
         }
         case "tab":
             return tabCommand(arg);
+        case "dialog":
+            return dialogCommand(arg);
         case "view":
             if (arg !== "list" && arg !== "icons")
                 return { ok: false, error: "usage: view list|icons" };
@@ -524,7 +567,7 @@ ApplicationWindow {
     // Pas de barre de menus dans la fenêtre: le menu vit dans la fili-bar (repli appmenu/fili-file.json, commandes ci-dessus)
 
     // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
-    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible || matchBox.visible || bulkBox.visible || conflictBox.visible
+    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible || matchBox.visible || bulkBox.visible || conflictBox.visible || compressBox.visible || passwordBox.visible || shareBox.visible || connectBox.visible || aboutCard.visible
     function trashSelection() {
         const row = folder.trash(files.targetsText(), files.currentIndex);
         files.reloaded();
