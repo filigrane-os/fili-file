@@ -284,9 +284,9 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "placesChanged"]
         fn places_changed(self: Pin<&mut Fili>);
-        // Commande de l'assistant (fili-file ctl): verbe, argument, corps
+        // Commande de l'assistant (fili-file ctl): numéro (à rendre à reply), verbe, argument, corps
         #[qsignal]
-        fn command(self: Pin<&mut Fili>, verb: &QString, arg: &QString, body: &QString);
+        fn command(self: Pin<&mut Fili>, id: i32, verb: &QString, arg: &QString, body: &QString);
         // Volume monté à la demande de mount_volume (chemin) ou erreur (texte)
         #[qsignal]
         fn mounted(self: Pin<&mut Fili>, path: &QString);
@@ -444,6 +444,11 @@ pub mod qobject {
         fn start_info(self: &Fili) -> bool;
         // Contexte pour l'assistant (fili-context): dossier affiché et sélection (chemins séparés par des retours à la ligne);
         // un dossier vide retire le contexte (fermeture)
+        // Réponse (une ligne JSON) à la commande `id` de ctl
+        #[qinvokable]
+        fn reply(self: &Fili, id: i32, text: &QString);
+        #[qinvokable]
+        fn pid(self: &Fili) -> i32;
         #[qinvokable]
         #[cxx_name = "publishContext"]
         fn publish_context(self: &Fili, location: &QString, selection: &QString, results: &QString);
@@ -2460,9 +2465,9 @@ impl cxx_qt::Initialize for Fili {
         // Commandes de l'assistant (pas dans le sélecteur de fichiers)
         if pick::get().is_none() {
             let cmd = self.qt_thread();
-            crate::context::serve(move |verb, arg, body| {
+            crate::context::serve(move |id, verb, arg, body| {
                 let _ = cmd.queue(move |mut f| {
-                    f.as_mut().command(&QString::from(&verb), &QString::from(&arg), &QString::from(&body));
+                    f.as_mut().command(id, &QString::from(&verb), &QString::from(&arg), &QString::from(&body));
                 });
             });
         }
@@ -2933,6 +2938,14 @@ impl Fili {
         } else {
             crate::context::publish("fili-file", &loc, &paths_of(selection), &results.to_string());
         }
+    }
+
+    pub fn pid(&self) -> i32 {
+        std::process::id() as i32
+    }
+
+    pub fn reply(&self, id: i32, text: &QString) {
+        crate::context::reply(id, &text.to_string());
     }
 
     pub fn start_info(&self) -> bool {

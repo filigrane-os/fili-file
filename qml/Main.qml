@@ -155,16 +155,8 @@ ApplicationWindow {
     // Commandes de l'assistant (fili-file ctl): aller à un endroit, afficher des résultats
     Connections {
         target: Fili
-        function onCommand(verb, arg, body) {
-            if (verb === "goto") {
-                win.open(arg);
-            } else if (verb === "show") {
-                folder.showResults(arg, body);
-                files.select(0);
-                files.focusList();
-            } else if (verb === "action") {
-                win.runAction(arg);
-            }
+        function onCommand(id, verb, arg, body) {
+            Fili.reply(id, JSON.stringify(win.runCommand(verb, arg, body)));
         }
     }
     Component.onDestruction: Fili.publishContext("", "", "")
@@ -302,10 +294,72 @@ ApplicationWindow {
         previewOn = !previewOn;
         Fili.setPreviewShown(previewOn);
     }
+    // Déclenche une commande de menu; renvoie {ok} ou {ok:false, error} (inconnue, désactivée)
     function runAction(name) {
         const a = menuActions[name];
-        if (a && a.enabled)
-            a.trigger();
+        if (!a)
+            return { ok: false, error: "unknown action: " + name + " (fili-file ctl actions lists them)" };
+        if (!a.enabled)
+            return { ok: false, error: "action disabled now: " + name + (win.typing ? " (a dialog or a text field is active)" : "") };
+        a.trigger();
+        return { ok: true };
+    }
+    // Dialogue ouvert, sinon ""
+    function dialogName() {
+        const open = { menu: menu.visible, confirm: confirm.visible, info: infoCard.visible, match: matchBox.visible, bulk: bulkBox.visible, conflict: conflictBox.visible, compress: compressBox.visible };
+        for (const k in open)
+            if (open[k])
+                return k;
+        return files.editing ? "rename" : pathBar.editing ? "path" : "";
+    }
+    // État de la fenêtre pour ctl state
+    function stateObject() {
+        const tabs = win.tabs.slice();
+        tabs[tabIndex] = { path: folder.shown };
+        return {
+            ok: true,
+            state: {
+                pid: Fili.pid(),
+                location: folder.shown,
+                results: folder.results,
+                in_trash: folder.inTrash,
+                tab: tabIndex,
+                tabs: tabs.map(t => t.path),
+                selection: Object.keys(files.selected),
+                view: files.tiles ? "icons" : "list",
+                hidden_shown: folder.showHidden,
+                preview: win.previewOn,
+                tasks: win.tasks,
+                dialog: dialogName(),
+                can_act: win.canAct
+            }
+        };
+    }
+    // Commandes de menu avec libellé, raccourci et état (activée maintenant ou non)
+    function actionList() {
+        return {
+            ok: true,
+            actions: Object.keys(menuActions).map(k => ({ name: k, label: menuActions[k].text, keys: String(menuActions[k].shortcut || ""), enabled: menuActions[k].enabled }))
+        };
+    }
+    function runCommand(verb, arg, body) {
+        if (verb === "goto") {
+            win.open(arg);
+            return folder.error === "" ? { ok: true } : { ok: false, error: folder.error };
+        }
+        if (verb === "show") {
+            folder.showResults(arg, body);
+            files.select(0);
+            files.focusList();
+            return { ok: true };
+        }
+        if (verb === "action")
+            return runAction(arg);
+        if (verb === "state")
+            return stateObject();
+        if (verb === "actions")
+            return actionList();
+        return { ok: false, error: "unknown command: " + verb };
     }
 
     // Pas de barre de menus dans la fenêtre: le menu vit dans la fili-bar (repli appmenu/fili-file.json, commandes ci-dessus)
