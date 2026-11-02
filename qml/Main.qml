@@ -777,11 +777,13 @@ ApplicationWindow {
     }
     // Menu d'un chemin (segment du fil d'Ariane ou lieu de la barre latérale)
     property string menuPath: ""
-    function openPathMenu(path, x, y, crumb, removable) {
+    function openPathMenu(path, x, y, crumb, removable, frequent) {
         menuPath = path;
         const list = [{ id: "gopath", label: Fili.tr("Open") }, { separator: true }];
         if (removable)
             list.push({ id: "remfav", label: Fili.tr("Remove from Favorites") });
+        else if (frequent)
+            list.push({ id: "remfreq", label: Fili.tr("Remove from Frequent") });
         else if (crumb && !Fili.isFavorite(path))
             list.push({ id: "addfav", label: Fili.tr("Add to Favorites") });
         list.push({ id: "copypath", label: Fili.tr("Copy Full Path") });
@@ -816,6 +818,8 @@ ApplicationWindow {
             Fili.addFavorite(menuPath);
         else if (id === "remfav")
             Fili.removeFavorite(menuPath);
+        else if (id === "remfreq")
+            Fili.forgetVisit(menuPath);
         else if (id === "open")
             win.show(folder.activate(files.currentIndex));
         else if (id.startsWith("app:"))
@@ -993,7 +997,7 @@ ApplicationWindow {
         current: win.nearby && !win.picking ? "nearby:" : win.networkView ? "network:" : folder.shown
         onOpen: p => win.open(p)
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
-        onContext: (path, removable, x, y) => win.openPathMenu(path, x, y, false, removable)
+        onContext: (path, removable, frequent, x, y) => win.openPathMenu(path, x, y, false, removable, frequent)
     }
     Rectangle {
         id: sideLine

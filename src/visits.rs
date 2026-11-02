@@ -82,6 +82,20 @@ pub fn record(path: &str) {
     let _ = std::fs::write(f, format(&list));
 }
 
+// Retire un dossier de la liste (« Retirer des fréquents »): il y revient s'il est de nouveau visité
+pub fn forget_in(list: &mut Vec<Visit>, path: &str) -> bool {
+    let before = list.len();
+    list.retain(|v| v.path != path);
+    list.len() != before
+}
+
+pub fn forget(path: &str) {
+    let mut list = load();
+    if forget_in(&mut list, path) {
+        let _ = std::fs::write(file(), format(&list));
+    }
+}
+
 // Dossiers qui existent encore, les mieux classés d'abord
 pub fn ranked() -> Vec<Visit> {
     let t = now();
@@ -106,6 +120,18 @@ mod tests {
         let fresh = Visit { count: 1, last: now - 60, path: "/c".into() };
         assert!(score(&fresh, now) > score(&l[0], now));
         assert_eq!(parse(&format(&l)), l);
+    }
+
+    #[test]
+    fn forgets_a_folder_and_it_comes_back_when_visited_again() {
+        let mut l = Vec::new();
+        bump(&mut l, "/a", 1000);
+        bump(&mut l, "/b", 1001);
+        assert!(forget_in(&mut l, "/a"));
+        assert!(!forget_in(&mut l, "/a"));
+        assert_eq!(l.iter().map(|v| v.path.as_str()).collect::<Vec<_>>(), vec!["/b"]);
+        bump(&mut l, "/a", 2000);
+        assert_eq!(l.iter().find(|v| v.path == "/a").map(|v| v.count), Some(1));
     }
 
     #[test]

@@ -11,7 +11,7 @@ Rectangle {
     signal open(string path)
     signal dropped(string urls, string dest, bool copy)
     // Clic droit sur un lieu: ses données et la position dans la fenêtre
-    signal context(string path, bool removable, real x, real y)
+    signal context(string path, bool removable, bool frequent, real x, real y)
 
     color: FiliTheme.nuitProfond
 
@@ -76,6 +76,7 @@ Rectangle {
             required property string path
             required property string dev
             required property bool removable
+            required property string section
             required property string mono
             required property bool full
             required property int index
@@ -156,7 +157,7 @@ Rectangle {
                     if (e.button === Qt.RightButton) {
                         if (row.path !== "" && row.path !== "nearby:" && row.path !== "network:") {
                             const p = area.mapToItem(null, e.x, e.y);
-                            side.context(row.path, row.removable, p.x, p.y);
+                            side.context(row.path, row.removable, row.section === Fili.tr("Frequent"), p.x, p.y);
                         }
                         return;
                     }

@@ -362,6 +362,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "trashPath"]
         fn trash_path(self: &Fili) -> QString;
+        // Retire un dossier de la section « Fréquents » de la barre latérale
+        #[qinvokable]
+        #[cxx_name = "forgetVisit"]
+        fn forget_visit(self: Pin<&mut Fili>, path: &QString);
         #[qinvokable]
         #[cxx_name = "pathExists"]
         fn path_exists(self: &Fili, path: &QString) -> bool;
@@ -2899,6 +2903,11 @@ impl Fili {
         if write_bookmarks(&list).is_ok() {
             self.as_mut().places_changed();
         }
+    }
+
+    pub fn forget_visit(mut self: Pin<&mut Self>, path: &QString) {
+        visits::forget(&path.to_string());
+        self.as_mut().places_changed();
     }
 
     pub fn trash_path(&self) -> QString {
