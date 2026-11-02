@@ -157,11 +157,38 @@ Rectangle {
     ]
     property var enabledKeys: Fili.columns().split(",")
     readonly property var cols: allColumns.filter(c => enabledKeys.indexOf(c.key) >= 0)
-    readonly property int colsWidth: cols.reduce((a, c) => a + c.width, 0)
+    // Largeurs choisies par l'utilisateur (glisser le bord gauche d'un en-tête), gardées dans l'état: {clé: px}
+    property var colWidths: loadWidths()
+    function loadWidths() {
+        const w = {};
+        for (const c of allColumns) {
+            const v = parseInt(Fili.uiState("col." + c.key));
+            if (v >= minColWidth)
+                w[c.key] = Math.min(v, maxColWidth);
+        }
+        return w;
+    }
+    readonly property int minColWidth: 56
+    readonly property int maxColWidth: 600
+    function baseWidth(c) {
+        return colWidths[c.key] > 0 ? colWidths[c.key] : c.width;
+    }
+    // px <= 0: retour à la largeur par défaut; save=false pendant le glisser (la valeur est gardée au relâchement)
+    function setColWidth(key, px, save) {
+        const w = Object.assign({}, colWidths);
+        if (px > 0)
+            w[key] = Math.max(minColWidth, Math.min(maxColWidth, Math.round(px)));
+        else
+            delete w[key];
+        colWidths = w;
+        if (save !== false)
+            Fili.setUiState("col." + key, px > 0 ? String(w[key]) : "");
+    }
+    readonly property int colsWidth: cols.reduce((a, c) => a + baseWidth(c), 0)
     // Fenêtre étroite: les colonnes se resserrent pour garder 200 px au nom (jusqu'à 35 % de leur largeur)
     readonly property real colScale: colsWidth > 0 ? Math.max(0.35, Math.min(1, (view.width - 2 * FiliTheme.space2 - 200) / colsWidth)) : 1
     function colWidth(c) {
-        return Math.round(c.width * colScale);
+        return Math.round(baseWidth(c) * colScale);
     }
     function setColumns(keys) {
         Fili.setColumns(keys.join(","));
@@ -217,6 +244,27 @@ Rectangle {
                             view.select(view.folder.sortBy(col.modelData.sort, view.currentIndex));
                     }
                 }
+                // Bord gauche d'une colonne de données: le glisser la rend plus large (vers la gauche) ou plus étroite;
+                // un double-clic rend la largeur par défaut. Le nom prend le reste.
+                MouseArea {
+                    id: grip
+                    visible: col.index > 0
+                    property real startX: 0
+                    property real startWidth: 0
+                    anchors { left: parent.left; top: parent.top; bottom: parent.bottom; leftMargin: -4 }
+                    width: 9
+                    cursorShape: Qt.SplitHCursor
+                    onPressed: e => {
+                        startX = mapToItem(header, e.x, 0).x;
+                        startWidth = view.baseWidth(col.modelData);
+                    }
+                    onPositionChanged: e => {
+                        if (pressed)
+                            view.setColWidth(col.modelData.key, startWidth - (mapToItem(header, e.x, 0).x - startX) / view.colScale, false);
+                    }
+                    onReleased: Fili.setUiState("col." + col.modelData.key, String(view.colWidths[col.modelData.key] || ""))
+                    onDoubleClicked: view.setColWidth(col.modelData.key, 0)
+                }
             }
         }
     }
@@ -255,9 +303,7 @@ Rectangle {
             const it = active.itemAtIndex(cur);
             const p = it ? it.mapToItem(view, FiliTheme.space4, it.height) : Qt.point(FiliTheme.space6, FiliTheme.space6);
             view.context(p.x, p.y);
-        } else if (e.key === Qt.Key_Space && view.typed === "")
-            view.folder.quicklook(cur);
-        else if (e.key === Qt.Key_Home)
+        } else if (e.key === Qt.Key_Home)
             move(0);
         else if (e.key === Qt.Key_End)
             move(count - 1);

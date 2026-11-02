@@ -177,6 +177,9 @@ ApplicationWindow {
     readonly property bool canAct: !win.typing && !win.picking && !win.nearby
     Action { id: aNewFolder; text: Fili.tr("New Folder"); shortcut: "Ctrl+Shift+N"; enabled: win.canAct && !folder.inTrash; onTriggered: win.newFolder() }
     Action { id: aOpen; text: Fili.tr("Open"); enabled: win.canAct && files.targets().length === 1; onTriggered: win.show(folder.activate(files.currentIndex)) }
+    // Espace: aperçu rapide (script quicklook; relancé sur le même fichier, il se referme). Désactivée pendant la saisie au
+    // clavier d'un début de nom (« mon fichier »): l'espace est alors une lettre.
+    Action { id: aQuickLook; text: Fili.tr("Quick Look"); shortcut: "Space"; enabled: !win.typing && !win.nearby && files.typed === "" && files.targets().length > 0; onTriggered: folder.quicklook(files.targets()[0]) }
     Action { id: aInfo; text: Fili.tr("Get Info"); shortcut: "Ctrl+I"; enabled: win.canAct; onTriggered: win.showInfo() }
     Action { id: aTrash; text: Fili.tr("Move to Trash"); shortcut: "Delete"; enabled: win.canAct && !folder.inTrash; onTriggered: win.trashSelection() }
     Action { id: aTrashAlt; shortcut: "Ctrl+Backspace"; enabled: win.canAct; onTriggered: win.trashSelection() }
@@ -227,7 +230,7 @@ ApplicationWindow {
     // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
     // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
     readonly property var menuActions: ({
-        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "share": aShare, "nearby": aNearby, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
+        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "compress": aCompress, "extract": aExtract, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
@@ -290,6 +293,19 @@ ApplicationWindow {
     }
     // Panneau d'aperçu (choix gardé dans l'état de l'utilisateur)
     property bool previewOn: Fili.previewShown()
+    // Largeur choisie du panneau d'aperçu (glisser son bord gauche; double-clic: 300), gardée dans l'état. Le panneau
+    // la réduit si la fenêtre manque de place.
+    readonly property int previewDefault: 300
+    property real previewWidth: {
+        const v = parseInt(Fili.uiState("preview"));
+        return v >= 160 ? Math.min(v, 900) : previewDefault;
+    }
+    // px <= 0: largeur par défaut; save=false pendant le glisser
+    function setPreviewWidth(px, save) {
+        previewWidth = px > 0 ? Math.max(160, Math.min(900, Math.round(px))) : previewDefault;
+        if (save !== false)
+            Fili.setUiState("preview", px > 0 ? String(previewWidth) : "");
+    }
     function togglePreview() {
         previewOn = !previewOn;
         Fili.setPreviewShown(previewOn);
@@ -387,6 +403,25 @@ ApplicationWindow {
         if (missing.length > 0)
             return { ok: false, error: "not in the folder shown (" + folder.shown + "): " + missing.slice(0, 5).join(", ") + (missing.length > 5 ? " …" : ""), selected: n };
         return { ok: true, selected: n };
+    }
+    // Largeurs: column NOM PX|reset (size, modified, kind, created, permissions, owner), preview PX|reset. Mêmes
+    // fonctions que le glisser des bords; PX est borné (colonne 56 à 600, aperçu 160 à 900)
+    function widthCommand(arg) {
+        const parts = arg.split("\t");
+        const usage = { ok: false, error: "usage: width column NAME PX|reset | width preview PX|reset" };
+        const value = v => v === "reset" ? 0 : /^\d+$/.test(v) ? parseInt(v) : -1;
+        if (parts[0] === "preview" && parts.length === 2 && value(parts[1]) >= 0) {
+            win.setPreviewWidth(value(parts[1]));
+            return { ok: true, width: win.previewWidth };
+        }
+        if (parts[0] === "column" && parts.length === 3 && value(parts[2]) >= 0) {
+            const col = files.allColumns.find(c => c.key === parts[1]);
+            if (!col)
+                return { ok: false, error: "unknown column: " + parts[1] + " (" + files.allColumns.map(c => c.key).join(", ") + ")" };
+            files.setColWidth(col.key, value(parts[2]));
+            return { ok: true, width: files.baseWidth(col) };
+        }
+        return usage;
     }
     function onOff(arg) {
         return arg === "on" ? true : arg === "off" ? false : undefined;
@@ -486,6 +521,8 @@ ApplicationWindow {
                 filter: folder.filter,
                 sort: Object.keys(sortKeys).find(k => sortKeys[k] === folder.sortKey) + (folder.sortDesc ? " desc" : " asc"),
                 preview: win.previewOn,
+                preview_width: win.previewWidth,
+                column_widths: files.colWidths,
                 tasks: win.tasks,
                 dialog: dialogName(),
                 can_act: win.canAct
@@ -526,6 +563,8 @@ ApplicationWindow {
             return tabCommand(arg);
         case "dialog":
             return dialogCommand(arg);
+        case "width":
+            return widthCommand(arg);
         case "view":
             if (arg !== "list" && arg !== "icons")
                 return { ok: false, error: "usage: view list|icons" };
@@ -717,7 +756,7 @@ ApplicationWindow {
         else if (id.startsWith("app:"))
             folder.openWith(id.slice(4), files.targets()[0]);
         else if (id === "quicklook")
-            folder.quicklook(files.currentIndex);
+            folder.quicklook(files.targets()[0]);
         else if (id === "copy")
             folder.copy(t);
         else if (id === "cut")
@@ -1015,15 +1054,35 @@ ApplicationWindow {
     }
     Preview {
         id: preview
-        // Largeur 300 au plus; la liste garde au moins 320 (en dessous de 160 le panneau disparaît)
+        // Largeur choisie (300 par défaut); la liste garde au moins 320 (en dessous de 160 le panneau disparaît)
         readonly property real room: win.width - FiliTheme.sidebarWidth - 1 - 320
         visible: win.previewOn && !win.picking && room >= 160
         anchors { top: toolbarLine.bottom; bottom: pickbar.top; right: parent.right }
-        width: visible ? Math.min(300, room) : 0
+        width: visible ? Math.min(win.previewWidth, room) : 0
         path: {
             const keys = Object.keys(files.selected);
             return keys.length === 1 ? keys[0] : keys.length === 0 && files.currentIndex >= 0 ? folder.pathAt(files.currentIndex) : "";
         }
+    }
+    // Bord gauche du panneau d'aperçu: le glisser l'élargit (vers la gauche) ou le rétrécit
+    MouseArea {
+        id: previewGrip
+        visible: preview.visible
+        property real startX: 0
+        property real startWidth: 0
+        anchors { top: toolbarLine.bottom; bottom: pickbar.top; right: preview.left; rightMargin: -4 }
+        width: 9
+        cursorShape: Qt.SplitHCursor
+        onPressed: e => {
+            startX = mapToItem(null, e.x, 0).x;
+            startWidth = preview.width;
+        }
+        onPositionChanged: e => {
+            if (pressed)
+                win.setPreviewWidth(startWidth - (mapToItem(null, e.x, 0).x - startX), false);
+        }
+        onReleased: Fili.setUiState("preview", String(Math.round(win.previewWidth)))
+        onDoubleClicked: win.setPreviewWidth(0)
     }
     ContextMenu {
         id: menu

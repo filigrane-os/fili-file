@@ -99,7 +99,7 @@ pub mod qobject {
         #[cxx_name = "setFilter"]
         fn set_filter(self: Pin<&mut FolderModel>, text: &QString);
         #[qinvokable]
-        fn quicklook(self: &FolderModel, row: i32);
+        fn quicklook(self: &FolderModel, path: &QString);
         #[qinvokable]
         fn find(self: &FolderModel, prefix: &QString) -> i32;
         #[qinvokable]
@@ -340,6 +340,14 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setViewMode"]
         fn set_view_mode(self: &Fili, mode: &QString);
+        // Petit état d'interface gardé entre deux lancements (largeurs des colonnes « col.size », du panneau d'aperçu
+        // « preview »): valeur en texte, vide si absente
+        #[qinvokable]
+        #[cxx_name = "uiState"]
+        fn ui_state(self: &Fili, key: &QString) -> QString;
+        #[qinvokable]
+        #[cxx_name = "setUiState"]
+        fn set_ui_state(self: &Fili, key: &QString, value: &QString);
         #[qinvokable]
         #[cxx_name = "previewShown"]
         fn preview_shown(self: &Fili) -> bool;
@@ -1473,10 +1481,8 @@ impl FolderModel {
     }
 
     // Aperçu rapide (~/.local/bin/quicklook): relancé sur le même fichier, il se referme
-    pub fn quicklook(&self, row: i32) {
-        if let Some(e) = self.row(row) {
-            spawn(&bin("quicklook"), &e.path, Path::new(&self.dir));
-        }
+    pub fn quicklook(&self, path: &QString) {
+        spawn(&bin("quicklook"), &path.to_string(), Path::new(&self.dir));
     }
 
     // Saisie au clavier: première ligne dont le nom commence par prefix (sans casse ni accents)
@@ -2448,6 +2454,28 @@ fn view_file() -> PathBuf {
     PathBuf::from(state).join("filigrane/fili-file-view")
 }
 
+fn ui_file() -> PathBuf {
+    let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
+    PathBuf::from(state).join("filigrane/fili-file-ui")
+}
+
+// Fichier d'état « clé=valeur » (une par ligne): lecture d'une clé
+fn ui_get(text: &str, key: &str) -> String {
+    text.lines().find_map(|l| l.split_once('=').filter(|(k, _)| *k == key).map(|(_, v)| v.trim().to_string())).unwrap_or_default()
+}
+
+// Le même texte avec la clé posée (ou retirée si la valeur est vide); clés et valeurs sans saut de ligne ni « = » dans la clé
+fn ui_set(text: &str, key: &str, value: &str) -> String {
+    let clean = |s: &str| s.replace(['\n', '\r'], " ");
+    let (key, value) = (clean(key).replace('=', "-"), clean(value));
+    let mut lines: Vec<String> = text.lines().filter(|l| l.split_once('=').is_none_or(|(k, _)| k != key)).map(String::from).collect();
+    if !value.trim().is_empty() {
+        lines.push(format!("{key}={}", value.trim()));
+    }
+    lines.sort();
+    if lines.is_empty() { String::new() } else { lines.join("\n") + "\n" }
+}
+
 fn columns_file() -> PathBuf {
     let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
     PathBuf::from(state).join("filigrane/fili-file-columns")
@@ -2748,6 +2776,19 @@ impl Fili {
         let _ = std::fs::write(file, keys.to_string());
     }
 
+    pub fn ui_state(&self, key: &QString) -> QString {
+        QString::from(&ui_get(&std::fs::read_to_string(ui_file()).unwrap_or_default(), &key.to_string()))
+    }
+
+    pub fn set_ui_state(&self, key: &QString, value: &QString) {
+        let file = ui_file();
+        let text = ui_set(&std::fs::read_to_string(&file).unwrap_or_default(), &key.to_string(), &value.to_string());
+        if let Some(dir) = file.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(file, text);
+    }
+
     pub fn view_mode(&self) -> QString {
         let text = std::fs::read_to_string(view_file()).unwrap_or_default();
         let text = if text.trim().is_empty() { crate::config::load().view.unwrap_or_default() } else { text };
@@ -2966,6 +3007,23 @@ impl Fili {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ui_state_file() {
+        let t = ui_set("", "col.size", "120");
+        assert_eq!(t, "col.size=120\n");
+        let t = ui_set(&t, "preview", "340");
+        assert_eq!(ui_get(&t, "col.size"), "120");
+        assert_eq!(ui_get(&t, "preview"), "340");
+        assert_eq!(ui_get(&t, "col.kind"), "");
+        // Remplacer ne duplique pas; vide retire; un « = » ou un saut de ligne ne casse pas le format
+        let t = ui_set(&t, "col.size", "150");
+        assert_eq!(t, "col.size=150\npreview=340\n");
+        assert_eq!(ui_set(&t, "col.size", ""), "preview=340\n");
+        let t = ui_set(&t, "a=b", "x\ny");
+        assert_eq!((ui_get(&t, "a-b"), t.lines().count()), ("x y".to_string(), 3));
+        assert_eq!(ui_set("preview=1\n", "preview", ""), "");
+    }
 
     #[test]
     fn parses_clipboard() {

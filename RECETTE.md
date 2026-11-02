@@ -27,7 +27,7 @@ Ctrl+K (serveur), Ctrl+Maj+R (à proximité), Ctrl+Maj+Suppr (vider la corbeille
 - [ ] Flèches haut/bas déplacent la ligne courante; Maj+flèches étendent la sélection; Ctrl+A sélectionne tout.
 - [ ] Retour/Entrée ouvre le dossier ou le fichier; Alt+↑ remonte.
 - [ ] Taper des lettres dans la liste saute au premier nom qui commence ainsi; une pause remet la saisie à zéro; avec les noms accentués et les majuscules.
-- [ ] **Espace** n'a pas d'aperçu rapide (c'est Ctrl+Maj+P): à décider avant la v1 si l'absence gêne.
+- [ ] **Espace** ouvre l'aperçu rapide (fenêtre flottante `quicklook`) de l'élément sélectionné: image, PDF, texte, tableau, dossier, vidéo; Espace, Échap ou `q` le referme; Espace sur le même fichier le referme aussi. Pendant la saisie d'un début de nom (« mon f… »), l'espace est une lettre et n'ouvre rien. Entrée « Aperçu rapide » dans le menu de la barre.
 - [ ] Suppr et Ctrl+Retour arrière mettent à la corbeille; Ctrl+Z défait.
 - [ ] Les raccourcis ne font **rien** pendant la saisie d'un nom, du chemin, de la recherche, et derrière un dialogue ouvert (Compresser, mot de passe, À propos, Serveur, Infos).
 - [ ] Échap ferme dialogue, menu, renommage, recherche, champ du chemin, dans cet ordre, sans fermer la fenêtre.
@@ -39,7 +39,7 @@ Ctrl+K (serveur), Ctrl+Maj+R (à proximité), Ctrl+Maj+Suppr (vider la corbeille
 - [ ] Double-clic ouvre un dossier, un fichier (application par défaut via xdg-open), une archive (extraction ici).
 - [ ] **Lasso**: glisser depuis le vide sélectionne la zone traversée, en liste et en icônes; Ctrl ajoute.
 - [ ] Clic droit sur un élément, sur plusieurs éléments, sur le vide, sur un élément de la corbeille: entrées adaptées (Ouvrir avec…, Renommer, Dupliquer, Compresser/Extraire, Copier le chemin, Informations…).
-- [ ] Clic droit sur l'en-tête: choix des colonnes; clic sur une colonne trie, un deuxième clic inverse; la largeur des colonnes n'est pas réglable (à décider si l'absence gêne).
+- [ ] Clic droit sur l'en-tête: choix des colonnes; clic sur une colonne trie, un deuxième clic inverse; **glisser le bord gauche d'un en-tête** de colonne (curseur ↔) élargit ou rétrécit la colonne (56 à 600 px), le nom prend le reste; double-clic sur ce bord = largeur par défaut; la largeur est gardée à la réouverture.
 - [ ] Défilement à la molette et au pavé tactile: inertie naturelle, pas de saut; défilement rapide du dossier `gros` (5000 fichiers) fluide.
 - [ ] Survol: pas de clignotement; curseur correct sur les bords et les boutons.
 
@@ -79,7 +79,7 @@ Ctrl+K (serveur), Ctrl+Maj+R (à proximité), Ctrl+Maj+Suppr (vider la corbeille
 
 ## 7. Aperçu, miniatures, infos
 
-- [ ] Ctrl+Maj+P: aperçu d'image (`image.png`), de PDF (`document.pdf`), de texte (`notes.txt`), de dossier; panneau à largeur fixe; vide quand rien n'est sélectionné.
+- [ ] Ctrl+Maj+P: aperçu d'image (`image.png`), de PDF (`document.pdf`), de texte (`notes.txt`), de dossier; **glisser son bord gauche** change sa largeur (160 à 900 px, réduite si la fenêtre manque de place), double-clic = 300 px, largeur gardée à la réouverture; vide quand rien n'est sélectionné.
 - [ ] Miniatures en mode icônes (`medias`): image et PDF; première ouverture un peu plus lente, la deuxième immédiate (cache `~/.cache/filigrane/thumbs`).
 - [ ] Infos (Ctrl+I): taille de dossier calculée en arrière-plan (barre ou valeur qui se met à jour), SHA-256 d'un fichier, droits en cases à cocher (modifier puis annuler), plusieurs éléments.
 - [ ] Un dossier de 5000 fichiers s'ouvre sans geler la fenêtre; le tri par chaque colonne reste fluide.
