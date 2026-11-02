@@ -264,8 +264,68 @@ pub fn ensure_trash(base: &Path) -> io::Result<()> {
     fs::create_dir_all(base.join("info"))
 }
 
+// Points de montage d'après /proc/self/mountinfo (5e champ; les espaces et caractères spéciaux y sont en octal: \040)
+fn mount_points(mountinfo: &str) -> Vec<PathBuf> {
+    let unescape = |s: &str| {
+        let b = s.as_bytes();
+        let mut out = Vec::with_capacity(b.len());
+        let mut i = 0;
+        while i < b.len() {
+            let octal = (b[i] == b'\\' && i + 3 < b.len() + 0).then(|| std::str::from_utf8(&b[i + 1..i + 4]).ok().and_then(|o| u8::from_str_radix(o, 8).ok())).flatten();
+            match octal {
+                Some(c) => {
+                    out.push(c);
+                    i += 4;
+                }
+                None => {
+                    out.push(b[i]);
+                    i += 1;
+                }
+            }
+        }
+        PathBuf::from(String::from_utf8_lossy(&out).into_owned())
+    };
+    mountinfo.lines().filter_map(|l| l.split(' ').nth(4)).map(unescape).collect()
+}
+
+// Corbeilles de l'utilisateur sur ces volumes ($volume/.Trash-UID, ou $volume/.Trash/UID quand .Trash existe), sauf celle
+// du volume du dossier personnel (dev): ne rend que celles qui existent
+fn volume_trashes_in(points: &[PathBuf], uid: u32, home_dev: Option<u64>) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    for mp in points {
+        if fs::metadata(mp).map(|m| m.dev()).ok() == home_dev && home_dev.is_some() {
+            continue;
+        }
+        for base in [mp.join(format!(".Trash-{uid}")), mp.join(".Trash").join(uid.to_string())] {
+            if base.join("files").is_dir() && !found.contains(&base) {
+                found.push(base);
+            }
+        }
+    }
+    found
+}
+
+// Corbeilles des autres volumes montés (clé USB, disque, /tmp...)
+pub fn volume_trashes() -> Vec<PathBuf> {
+    // Les tests ne touchent jamais aux corbeilles réelles de la machine (vider la corbeille viderait celle d'une clé)
+    if cfg!(test) {
+        return Vec::new();
+    }
+    // FILI_MOUNTINFO remplace /proc/self/mountinfo (le banc de tests, pour ne jamais vider les vraies corbeilles)
+    let mounts = fs::read_to_string(std::env::var_os("FILI_MOUNTINFO").unwrap_or_else(|| "/proc/self/mountinfo".into())).unwrap_or_default();
+    let home_dev = fs::metadata(home_trash()).or_else(|_| fs::metadata(data_home())).map(|m| m.dev()).ok();
+    volume_trashes_in(&mount_points(&mounts), unsafe { libc::getuid() }, home_dev)
+}
+
+// La corbeille de l'utilisateur puis celles des autres volumes: ce que la vue Corbeille regroupe
+pub fn all_trashes() -> Vec<PathBuf> {
+    let mut v = vec![home_trash()];
+    v.extend(volume_trashes());
+    v
+}
+
 pub fn trash_is_empty() -> bool {
-    fs::read_dir(trash_files()).is_ok_and(|mut d| d.next().is_none())
+    all_trashes().iter().all(|b| fs::read_dir(b.join("files")).is_ok_and(|mut d| d.next().is_none()))
 }
 
 // Racine du volume qui contient p (premier ancêtre dont le parent est sur un autre volume)
@@ -410,11 +470,12 @@ pub fn restore(trashed: &Path) -> io::Result<PathBuf> {
 }
 
 pub fn empty_trash() -> io::Result<()> {
-    let base = home_trash();
-    for sub in ["files", "info"] {
-        let Ok(d) = fs::read_dir(base.join(sub)) else { continue };
-        for e in d.flatten() {
-            remove_tree(&e.path())?;
+    for base in all_trashes() {
+        for sub in ["files", "info"] {
+            let Ok(d) = fs::read_dir(base.join(sub)) else { continue };
+            for e in d.flatten() {
+                remove_tree(&e.path())?;
+            }
         }
     }
     Ok(())
@@ -423,6 +484,21 @@ pub fn empty_trash() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mount_points_and_volume_trashes() {
+        let info = "22 1 8:2 / / rw - ext4 /dev/sda2 rw\n40 22 0:30 / /run/media/u/MA\\040CLE rw - vfat /dev/sdb1 rw\n41 22 0:31 / /tmp rw - tmpfs tmpfs rw\n";
+        assert_eq!(mount_points(info), vec![PathBuf::from("/"), PathBuf::from("/run/media/u/MA CLE"), PathBuf::from("/tmp")]);
+        // Un volume avec sa corbeille .Trash-UID est trouvé (ici un dossier de test); celui sans corbeille, non
+        let vol = tmp("voltrash");
+        let other = tmp("voltrash-empty");
+        fs::create_dir_all(vol.join(".Trash-1234/files")).unwrap();
+        assert_eq!(volume_trashes_in(&[vol.clone(), other.clone()], 1234, None), vec![vol.join(".Trash-1234")]);
+        assert_eq!(volume_trashes_in(&[vol.clone()], 99, None), Vec::<PathBuf>::new());
+        // Le volume du dossier personnel est exclu (sa corbeille est celle de l'utilisateur)
+        let dev = fs::metadata(&vol).unwrap().dev();
+        assert_eq!(volume_trashes_in(&[vol.clone()], 1234, Some(dev)), Vec::<PathBuf>::new());
+    }
 
     fn tmp(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("fili-file-ops-{tag}-{}", std::process::id()));

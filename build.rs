@@ -24,6 +24,7 @@ fn main() {
                 "qml/ViewSwitch.qml",
                 "qml/BandSelect.qml",
                 "qml/FocusRing.qml",
+                "qml/FiliScrollBar.qml",
                 "qml/KineticScroll.qml",
             ])
             .qml_file(QmlFile::from("qml/FiliTheme.qml").singleton(true))

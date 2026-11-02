@@ -13,17 +13,19 @@ Item {
     signal context(string path, real x, real y)
     signal done()
 
-    // Propositions façon fzf pour ce qui est tapé (Haut/Bas choisissent, Tab complète, Entrée valide la proposition choisie
-    // ou, sans choix, le texte tel quel)
+    // Propositions façon fzf pour ce qui est tapé (Haut/Bas choisissent, Tab complète, Entrée valide la proposition choisie,
+    // la première par défaut après une frappe, ou, sans choix, le texte tel quel)
     property var suggestions: []
     property int selected: -1
     function shown(p) {
         const h = Fili.home();
         return p === h ? "~" : p.startsWith(h + "/") ? "~" + p.slice(h.length) : p;
     }
-    function refresh() {
+    // preselect: après une frappe, la première proposition est choisie d'avance (Entrée la valide sans les flèches),
+    // sauf quand le texte finit par « / » (dossier complet: Entrée y va tel quel, les flèches choisissent un contenu)
+    function refresh(preselect) {
         suggestions = editing ? JSON.parse(Fili.pathSuggest(input.text)) : [];
-        selected = -1;
+        selected = preselect === true && suggestions.length > 0 && !input.text.endsWith("/") ? 0 : -1;
     }
     // Remplace le texte par la proposition i (un « / » en fin pour un dossier, où l'on continue de taper)
     function accept(i) {
@@ -138,7 +140,7 @@ Item {
             color: FiliTheme.brume
             selectionColor: FiliTheme.nuit4
             selectedTextColor: FiliTheme.brume
-            onTextEdited: bar.refresh()
+            onTextEdited: bar.refresh(true)
             onAccepted: {
                 if (bar.selected >= 0) {
                     const c = bar.suggestions[bar.selected];

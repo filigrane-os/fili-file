@@ -52,7 +52,7 @@ fn build(path: &Path, m: &fs::Metadata) -> Entry {
 
 // Lecture d'un dossier: les métadonnées viennent du descripteur du dossier (plus rapide qu'un stat par chemin
 // complet); seuls les liens passent par la résolution de leur cible
-pub fn list(dir: &Path) -> io::Result<Vec<Entry>> {
+fn list_one(dir: &Path) -> io::Result<Vec<Entry>> {
     Ok(fs::read_dir(dir)?
         .filter_map(|e| {
             let e = e.ok()?;
@@ -63,6 +63,17 @@ pub fn list(dir: &Path) -> io::Result<Vec<Entry>> {
             }
         })
         .collect())
+}
+
+// La Corbeille regroupe celle du dossier personnel et celles des autres volumes montés (.Trash-UID d'une clé, de /tmp...)
+pub fn list(dir: &Path) -> io::Result<Vec<Entry>> {
+    let mut all = list_one(dir)?;
+    if dir == crate::ops::trash_files() {
+        for base in crate::ops::volume_trashes() {
+            all.extend(list_one(&base.join("files")).unwrap_or_default());
+        }
+    }
+    Ok(all)
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]

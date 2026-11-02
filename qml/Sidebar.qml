@@ -51,7 +51,8 @@ Rectangle {
             width: list.width
             height: Math.max(list.height, list.contentHeight)
             onDropped: d => {
-                d.urls.forEach(u => Fili.addFavorite(u.toString()));
+                // addFavorite attend un chemin, pas une URL file://
+                d.urls.forEach(u => Fili.addFavorite(decodeURIComponent(u.toString().replace(/^file:\/\//, ""))));
                 d.acceptProposedAction();
             }
         }
@@ -140,7 +141,7 @@ Rectangle {
             DropArea {
                 id: drop
                 anchors.fill: parent
-                enabled: row.path !== "nearby:"
+                enabled: row.path !== "nearby:" && row.path !== "network:"
                 onDropped: d => {
                     side.dropped(d.urls.map(u => u.toString()).join("\n"), row.path, d.proposedAction === Qt.CopyAction);
                     d.acceptProposedAction();
@@ -153,7 +154,7 @@ Rectangle {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 onClicked: e => {
                     if (e.button === Qt.RightButton) {
-                        if (row.path !== "" && row.path !== "nearby:") {
+                        if (row.path !== "" && row.path !== "nearby:" && row.path !== "network:") {
                             const p = area.mapToItem(null, e.x, e.y);
                             side.context(row.path, row.removable, p.x, p.y);
                         }

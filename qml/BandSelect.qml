@@ -1,5 +1,6 @@
 // Sélection par zone: tirer la souris sur le fond de la liste ou de la grille sélectionne les éléments touchés par le
-// rectangle (Ctrl ou Maj: s'ajoute à la sélection). À poser dans le Flickable de la vue, sous les lignes.
+// rectangle (Ctrl ou Maj: s'ajoute à la sélection). À poser dans le Flickable de la vue, sous les lignes; le rectangle
+// lui-même passe au-dessus d'elles.
 import QtQuick
 import Fili.Files
 
@@ -21,7 +22,7 @@ MouseArea {
 
     onPressed: e => {
         const add = e.modifiers & (Qt.ControlModifier | Qt.ShiftModifier);
-        view.renaming = -1;
+        view.endRename();
         Fili.keyNav = false;
         if (!add)
             view.pick(-1);
@@ -37,7 +38,8 @@ MouseArea {
         const x = Math.max(0, Math.min(e.x, width)), y = Math.max(0, Math.min(e.y, height));
         if (!rect.visible && Math.abs(x - x0) + Math.abs(y - y0) < 4)
             return;
-        rect.x = Math.min(x0, x);
+        // rect vit dans le contenu de la vue (au-dessus des lignes): ses coordonnées incluent x de la zone
+        rect.x = Math.min(x0, x) + band.x;
         rect.y = Math.min(y0, y);
         rect.width = Math.abs(x - x0);
         rect.height = Math.abs(y - y0);
@@ -46,7 +48,7 @@ MouseArea {
         for (const it of flick.contentItem.children) {
             if (it.path === undefined || !it.visible)
                 continue;
-            const left = rect.x + band.x;
+            const left = rect.x;
             if (it.x < left + rect.width && it.x + it.width > left && it.y < rect.y + rect.height && it.y + it.height > rect.y)
                 s[it.path] = true;
         }
@@ -55,8 +57,11 @@ MouseArea {
     onReleased: rect.visible = false
     onCanceled: rect.visible = false
 
+    // Le rectangle se dessine au-dessus des lignes (la zone, elle, reste dessous pour leur laisser les clics)
     Rectangle {
         id: rect
+        parent: band.flick.contentItem
+        z: 1000
         visible: false
         radius: 2
         color: FiliTheme.alpha(FiliTheme.voile, 0.15)

@@ -97,6 +97,25 @@ ApplicationWindow {
         function onReloaded() { win.checkTrash(); }
     }
 
+    // Pas de fermeture pendant une opération (copie, déplacement, archive): attendre ou annuler (Échap), car une copie
+    // coupée en route laisse des fichiers à moitié écrits
+    readonly property bool working: folder.busy || win.tasks.length > 0
+    function refuseClose() {
+        win.notice = Fili.tr("An operation is in progress: wait for it to finish, or cancel it (Esc), before closing.");
+        noticeTimer.restart();
+    }
+    function quit() {
+        if (working)
+            refuseClose();
+        else
+            Qt.quit();
+    }
+    onClosing: close => {
+        if (working) {
+            close.accepted = false;
+            refuseClose();
+        }
+    }
     // Message passager (volumes): effacé après 6 s
     property string notice: ""
     Timer { id: noticeTimer; interval: 6000; onTriggered: win.notice = "" }
@@ -118,6 +137,8 @@ ApplicationWindow {
             files.select(row);
     }
     // « À proximité » (partage de proximité) remplace la liste des fichiers; tout changement de dossier la ferme
+    // Le lieu « Réseau » de la barre latérale est affiché (vue de résultats)
+    readonly property bool networkView: folder.results === Fili.tr("Network")
     property bool nearby: false
     property string nearbyFrom: ""
     function open(path) {
@@ -130,6 +151,12 @@ ApplicationWindow {
             return;
         }
         nearby = false;
+        if (path === "network:") {
+            folder.showNetwork(Fili.tr("Network"));
+            files.select(0);
+            files.focusList();
+            return;
+        }
         const row = folder.go(path);
         if (row >= 0 || folder.error === "") {
             pathBar.editing = false;
@@ -142,8 +169,11 @@ ApplicationWindow {
     Timer {
         id: contextTimer
         interval: 150
-        onTriggered: Fili.publishContext(folder.path, Object.keys(files.selected).join("\n"), folder.results)
+        onTriggered: Fili.publishContext(folder.path, Object.keys(files.selected).join("\n"), folder.results, win.disabledNow)
     }
+    // Commandes de menu impossibles maintenant (rien de sélectionné, dialogue ouvert...): publiées pour que la fili-bar les grise
+    readonly property string disabledNow: Object.keys(menuActions).filter(k => !menuActions[k].enabled).sort().join(",")
+    onDisabledNowChanged: contextTimer.restart()
     Connections {
         target: files
         function onSelectedChanged() { contextTimer.restart(); }
@@ -159,7 +189,7 @@ ApplicationWindow {
             Fili.reply(id, JSON.stringify(win.runCommand(verb, arg, body)));
         }
     }
-    Component.onDestruction: Fili.publishContext("", "", "")
+    Component.onDestruction: Fili.publishContext("", "", "", "")
 
     Component.onCompleted: {
         nameInput.text = Fili.pickName();
@@ -173,43 +203,47 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+]"; onActivated: win.show(folder.forward()) }
 
 
+    // Éléments sélectionnés (ceux qu'on voit surlignés): les commandes de fichiers les visent, et sont grisées sans eux.
+    // Une ligne seulement « courante » (après un clic dans le vide) n'est pas une cible.
+    readonly property int selCount: Object.keys(files.selected).length
     // Commandes de la barre de menus (exposée au menu global de la fili-bar par AT-SPI); chaque raccourci vit ici, une seule fois
     readonly property bool canAct: !win.typing && !win.picking && !win.nearby
     Action { id: aNewFolder; text: Fili.tr("New Folder"); shortcut: "Ctrl+Shift+N"; enabled: win.canAct && !folder.inTrash; onTriggered: win.newFolder() }
-    Action { id: aOpen; text: Fili.tr("Open"); enabled: win.canAct && files.targets().length === 1; onTriggered: win.show(folder.activate(files.currentIndex)) }
+    Action { id: aOpen; text: Fili.tr("Open"); enabled: win.canAct && win.selCount === 1; onTriggered: win.show(folder.activate(files.currentIndex)) }
     // Espace: aperçu rapide (script quicklook; relancé sur le même fichier, il se referme). Désactivée pendant la saisie au
     // clavier d'un début de nom (« mon fichier »): l'espace est alors une lettre.
-    Action { id: aQuickLook; text: Fili.tr("Quick Look"); shortcut: "Space"; enabled: !win.typing && !win.nearby && files.typed === "" && files.targets().length > 0; onTriggered: folder.quicklook(files.targets()[0]) }
+    Action { id: aQuickLook; text: Fili.tr("Quick Look"); shortcut: "Space"; enabled: !win.typing && !win.nearby && files.typed === "" && win.selCount > 0; onTriggered: folder.quicklook(files.targets()[0]) }
     Action { id: aInfo; text: Fili.tr("Get Info"); shortcut: "Ctrl+I"; enabled: win.canAct; onTriggered: win.showInfo() }
-    Action { id: aTrash; text: Fili.tr("Move to Trash"); shortcut: "Delete"; enabled: win.canAct && !folder.inTrash; onTriggered: win.trashSelection() }
-    Action { id: aTrashAlt; shortcut: "Ctrl+Backspace"; enabled: win.canAct; onTriggered: win.trashSelection() }
+    Action { id: aTrash; text: Fili.tr("Move to Trash"); shortcut: "Delete"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: win.trashSelection() }
+    Action { id: aTrashAlt; shortcut: "Ctrl+Backspace"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: win.trashSelection() }
+    Action { id: aPutBack; text: Fili.tr("Put Back"); enabled: win.canAct && folder.inTrash && win.selCount > 0; onTriggered: win.putBack() }
     Action { id: aEmpty; text: Fili.tr("Empty Trash"); shortcut: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onTriggered: win.askEmpty() }
     Action { id: aAbout; text: Fili.tr("About Casier"); onTriggered: win.showAbout() }
     // Ctrl+W ferme l'onglet, et la fenêtre quand il n'y en a plus qu'un
-    Action { id: aClose; text: Fili.tr("Close"); shortcut: "Ctrl+W"; onTriggered: win.tabs.length > 1 ? win.closeTab(win.tabIndex) : Qt.quit() }
+    Action { id: aClose; text: Fili.tr("Close"); shortcut: "Ctrl+W"; onTriggered: win.tabs.length > 1 ? win.closeTab(win.tabIndex) : win.quit() }
     Action { id: aNewTab; text: Fili.tr("New Tab"); shortcut: "Ctrl+T"; enabled: !win.picking; onTriggered: win.newTab() }
     Action { id: aNextTab; text: Fili.tr("Show Next Tab"); shortcut: "Ctrl+Tab"; enabled: win.tabs.length > 1; onTriggered: win.switchTab((win.tabIndex + 1) % win.tabs.length) }
     Action { id: aPrevTab; text: Fili.tr("Show Previous Tab"); shortcut: "Ctrl+Shift+Tab"; enabled: win.tabs.length > 1; onTriggered: win.switchTab((win.tabIndex + win.tabs.length - 1) % win.tabs.length) }
-    Action { id: aQuit; text: Fili.tr("Quit"); shortcut: "Ctrl+Q"; onTriggered: Qt.quit() }
+    Action { id: aQuit; text: Fili.tr("Quit"); shortcut: "Ctrl+Q"; onTriggered: win.quit() }
     Action { id: aUndo; text: Fili.tr("Undo"); shortcut: "Ctrl+Z"; enabled: win.canAct; onTriggered: folder.undo() }
-    Action { id: aCut; text: Fili.tr("Cut"); shortcut: "Ctrl+X"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.cut(files.targetsText()) }
-    Action { id: aCopy; text: Fili.tr("Copy"); shortcut: "Ctrl+C"; enabled: win.canAct; onTriggered: folder.copy(files.targetsText()) }
+    Action { id: aCut; text: Fili.tr("Cut"); shortcut: "Ctrl+X"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: folder.cut(files.targetsText()) }
+    Action { id: aCopy; text: Fili.tr("Copy"); shortcut: "Ctrl+C"; enabled: win.canAct && win.selCount > 0; onTriggered: folder.copy(files.targetsText()) }
     Action { id: aPaste; text: Fili.tr("Paste"); shortcut: "Ctrl+V"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.paste() }
-    Action { id: aDuplicate; text: Fili.tr("Duplicate"); shortcut: "Ctrl+D"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.duplicate(files.targetsText()) }
+    Action { id: aDuplicate; text: Fili.tr("Duplicate"); shortcut: "Ctrl+D"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: folder.duplicate(files.targetsText()) }
     // F2: renommer sur place; avec plusieurs éléments sélectionnés, renommer en lot
-    Action { id: aRename; text: Fili.tr("Rename"); shortcut: "F2"; enabled: win.canAct && !folder.inTrash; onTriggered: Object.keys(files.selected).length > 1 ? bulkBox.open() : files.startRename() }
+    Action { id: aRename; text: Fili.tr("Rename"); shortcut: "F2"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: Object.keys(files.selected).length > 1 ? bulkBox.open() : files.startRename() }
     Action { id: aBulk; text: Fili.tr("Rename Items…"); enabled: win.canAct && !folder.inTrash && Object.keys(files.selected).length > 1; onTriggered: bulkBox.open() }
     Action { id: aSelectAll; text: Fili.tr("Select All"); shortcut: "Ctrl+A"; enabled: win.canAct; onTriggered: files.selectAll() }
     Action { id: aInvert; text: Fili.tr("Invert Selection"); shortcut: "Ctrl+Shift+I"; enabled: win.canAct; onTriggered: files.invertSelection() }
     Action { id: aMatch; text: Fili.tr("Select Matching…"); shortcut: "Ctrl+Shift+M"; enabled: win.canAct && !win.picking; onTriggered: matchBox.open() }
-    Action { id: aSameKind; text: Fili.tr("Select Same Kind"); enabled: win.canAct && files.targets().length > 0; onTriggered: files.selectPaths(folder.sameKind(files.targetsText()).split("\n")) }
+    Action { id: aSameKind; text: Fili.tr("Select Same Kind"); enabled: win.canAct && win.selCount > 0; onTriggered: files.selectPaths(folder.sameKind(files.targetsText()).split("\n")) }
     Action { id: aTerminal; text: Fili.tr("Open Terminal Here"); shortcut: "Ctrl+Alt+T"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.terminal(files.targets().length === 1 ? files.targets()[0] : "") }
     Action { id: aList; text: Fili.tr("View as List"); shortcut: "Ctrl+1"; checkable: true; checked: !files.tiles; onTriggered: files.setViewMode("list") }
     Action { id: aGrid; text: Fili.tr("View as Icons"); shortcut: "Ctrl+2"; checkable: true; checked: files.tiles; onTriggered: files.setViewMode("grid") }
-    Action { id: aCopyPath; text: Fili.tr("Copy Full Path"); shortcut: "Ctrl+Shift+C"; enabled: win.canAct && files.targets().length > 0; onTriggered: win.copyAs("path") }
-    Action { id: aCopyName; text: Fili.tr("Copy Name"); shortcut: "Ctrl+Alt+C"; enabled: win.canAct && files.targets().length > 0; onTriggered: win.copyAs("name") }
-    Action { id: aCopyStem; text: Fili.tr("Copy Name Without Extension"); enabled: win.canAct && files.targets().length > 0; onTriggered: win.copyAs("stem") }
-    Action { id: aCopyParent; text: Fili.tr("Copy Parent Folder"); enabled: win.canAct && files.targets().length > 0; onTriggered: win.copyAs("parent") }
+    Action { id: aCopyPath; text: Fili.tr("Copy Full Path"); shortcut: "Ctrl+Shift+C"; enabled: win.canAct && win.selCount > 0; onTriggered: win.copyAs("path") }
+    Action { id: aCopyName; text: Fili.tr("Copy Name"); shortcut: "Ctrl+Alt+C"; enabled: win.canAct && win.selCount > 0; onTriggered: win.copyAs("name") }
+    Action { id: aCopyStem; text: Fili.tr("Copy Name Without Extension"); enabled: win.canAct && win.selCount > 0; onTriggered: win.copyAs("stem") }
+    Action { id: aCopyParent; text: Fili.tr("Copy Parent Folder"); enabled: win.canAct && win.selCount > 0; onTriggered: win.copyAs("parent") }
     Action { id: aPreview; text: Fili.tr("Show Preview"); shortcut: "Ctrl+Shift+P"; checkable: true; checked: win.previewOn; enabled: !win.picking; onTriggered: win.togglePreview() }
     Action { id: aHidden; text: Fili.tr("Show Hidden Files"); shortcut: "Ctrl+H"; checkable: true; checked: folder.showHidden; onTriggered: win.show(folder.toggleHidden(files.currentIndex)) }
     Action { id: aRefresh; text: Fili.tr("Reload"); shortcut: "F5"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
@@ -220,7 +254,7 @@ ApplicationWindow {
     Action { id: aShare; text: Fili.tr("Share…"); enabled: win.canAct && !folder.inTrash && !win.picking && win.shareable().length > 0; onTriggered: shareBox.open() }
     Action { id: aNearby; text: Fili.tr("Nearby"); shortcut: "Ctrl+Shift+R"; enabled: !win.picking; onTriggered: win.open("nearby:") }
     Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
-    Action { id: aCompress; text: Fili.tr("Compress…"); enabled: win.canAct && !folder.inTrash && !win.picking && Object.keys(files.selected).length > 0; onTriggered: compressBox.open(files.targetsText()) }
+    Action { id: aCompress; text: Fili.tr("Compress…"); enabled: win.canAct && !folder.inTrash && !win.picking && win.selCount > 0; onTriggered: compressBox.open(files.targetsText()) }
     Action { id: aExtract; text: Fili.tr("Extract Here"); enabled: win.canAct && !folder.inTrash && !win.picking && Object.keys(files.selected).length > 0 && folder.allArchives(files.targetsText()); onTriggered: folder.extract(files.targetsText(), "") }
     Action { id: aConnect; text: Fili.tr("Connect to Server…"); shortcut: "Ctrl+K"; onTriggered: connectBox.open() }
     // « / » comme Ctrl+F (façon vim, yazi); sans libellé: la barre de menus ne montre que Ctrl+F
@@ -230,7 +264,7 @@ ApplicationWindow {
     // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
     // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
     readonly property var menuActions: ({
-        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
+        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "put-back": aPutBack, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "compress": aCompress, "extract": aExtract, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
@@ -276,6 +310,18 @@ ApplicationWindow {
         tabs = t;
         tabIndex = i;
         open(t[i].path);
+    }
+    // Déplace l'onglet from à la place to (glisser un onglet); l'onglet affiché reste le même
+    function moveTab(from, to) {
+        if (from === to || from < 0 || to < 0 || from >= tabs.length || to >= tabs.length)
+            return;
+        const t = tabs.slice();
+        t[tabIndex] = { path: folder.shown };
+        const current = t[tabIndex];
+        const moved = t.splice(from, 1)[0];
+        t.splice(to, 0, moved);
+        tabs = t;
+        tabIndex = t.indexOf(current);
     }
     function closeTab(i) {
         if (tabs.length < 2)
@@ -399,6 +445,13 @@ ApplicationWindow {
         } else {
             return { ok: false, error: "unknown selection mode: " + mode };
         }
+        // Comme un clic: la ligne courante est la première sélectionnée (Ouvrir, Aperçu rapide... partent d'elle)
+        const first = Object.keys(files.selected)[0];
+        if (first !== undefined) {
+            const row = folder.rowOf(first.split("/").pop());
+            if (row >= 0)
+                files.active.currentIndex = row;
+        }
         const n = Object.keys(files.selected).length;
         if (missing.length > 0)
             return { ok: false, error: "not in the folder shown (" + folder.shown + "): " + missing.slice(0, 5).join(", ") + (missing.length > 5 ? " …" : ""), selected: n };
@@ -445,13 +498,20 @@ ApplicationWindow {
             closeTab(i);
             return { ok: true };
         }
+        case "move": {
+            const to = parts.length > 2 && /^\d+$/.test(parts[2]) ? parseInt(parts[2]) : -1;
+            if (n < 0 || n >= tabs.length || to < 0 || to >= tabs.length)
+                return { ok: false, error: "no such tab (0.." + (tabs.length - 1) + "): tab move FROM TO" };
+            moveTab(n, to);
+            return { ok: true };
+        }
         case "switch":
             if (n < 0 || n >= tabs.length)
                 return { ok: false, error: "no such tab: " + (parts[1] || "") + " (0.." + (tabs.length - 1) + ")" };
             switchTab(n);
             return { ok: true };
         }
-        return { ok: false, error: "usage: tab new [PATH] | close [N] | switch N" };
+        return { ok: false, error: "usage: tab new [PATH] | close [N] | switch N | move FROM TO" };
     }
     // Répond au dialogue ouvert (ctl dialog accept|cancel; pour un conflit de nom aussi replace|skip|both): accept = le
     // bouton par défaut, cancel = Échap. Les champs de saisie (renommage, chemin) et le menu contextuel ne se pilotent pas ici.
@@ -525,6 +585,8 @@ ApplicationWindow {
                 column_widths: files.colWidths,
                 tasks: win.tasks,
                 dialog: dialogName(),
+                notice: win.notice,
+                busy: win.working,
                 can_act: win.canAct
             }
         };
@@ -723,6 +785,9 @@ ApplicationWindow {
         else if (crumb && !Fili.isFavorite(path))
             list.push({ id: "addfav", label: Fili.tr("Add to Favorites") });
         list.push({ id: "copypath", label: Fili.tr("Copy Full Path") });
+        // Le lieu « Corbeille » de la barre latérale: vider sans y entrer
+        if (path === Fili.trashPath() && !crumb)
+            list.push({ separator: true }, { id: "empty", label: Fili.tr("Empty Trash"), enabled: trashFull });
         menu.open(x, y, list);
     }
     function menuAction(id) {
@@ -925,7 +990,7 @@ ApplicationWindow {
         id: sidebar
         anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: parent.left }
         width: FiliTheme.sidebarWidth
-        current: win.nearby && !win.picking ? "nearby:" : folder.shown
+        current: win.nearby && !win.picking ? "nearby:" : win.networkView ? "network:" : folder.shown
         onOpen: p => win.open(p)
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
         onContext: (path, removable, x, y) => win.openPathMenu(path, x, y, false, removable)
@@ -957,7 +1022,35 @@ ApplicationWindow {
                     width: Math.max(80, Math.min(180, (tabBar.width - 2 * FiliTheme.space2) / win.tabs.length - FiliTheme.space1))
                     height: parent.height
                     radius: FiliTheme.radiusControl
-                    color: current ? FiliTheme.nuit3 : tabArea.containsMouse ? FiliTheme.nuit2 : "transparent"
+                    color: current ? FiliTheme.nuit3 : tabArea.containsMouse || tabDrop.containsDrag ? FiliTheme.nuit2 : "transparent"
+                    border.width: tabDrop.containsDrag ? 1 : 0
+                    border.color: FiliTheme.voile
+                    // Glisser l'onglet pour le déplacer: il suit le curseur, la place se décide au relâchement
+                    property real dragDx: 0
+                    property bool moving: false
+                    z: moving ? 10 : 0
+                    opacity: moving ? 0.85 : 1
+                    transform: Translate { x: dragDx }
+                    // Fichiers déposés sur un onglet: ils vont dans son dossier. Le survol un instant l'affiche (la cible se
+                    // choisit alors dans la liste). Pas sur l'onglet affiché: ce serait son propre dossier.
+                    DropArea {
+                        id: tabDrop
+                        anchors.fill: parent
+                        enabled: !current
+                        keys: ["text/uri-list"]
+                        onEntered: spring.restart()
+                        onExited: spring.stop()
+                        onDropped: d => {
+                            spring.stop();
+                            folder.dropItems(d.urls.map(u => u.toString()).join("\n"), path, d.proposedAction === Qt.CopyAction);
+                            d.acceptProposedAction();
+                        }
+                        Timer {
+                            id: spring
+                            interval: 700
+                            onTriggered: win.switchTab(index)
+                        }
+                    }
                     Text {
                         anchors { left: parent.left; leftMargin: FiliTheme.space3; right: closeX.left; rightMargin: FiliTheme.space1; verticalCenter: parent.verticalCenter }
                         text: path === "/" ? "/" : path === Fili.home() ? Fili.home().split("/").pop() : path.split("/").pop()
@@ -969,10 +1062,44 @@ ApplicationWindow {
                     }
                     MouseArea {
                         id: tabArea
+                        property real pressX: 0
+                        property bool wasDrag: false
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                        onClicked: e => e.button === Qt.MiddleButton ? win.closeTab(index) : win.switchTab(index)
+                        onPressed: e => {
+                            pressX = mapToItem(tabBar, e.x, 0).x;
+                            wasDrag = false;
+                        }
+                        onPositionChanged: e => {
+                            if (!pressed || win.tabs.length < 2)
+                                return;
+                            const dx = mapToItem(tabBar, e.x, 0).x - pressX;
+                            if (!moving && Math.abs(dx) < 8)
+                                return;
+                            moving = true;
+                            wasDrag = true;
+                            // Reste dans la barre: du premier au dernier onglet
+                            const slot = parent.width + FiliTheme.space1;
+                            dragDx = Math.max(-index * slot, Math.min((win.tabs.length - 1 - index) * slot, dx));
+                        }
+                        onReleased: {
+                            if (moving) {
+                                const to = Math.max(0, Math.min(win.tabs.length - 1, index + Math.round(dragDx / (parent.width + FiliTheme.space1))));
+                                moving = false;
+                                dragDx = 0;
+                                win.moveTab(index, to);
+                            }
+                        }
+                        onCanceled: {
+                            moving = false;
+                            dragDx = 0;
+                        }
+                        onClicked: e => {
+                            if (wasDrag)
+                                return;
+                            e.button === Qt.MiddleButton ? win.closeTab(index) : win.switchTab(index);
+                        }
                     }
                     Text {
                         id: closeX
@@ -1002,7 +1129,7 @@ ApplicationWindow {
         Text {
             anchors { left: parent.left; leftMargin: FiliTheme.margin; right: closeResults.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             elide: Text.ElideRight
-            text: Fili.tr("Results") + ": " + folder.results
+            text: win.networkView ? (files.active.count === 0 ? Fili.tr("No server connected. Connect to Server… (Ctrl+K) adds one.") : Fili.tr("Connected servers and shares")) : Fili.tr("Results") + ": " + folder.results
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeList
             color: FiliTheme.brume

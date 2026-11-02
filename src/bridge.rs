@@ -72,6 +72,10 @@ pub mod qobject {
         #[cxx_name = "showResults"]
         fn show_results(self: Pin<&mut FolderModel>, title: &QString, paths: &QString);
         // Revient au contenu du dossier
+        // Lieu « Réseau »: serveurs et partages connectés (gvfs, NFS, CIFS, sshfs), sous leur nom lisible
+        #[qinvokable]
+        #[cxx_name = "showNetwork"]
+        fn show_network(self: Pin<&mut FolderModel>, title: &QString);
         #[qinvokable]
         #[cxx_name = "closeResults"]
         fn close_results(self: Pin<&mut FolderModel>);
@@ -354,6 +358,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setPreviewShown"]
         fn set_preview_shown(self: &Fili, on: bool);
+        // Dossier des éléments de la Corbeille (le lieu « Corbeille » de la barre latérale)
+        #[qinvokable]
+        #[cxx_name = "trashPath"]
+        fn trash_path(self: &Fili) -> QString;
         #[qinvokable]
         #[cxx_name = "pathExists"]
         fn path_exists(self: &Fili, path: &QString) -> bool;
@@ -463,7 +471,7 @@ pub mod qobject {
         fn pid(self: &Fili) -> i32;
         #[qinvokable]
         #[cxx_name = "publishContext"]
-        fn publish_context(self: &Fili, location: &QString, selection: &QString, results: &QString);
+        fn publish_context(self: &Fili, location: &QString, selection: &QString, results: &QString, disabled: &QString);
     }
 
     impl cxx_qt::Initialize for Fili {}
@@ -1344,6 +1352,28 @@ impl FolderModel {
         self.as_mut().changed();
     }
 
+    pub fn show_network(mut self: Pin<&mut Self>, title: &QString) {
+        if self.dir.is_empty() {
+            return;
+        }
+        let all: Vec<fs::Entry> = volumes::network()
+            .into_iter()
+            .filter_map(|v| {
+                let mount = v.mount?;
+                fs::entry(Path::new(&mount)).map(|e| fs::Entry { name: v.name.clone(), ..e })
+            })
+            .collect();
+        let dir = QString::from(&self.dir);
+        let mut r = self.as_mut().rust_mut();
+        r.all = all;
+        r.filter = QString::default();
+        r.results = title.clone();
+        r.shown = dir;
+        self.as_mut().drop_index();
+        self.as_mut().rebuild();
+        self.as_mut().changed();
+    }
+
     pub fn close_results(mut self: Pin<&mut Self>) {
         if !self.results.is_empty() {
             let dir = QString::from(&self.dir);
@@ -1380,6 +1410,15 @@ impl FolderModel {
         if archive_stem(&e.name).is_some() && !self.in_trash {
             self.start_archive(vec![e.path.clone()], None, String::new());
             return -1;
+        }
+        // Un fichier vide (0 octet) n'a pas de contenu à reconnaître: xdg-open le prend pour « application/x-zerosize » et
+        // n'ouvre rien. On l'ouvre avec l'application de son type d'après le nom (sans extension connue: du texte).
+        if e.size == 0 {
+            let mime = icons::mime_type(&e.name).unwrap_or_else(|| "text/plain".into());
+            if let Some(app) = apps::for_mime(&mime).into_iter().next() && let Some((program, args)) = apps::command(&app, &e.path).split_first() {
+                spawn_detached(Command::new(program).args(args).current_dir(&self.dir));
+                return -1;
+            }
         }
         spawn("xdg-open", &e.path, Path::new(&self.dir));
         -1
@@ -1461,6 +1500,7 @@ impl FolderModel {
         let name = self.selected_name(row);
         let mut r = self.as_mut().rust_mut();
         r.show_hidden = !r.show_hidden;
+        ui_store("hidden", if r.show_hidden { "1" } else { "0" });
         if !self.filter.is_empty() {
             self.as_mut().start_index();
         }
@@ -2431,7 +2471,12 @@ impl cxx_qt::Initialize for FolderModel {
         {
             let mut m = self.as_mut();
             let r = m.as_mut().rust_mut().get_mut();
-            r.show_hidden = cfg.show_hidden;
+            // Fichiers cachés: le dernier choix de l'utilisateur (Ctrl+H) passe devant le réglage
+            r.show_hidden = match ui_get(&std::fs::read_to_string(ui_file()).unwrap_or_default(), "hidden").as_str() {
+                "1" => true,
+                "0" => false,
+                _ => cfg.show_hidden,
+            };
             r.sort_key = cfg.sort;
             r.sort_desc = cfg.sort_desc;
         }
@@ -2474,6 +2519,16 @@ fn ui_set(text: &str, key: &str, value: &str) -> String {
     }
     lines.sort();
     if lines.is_empty() { String::new() } else { lines.join("\n") + "\n" }
+}
+
+// Écrit une clé de l'état d'interface (vide: la retire)
+fn ui_store(key: &str, value: &str) {
+    let file = ui_file();
+    let text = ui_set(&std::fs::read_to_string(&file).unwrap_or_default(), key, value);
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(file, text);
 }
 
 fn columns_file() -> PathBuf {
@@ -2781,12 +2836,7 @@ impl Fili {
     }
 
     pub fn set_ui_state(&self, key: &QString, value: &QString) {
-        let file = ui_file();
-        let text = ui_set(&std::fs::read_to_string(&file).unwrap_or_default(), &key.to_string(), &value.to_string());
-        if let Some(dir) = file.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let _ = std::fs::write(file, text);
+        ui_store(&key.to_string(), &value.to_string());
     }
 
     pub fn view_mode(&self) -> QString {
@@ -2849,6 +2899,10 @@ impl Fili {
         if write_bookmarks(&list).is_ok() {
             self.as_mut().places_changed();
         }
+    }
+
+    pub fn trash_path(&self) -> QString {
+        QString::from(&ops::trash_files().to_string_lossy().into_owned())
     }
 
     pub fn trash_full(&self) -> bool {
@@ -2932,6 +2986,8 @@ impl Fili {
         }
         // Partage de proximité (vue À proximité de la fenêtre, pas un dossier)
         items.push((devices, i18n::tr("Nearby").to_string(), "nearby:".into(), "network-wireless", String::new()));
+        // Serveurs et partages connectés (vue de résultats, pas un dossier)
+        items.push((devices, i18n::tr("Network").to_string(), "network:".into(), "network-workgroup", String::new()));
         items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "computer", String::new()));
         // Volumes amovibles: non montés, un clic les monte (path vide, dev renseigné)
         for v in volumes::list() {
@@ -2982,12 +3038,13 @@ impl Fili {
         QString::from(&home())
     }
 
-    pub fn publish_context(&self, location: &QString, selection: &QString, results: &QString) {
+    pub fn publish_context(&self, location: &QString, selection: &QString, results: &QString, disabled: &QString) {
         let loc = location.to_string();
         if loc.is_empty() {
             crate::context::clear();
         } else {
-            crate::context::publish("fili-file", &loc, &paths_of(selection), &results.to_string());
+            let off: Vec<String> = disabled.to_string().split(',').filter(|d| !d.is_empty()).map(String::from).collect();
+            crate::context::publish("fili-file", &loc, &paths_of(selection), &results.to_string(), &off);
         }
     }
 

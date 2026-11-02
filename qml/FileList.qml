@@ -54,6 +54,13 @@ Rectangle {
     readonly property string info: Object.keys(selected).length > 0 ? folder.describe(Object.keys(selected).join("\n")) : ""
     property int renaming: -1
     readonly property bool editing: renaming >= 0
+    // Fin du renommage sur place par un clic ailleurs: ce qui est tapé est validé (Échap seul annule)
+    signal commitEdit()
+    function endRename() {
+        if (renaming >= 0)
+            commitEdit();
+        renaming = -1;
+    }
 
     function pick(row) {
         const s = {};
@@ -61,6 +68,84 @@ Rectangle {
             s[folder.pathAt(row)] = true;
         selected = s;
         anchor = row;
+    }
+    // Image sous le curseur pendant un glisser: les noms (trois au plus) et le nombre d'éléments, préparée au clic
+    property url dragImage: ""
+    Item {
+        id: dragPreview
+        // Hors de la fenêtre, mais rendu: grabToImage en fait l'image
+        x: -4000
+        width: 220
+        height: stack.implicitHeight + 6
+        property var names: []
+        property int total: 0
+        Column {
+            id: stack
+            x: 3
+            y: 3
+            spacing: 3
+            Repeater {
+                model: dragPreview.names
+                delegate: Rectangle {
+                    required property string modelData
+                    width: 200
+                    height: 24
+                    radius: FiliTheme.radiusControl
+                    color: FiliTheme.nuit3
+                    border.width: 1
+                    border.color: FiliTheme.voile
+                    Text {
+                        anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideMiddle
+                        text: parent.modelData
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.sizeList
+                        color: FiliTheme.brume
+                    }
+                }
+            }
+        }
+        // Pastille du nombre d'éléments
+        Rectangle {
+            visible: dragPreview.total > 1
+            x: 200 - 6
+            y: -1
+            width: Math.max(20, countText.implicitWidth + 10)
+            height: 20
+            radius: 10
+            color: FiliTheme.voileVif
+            Text {
+                id: countText
+                anchors.centerIn: parent
+                text: dragPreview.total
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.sizeSmall
+                font.weight: FiliTheme.weightAccent
+                color: FiliTheme.nuitProfond
+            }
+        }
+    }
+    function prepareDrag(path) {
+        const keys = selected[path] ? Object.keys(selected) : [path];
+        dragPreview.names = keys.slice(0, 3).map(p => p.split("/").pop());
+        dragPreview.total = keys.length;
+        // Le temps que les noms soient posés, puis une image de la taille de l'aperçu
+        Qt.callLater(() => dragPreview.grabToImage(r => { view.dragImage = r.url; }, Qt.size(dragPreview.width, dragPreview.height)));
+    }
+    // Clic sur l'élément de ce nom, une fois un renommage validé (ce qu'aurait fait un clic simple, Ctrl ou Maj)
+    function clickNamed(name, modifiers) {
+        const row = folder.rowOf(name);
+        if (row < 0)
+            return;
+        active.currentIndex = row;
+        if (modifiers & Qt.ControlModifier)
+            toggle(row);
+        else if (modifiers & Qt.ShiftModifier)
+            extendTo(row);
+        else
+            pick(row);
+        active.forceActiveFocus();
     }
     // Une seule ligne sélectionnée et courante
     function select(row) {
@@ -569,7 +654,13 @@ Rectangle {
                         }
                         view.focusList();
                     }
-                    onAccepted: commit()
+                    // Entrée valide, et s'arrête là (sans cela elle remonte à la liste, qui ouvrirait l'élément)
+                    Keys.onReturnPressed: e => { commit(); e.accepted = true; }
+                    Keys.onEnterPressed: e => { commit(); e.accepted = true; }
+                    Connections {
+                        target: view
+                        function onCommitEdit() { input.commit(); }
+                    }
                     Keys.onEscapePressed: {
                         view.renaming = -1;
                         view.focusList();
@@ -605,6 +696,8 @@ Rectangle {
                 width: 1
                 height: 1
                 Drag.active: area.drag.active
+                Drag.imageSource: view.dragImage
+                Drag.hotSpot: Qt.point(24, 14)
                 Drag.dragType: Drag.Automatic
                 Drag.supportedActions: Qt.CopyAction | Qt.MoveAction
                 Drag.proposedAction: Qt.MoveAction
@@ -638,7 +731,13 @@ Rectangle {
                         return;
                     }
                     Fili.keyNav = false;
-                    view.renaming = -1;
+                    if (view.renaming >= 0) {
+                        // Valider le renommage d'abord: la ligne peut changer de place (tri), le clic se refait par le nom
+                        const name = row.name, mods = e.modifiers;
+                        view.endRename();
+                        Qt.callLater(() => view.clickNamed(name, mods));
+                        return;
+                    }
                     collapse = false;
                     if (e.modifiers & Qt.ControlModifier)
                         view.toggle(row.index);
@@ -653,6 +752,7 @@ Rectangle {
                         // Sélection multiple: elle se réduit au relâchement s'il n'y a pas eu de glisser
                         collapse = true;
                     }
+                    view.prepareDrag(row.path);
                     view.active.forceActiveFocus();
                 }
                 onReleased: {
@@ -663,6 +763,17 @@ Rectangle {
                 onDoubleClicked: view.openRow(row.index)
             }
         }
+    }
+
+    FiliScrollBar {
+        flick: list
+        visible: needed && !view.tiles
+        anchors { top: list.top; bottom: list.bottom; right: list.right }
+    }
+    FiliScrollBar {
+        flick: grid
+        visible: needed && view.tiles
+        anchors { top: grid.top; bottom: grid.bottom; right: grid.right }
     }
 
     // Dossier vide
