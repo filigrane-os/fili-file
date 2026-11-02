@@ -379,7 +379,7 @@ ApplicationWindow {
                 list.push({ separator: true });
                 if (archives)
                     list.push({ id: "extract", label: Fili.tr("Extract Here") });
-                list.push({ id: "compress", label: Fili.tr("Compress") });
+                list.push({ id: "compress", label: Fili.tr("Compress…") });
                 list.push({ id: "share", label: Fili.tr("Share…"), enabled: t.some(p => !folder.pathIsDir(p)) });
             }
             list.push({ separator: true });
@@ -481,7 +481,7 @@ ApplicationWindow {
         else if (id === "extract")
             folder.extract(t);
         else if (id === "compress")
-            folder.compress(t);
+            compressBox.open(t);
         else if (id === "share")
             aShare.trigger();
         else if (id === "newfolder")
@@ -1632,6 +1632,186 @@ ApplicationWindow {
                         primary: true
                         onClicked: conflictBox.choose("both")
                     }
+                }
+            }
+        }
+    }
+    // Panneau de compression (menu « Compresser… »): nom, format, niveau, fichiers cachés. Les choix sont gardés pour la session.
+    component ChoiceRow: Item {
+        property var options: []
+        property string current
+        width: parent ? parent.width : 100
+        height: 22
+        activeFocusOnTab: true
+        function step(d) {
+            const i = options.findIndex(o => o.id === current);
+            current = options[(i + d + options.length) % options.length].id;
+        }
+        Keys.onLeftPressed: step(-1)
+        Keys.onRightPressed: step(1)
+        Keys.onReturnPressed: compressBox.apply()
+        Keys.onEnterPressed: compressBox.apply()
+        Keys.onEscapePressed: compressBox.visible = false
+        Row {
+            spacing: FiliTheme.space1
+            Repeater {
+                model: options
+                TextButton {
+                    required property var modelData
+                    label: modelData.label
+                    primary: modelData.id === current
+                    onClicked: { current = modelData.id; parent.parent.forceActiveFocus(); }
+                }
+            }
+        }
+        FocusRing {}
+    }
+    Rectangle {
+        id: compressBox
+        property string paths: ""
+        property string format: "zip"
+        property string level: "normal"
+        property bool skipHidden: false
+        function open(list) {
+            paths = list.join("\n");
+            nameField.text = folder.archiveName(paths);
+            visible = true;
+        }
+        function apply() {
+            if (nameField.text.trim() === "")
+                return;
+            visible = false;
+            folder.compress(paths, nameField.text, format, level, skipHidden);
+        }
+        anchors.fill: parent
+        visible: false
+        z: 200
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        onVisibleChanged: if (visible) { nameField.forceActiveFocus(); nameField.selectAll(); } else files.focusList()
+        MouseArea {
+            anchors.fill: parent
+            onClicked: compressBox.visible = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 380
+            height: compressCard.implicitHeight + 2 * FiliTheme.space4
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            Column {
+                id: compressCard
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
+                spacing: FiliTheme.space3
+                Text {
+                    width: parent.width
+                    text: Fili.tr("Compress")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.brume
+                }
+                Rectangle {
+                    width: parent.width
+                    height: 26
+                    radius: FiliTheme.radiusControl
+                    color: FiliTheme.nuit
+                    border.width: 1
+                    border.color: nameField.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+                    TextInput {
+                        id: nameField
+                        anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+                        verticalAlignment: TextInput.AlignVCenter
+                        clip: true
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.size
+                        color: FiliTheme.brume
+                        selectByMouse: true
+                        KeyNavigation.tab: formatRow
+                        onAccepted: compressBox.apply()
+                        Keys.onEscapePressed: compressBox.visible = false
+                    }
+                }
+                Text {
+                    text: Fili.tr("Format")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
+                }
+                ChoiceRow {
+                    id: formatRow
+                    KeyNavigation.tab: levelRow
+                    options: [
+                        { id: "zip", label: "zip" }, { id: "7z", label: "7z" }, { id: "tar.gz", label: "tar.gz" },
+                        { id: "tar.xz", label: "tar.xz" }, { id: "tar.zst", label: "tar.zst" }
+                    ]
+                    current: compressBox.format
+                    onCurrentChanged: compressBox.format = current
+                }
+                Text {
+                    text: Fili.tr("Compression")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
+                }
+                ChoiceRow {
+                    id: levelRow
+                    KeyNavigation.tab: hiddenRow
+                    options: [
+                        { id: "fast", label: Fili.tr("Faster") }, { id: "normal", label: Fili.tr("Balanced") },
+                        { id: "best", label: Fili.tr("Smaller") }
+                    ]
+                    current: compressBox.level
+                    onCurrentChanged: compressBox.level = current
+                }
+                Item {
+                    id: hiddenRow
+                    width: parent.width
+                    height: 22
+                    activeFocusOnTab: true
+                    KeyNavigation.tab: nameField
+                    function flip() { compressBox.skipHidden = !compressBox.skipHidden; }
+                    Keys.onSpacePressed: flip()
+                    Keys.onReturnPressed: compressBox.apply()
+                    Keys.onEnterPressed: compressBox.apply()
+                    Keys.onEscapePressed: compressBox.visible = false
+                    Rectangle {
+                        id: box
+                        width: 14
+                        height: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        radius: 3
+                        color: FiliTheme.nuit
+                        border.width: 1
+                        border.color: compressBox.skipHidden ? FiliTheme.voile : FiliTheme.nuit4
+                        Text {
+                            anchors.centerIn: parent
+                            visible: compressBox.skipHidden
+                            text: "✓"
+                            font.family: FiliTheme.font
+                            font.pixelSize: FiliTheme.sizeList
+                            color: FiliTheme.voile
+                        }
+                    }
+                    Text {
+                        anchors { left: box.right; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                        text: Fili.tr("Skip hidden files")
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.size
+                        color: FiliTheme.brume
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: { hiddenRow.flip(); hiddenRow.forceActiveFocus(); }
+                    }
+                    FocusRing {}
+                }
+                Row {
+                    spacing: FiliTheme.space2
+                    anchors.right: parent.right
+                    TextButton { label: Fili.tr("Cancel"); onClicked: compressBox.visible = false }
+                    TextButton { label: Fili.tr("Compress"); primary: true; onClicked: compressBox.apply() }
                 }
             }
         }

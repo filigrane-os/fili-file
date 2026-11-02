@@ -173,8 +173,13 @@ pub mod qobject {
         fn all_archives(self: &FolderModel, paths: &QString) -> bool;
         #[qinvokable]
         fn extract(self: Pin<&mut FolderModel>, paths: &QString);
+        // Nom proposé par le panneau de compression (sans extension)
         #[qinvokable]
-        fn compress(self: Pin<&mut FolderModel>, paths: &QString);
+        #[cxx_name = "archiveName"]
+        fn archive_name(self: &FolderModel, paths: &QString) -> QString;
+        // Compresse avec les choix du panneau: nom (sans extension), format, niveau (fast|normal|best), sans fichiers cachés
+        #[qinvokable]
+        fn compress(self: Pin<&mut FolderModel>, paths: &QString, name: &QString, format: &QString, level: &QString, skip_hidden: bool);
         #[qinvokable]
         fn cancel(self: Pin<&mut FolderModel>);
         // Renommage en lot (modes replace, number, case; voir ops::bulk_name). L'aperçu rend du JSON
@@ -819,6 +824,13 @@ enum Mode {
     Move,
     // Déplacer sur le même volume, copier sinon (glisser-déposer)
     Auto,
+}
+
+struct ArchiveOpts {
+    name: String,
+    format: String,
+    level: String,
+    skip_hidden: bool,
 }
 
 fn paths_of(list: &QString) -> Vec<String> {
@@ -1986,15 +1998,41 @@ impl FolderModel {
     }
 
     pub fn extract(self: Pin<&mut Self>, paths: &QString) {
-        self.start_archive(paths_of(paths), false);
+        self.start_archive(paths_of(paths), None);
     }
 
-    pub fn compress(self: Pin<&mut Self>, paths: &QString) {
-        self.start_archive(paths_of(paths), true);
+    pub fn archive_name(&self, paths: &QString) -> QString {
+        let items = paths_of(paths);
+        QString::from(&match items.as_slice() {
+            [one] => {
+                let n = base(one);
+                match n.rsplit_once('.') {
+                    Some((s, _)) if !s.is_empty() && !Path::new(one).is_dir() => s.to_string(),
+                    _ => n,
+                }
+            }
+            _ => i18n::tr("Archive").to_string(),
+        })
+    }
+
+    pub fn compress(self: Pin<&mut Self>, paths: &QString, name: &QString, format: &QString, level: &QString, skip_hidden: bool) {
+        let format = match format.to_string().as_str() {
+            f @ ("zip" | "7z" | "tar.gz" | "tar.xz" | "tar.zst") => f.to_string(),
+            _ => "zip".into(),
+        };
+        let level = match level.to_string().as_str() {
+            l @ ("fast" | "best") => l.to_string(),
+            _ => "normal".into(),
+        };
+        // Pas de séparateur de chemin dans le nom
+        let name = name.to_string().replace('/', "-").trim().to_string();
+        let opts = ArchiveOpts { name, format, level, skip_hidden };
+        self.start_archive(paths_of(paths), Some(opts));
     }
 
     // Extraction (tar, 7z) ou compression (zip) en arrière-plan, annulable; le résultat se défait (corbeille)
-    fn start_archive(mut self: Pin<&mut Self>, items: Vec<String>, compress: bool) {
+    fn start_archive(mut self: Pin<&mut Self>, items: Vec<String>, opts: Option<ArchiveOpts>) {
+        let compress = opts.is_some();
         if items.is_empty() {
             return;
         }
@@ -2029,13 +2067,17 @@ impl FolderModel {
             let (mut created, mut error): (Vec<PathBuf>, Option<String>) = (Vec::new(), None);
             // Jobs: (programme, arguments, dossier ou fichier créé, nom pour les erreurs)
             let mut jobs: Vec<(&str, Vec<String>, PathBuf, String)> = Vec::new();
-            if compress {
-                let first = base(&items[0]);
-                let name = if items.len() == 1 { first } else { i18n::tr("Archive").to_string() };
-                let out = ops::unique(&dir, &format!("{name}.zip"), "", false);
-                let mut args = vec!["-r".to_string(), "-q".to_string(), out.to_string_lossy().into_owned()];
-                args.extend(items.iter().map(|p| base(p)));
-                jobs.push(("zip", args, out, name));
+            if let Some(o) = &opts {
+                let name = if o.name.is_empty() || o.name.starts_with('.') { i18n::tr("Archive").to_string() } else { o.name.clone() };
+                let out = ops::unique(&dir, &format!("{name}.{}", o.format), "", false);
+                // fili-archive écrit sous un nom caché puis renomme; -q: pas de transaction ni de notification (fili-file a les siens)
+                let mut args: Vec<String> = ["pack", "-q", "-f", &o.format, "-l", &o.level].map(String::from).into();
+                if o.skip_hidden {
+                    args.push("--no-hidden".into());
+                }
+                args.extend(["-o".into(), out.to_string_lossy().into_owned(), "--".into()]);
+                args.extend(items.iter().cloned());
+                jobs.push(("fili-archive", args, out, name));
             } else {
                 for item in &items {
                     let name = base(item);
@@ -2060,7 +2102,7 @@ impl FolderModel {
                     .current_dir(&dir)
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
-                    .stderr(Stdio::null())
+                    .stderr(if program == "fili-archive" { Stdio::piped() } else { Stdio::null() })
                     .spawn();
                 let mut child = match child {
                     Ok(c) => c,
@@ -2074,6 +2116,17 @@ impl FolderModel {
                     if cancel.load(Ordering::Relaxed) {
                         let _ = child.kill();
                         let _ = child.wait();
+                        if program == "fili-archive" {
+                            // le programme tué laisse son fichier de travail caché (« .nom.PID.part.ext »)
+                            if let Some(n) = out.file_name() {
+                                let prefix = format!(".{}.{}.part.", n.to_string_lossy(), child.id());
+                                for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                                    if e.file_name().to_string_lossy().starts_with(&prefix) {
+                                        let _ = std::fs::remove_file(e.path());
+                                    }
+                                }
+                            }
+                        }
                         break None;
                     }
                     match child.try_wait() {
@@ -2086,8 +2139,14 @@ impl FolderModel {
                     Some(true) => created.push(out),
                     Some(false) => {
                         let _ = ops::remove_tree(&out);
-                        let why = i18n::tr("the tool reported an error");
-                        error = Some(msg(&name, why));
+                        // fili-archive dit pourquoi sur sa sortie d'erreur (« fili-archive: cannot compress: … »)
+                        let mut err = String::new();
+                        if let Some(mut se) = child.stderr.take() {
+                            let _ = std::io::Read::read_to_string(&mut se, &mut err);
+                        }
+                        let why = err.lines().last().map(|l| l.trim_start_matches("fili-archive: ").trim().to_string());
+                        let why = why.filter(|w| !w.is_empty()).unwrap_or_else(|| i18n::tr("the tool reported an error").to_string());
+                        error = Some(msg(&name, &why));
                         break;
                     }
                     None => {
