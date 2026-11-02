@@ -222,6 +222,7 @@ ApplicationWindow {
     // Ctrl+W ferme l'onglet, et la fenêtre quand il n'y en a plus qu'un
     Action { id: aClose; text: Fili.tr("Close"); shortcut: "Ctrl+W"; onTriggered: win.tabs.length > 1 ? win.closeTab(win.tabIndex) : win.quit() }
     Action { id: aNewTab; text: Fili.tr("New Tab"); shortcut: "Ctrl+T"; enabled: !win.picking; onTriggered: win.newTab() }
+    Action { id: aDetachTab; text: Fili.tr("Move Tab to New Window"); enabled: !win.picking && win.tabs.length > 1; onTriggered: win.detachTab(win.tabIndex) }
     Action { id: aNextTab; text: Fili.tr("Show Next Tab"); shortcut: "Ctrl+Tab"; enabled: win.tabs.length > 1; onTriggered: win.switchTab((win.tabIndex + 1) % win.tabs.length) }
     Action { id: aPrevTab; text: Fili.tr("Show Previous Tab"); shortcut: "Ctrl+Shift+Tab"; enabled: win.tabs.length > 1; onTriggered: win.switchTab((win.tabIndex + win.tabs.length - 1) % win.tabs.length) }
     Action { id: aQuit; text: Fili.tr("Quit"); shortcut: "Ctrl+Q"; onTriggered: win.quit() }
@@ -264,7 +265,7 @@ ApplicationWindow {
     // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
     // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
     readonly property var menuActions: ({
-        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "put-back": aPutBack, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
+        "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "put-back": aPutBack, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "detach-tab": aDetachTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "compress": aCompress, "extract": aExtract, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
@@ -322,6 +323,14 @@ ApplicationWindow {
         t.splice(to, 0, moved);
         tabs = t;
         tabIndex = t.indexOf(current);
+    }
+    // Détache l'onglet i dans une nouvelle fenêtre de Casier (même dossier) et le ferme ici. Rend false s'il est le seul.
+    function detachTab(i) {
+        if (tabs.length < 2 || i < 0 || i >= tabs.length)
+            return false;
+        Fili.openWindow(i === tabIndex ? folder.shown : tabs[i].path);
+        closeTab(i);
+        return true;
     }
     function closeTab(i) {
         if (tabs.length < 2)
@@ -498,6 +507,14 @@ ApplicationWindow {
             closeTab(i);
             return { ok: true };
         }
+        case "detach": {
+            const i = parts.length > 1 ? n : tabIndex;
+            if (i < 0 || i >= tabs.length)
+                return { ok: false, error: "no such tab: " + (parts[1] || "") + " (0.." + (tabs.length - 1) + ")" };
+            if (!detachTab(i))
+                return { ok: false, error: "last tab: nothing to detach" };
+            return { ok: true };
+        }
         case "move": {
             const to = parts.length > 2 && /^\d+$/.test(parts[2]) ? parseInt(parts[2]) : -1;
             if (n < 0 || n >= tabs.length || to < 0 || to >= tabs.length)
@@ -511,7 +528,7 @@ ApplicationWindow {
             switchTab(n);
             return { ok: true };
         }
-        return { ok: false, error: "usage: tab new [PATH] | close [N] | switch N | move FROM TO" };
+        return { ok: false, error: "usage: tab new [PATH] | close [N] | switch N | move FROM TO | detach [N]" };
     }
     // Répond au dialogue ouvert (ctl dialog accept|cancel; pour un conflit de nom aussi replace|skip|both): accept = le
     // bouton par défaut, cancel = Échap. Les champs de saisie (renommage, chemin) et le menu contextuel ne se pilotent pas ici.
@@ -783,7 +800,7 @@ ApplicationWindow {
         if (removable)
             list.push({ id: "remfav", label: Fili.tr("Remove from Favorites") });
         else if (frequent)
-            list.push({ id: "remfreq", label: Fili.tr("Remove from Frequent") });
+            list.push({ id: "remfreq", label: Fili.tr("Remove from Recents") });
         else if (crumb && !Fili.isFavorite(path))
             list.push({ id: "addfav", label: Fili.tr("Add to Favorites") });
         list.push({ id: "copypath", label: Fili.tr("Copy Full Path") });
@@ -1032,8 +1049,9 @@ ApplicationWindow {
                     // Glisser l'onglet pour le déplacer: il suit le curseur, la place se décide au relâchement
                     property real dragDx: 0
                     property bool moving: false
+                    property bool leaving: false
                     z: moving ? 10 : 0
-                    opacity: moving ? 0.85 : 1
+                    opacity: leaving ? 0.45 : moving ? 0.85 : 1
                     transform: Translate { x: dragDx }
                     // Fichiers déposés sur un onglet: ils vont dans son dossier. Le survol un instant l'affiche (la cible se
                     // choisit alors dans la liste). Pas sur l'onglet affiché: ce serait son propre dossier.
@@ -1086,17 +1104,30 @@ ApplicationWindow {
                             // Reste dans la barre: du premier au dernier onglet
                             const slot = parent.width + FiliTheme.space1;
                             dragDx = Math.max(-index * slot, Math.min((win.tabs.length - 1 - index) * slot, dx));
+                            // Loin de la barre: il deviendra une fenêtre (à demi transparent pour le dire)
+                            leaving = outside(e);
                         }
-                        onReleased: {
+                        // Relâché loin de la barre d'onglets (au-dessus, sous la barre ou hors de la fenêtre): l'onglet devient une fenêtre
+                        function outside(e) {
+                            const p = mapToItem(null, e.x, e.y);
+                            return p.y < -24 || p.y > tabBar.y + tabBar.height + 48 || p.x < -24 || p.x > win.width + 24;
+                        }
+                        onReleased: e => {
                             if (moving) {
+                                const out = outside(e);
                                 const to = Math.max(0, Math.min(win.tabs.length - 1, index + Math.round(dragDx / (parent.width + FiliTheme.space1))));
                                 moving = false;
+                                leaving = false;
                                 dragDx = 0;
-                                win.moveTab(index, to);
+                                if (out)
+                                    win.detachTab(index);
+                                else
+                                    win.moveTab(index, to);
                             }
                         }
                         onCanceled: {
                             moving = false;
+                            leaving = false;
                             dragDx = 0;
                         }
                         onClicked: e => {

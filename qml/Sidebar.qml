@@ -157,7 +157,7 @@ Rectangle {
                     if (e.button === Qt.RightButton) {
                         if (row.path !== "" && row.path !== "nearby:" && row.path !== "network:") {
                             const p = area.mapToItem(null, e.x, e.y);
-                            side.context(row.path, row.removable, row.section === Fili.tr("Frequent"), p.x, p.y);
+                            side.context(row.path, row.removable, row.section === Fili.tr("Recents"), p.x, p.y);
                         }
                         return;
                     }

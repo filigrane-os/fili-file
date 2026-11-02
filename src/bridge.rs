@@ -362,7 +362,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "trashPath"]
         fn trash_path(self: &Fili) -> QString;
-        // Retire un dossier de la section « Fréquents » de la barre latérale
+        // Nouvelle fenêtre de Casier sur ce dossier (onglet détaché)
+        #[qinvokable]
+        #[cxx_name = "openWindow"]
+        fn open_window(self: &Fili, path: &QString);
+        // Retire un dossier de la section « Récents » de la barre latérale
         #[qinvokable]
         #[cxx_name = "forgetVisit"]
         fn forget_visit(self: Pin<&mut Fili>, path: &QString);
@@ -2905,6 +2909,11 @@ impl Fili {
         }
     }
 
+    pub fn open_window(&self, path: &QString) {
+        let Ok(exe) = env::current_exe() else { return };
+        spawn_detached(Command::new(exe).arg(path.to_string()).current_dir("/"));
+    }
+
     pub fn forget_visit(mut self: Pin<&mut Self>, path: &QString) {
         visits::forget(&path.to_string());
         self.as_mut().places_changed();
@@ -2989,7 +2998,7 @@ impl Fili {
             seen.push(p);
         }
         // Dossiers souvent ouverts récemment (hors favoris, dossier personnel et racine), 5 au plus
-        let frequent = i18n::tr("Frequent");
+        let frequent = i18n::tr("Recents");
         for v in visits::ranked().into_iter().filter(|v| v.path != home && v.path != "/" && !seen.contains(&v.path)).take(5) {
             items.push((frequent, name(&v.path), v.path.clone(), "folder", String::new()));
         }

@@ -41,7 +41,7 @@ fn json(s: &str) -> String {
 const ABOUT: &str = "File manager. location = folder shown (results = title if a result list from ctl show replaces its content), selection = paths the user selected (absolute). \
 Act on files with normal shell tools (mv, cp, rg, sha256sum, tar...) using these paths; prefer the shell for batch work. \
 fili-file shows changes live (inotify), so no refresh call is needed. To change files use fili-tx (mv, mv - for batches, trash, mkdir, cp), never bare mv/rm: fili-tx undo reverts the whole request. \
-To take the user somewhere: fili-file ctl goto PATH (a file is selected in its folder). Menu commands (the fili-bar menu): fili-file ctl action new-folder|copy|paste|rename|trash|undo|reload|... acts on the user's selection. Every ctl command prints a JSON answer and exits 1 with the reason if it did not happen (unknown or disabled action, bad path). fili-file ctl state prints the window state (tabs, folder, selection, view, tasks, open dialog); fili-file ctl actions lists the commands with label, shortcut and whether they are enabled now. Commands with an argument skip their dialog: ctl action rename NAME | new-folder NAME | select-matching GLOB | compress NAME[.zip|.7z|.tar.gz|.tar.xz|.tar.zst] | extract PASSWORD | search TEXT | path PATH. Selection: ctl select < paths (replaces), select --add < paths, select --none, select --pattern GLOB (paths must be in the folder shown). ctl reveal PATH opens the parent and selects the item; ctl tab new [PATH]|close [N]|switch N|move FROM TO; ctl view list|icons; hidden on|off; preview on|off; sort name|size|modified|kind|created|permissions|owner [asc|desc]. ctl dialog accept|cancel (a name conflict also replace|skip|both) answers the open dialog; ctl width column NAME PX|reset and width preview PX|reset set the column and preview panel widths; action quick-look (Space) opens the quick look window. To show search results in this window: \
+To take the user somewhere: fili-file ctl goto PATH (a file is selected in its folder). Menu commands (the fili-bar menu): fili-file ctl action new-folder|copy|paste|rename|trash|undo|reload|... acts on the user's selection. Every ctl command prints a JSON answer and exits 1 with the reason if it did not happen (unknown or disabled action, bad path). fili-file ctl state prints the window state (tabs, folder, selection, view, tasks, open dialog); fili-file ctl actions lists the commands with label, shortcut and whether they are enabled now. Commands with an argument skip their dialog: ctl action rename NAME | new-folder NAME | select-matching GLOB | compress NAME[.zip|.7z|.tar.gz|.tar.xz|.tar.zst] | extract PASSWORD | search TEXT | path PATH. Selection: ctl select < paths (replaces), select --add < paths, select --none, select --pattern GLOB (paths must be in the folder shown). ctl reveal PATH opens the parent and selects the item; ctl tab new [PATH]|close [N]|switch N|move FROM TO|detach [N] (the tab becomes its own window); ctl view list|icons; hidden on|off; preview on|off; sort name|size|modified|kind|created|permissions|owner [asc|desc]. ctl dialog accept|cancel (a name conflict also replace|skip|both) answers the open dialog; ctl width column NAME PX|reset and width preview PX|reset set the column and preview panel widths; action quick-look (Space) opens the quick look window. To show search results in this window: \
 find them with fd/rg/find, then fili-file ctl show 'TITLE' < paths (one absolute path per line); both bring the window forward.";
 
 // results: titre de la liste de résultats affichée (vide: le dossier normal)
@@ -178,7 +178,7 @@ fn raise(pid: &str) {
 }
 
 const USAGE: &str = "usage: fili-file ctl [--pid PID] goto PATH | reveal PATH | show TITLE < paths | action NAME [ARG] | state | actions | \
-select [--add | --none | --pattern GLOB] < paths | tab new [PATH] | tab close [N] | tab switch N | tab move FROM TO | view list|icons | hidden on|off | \
+select [--add | --none | --pattern GLOB] < paths | tab new [PATH] | tab close [N] | tab switch N | tab move FROM TO | tab detach [N] | view list|icons | hidden on|off | \
 preview on|off | sort COLUMN [asc|desc] | dialog accept|cancel|replace|skip|both | width column NAME PX|reset | width preview PX|reset";
 
 // Sépare l'option --pid du reste des arguments
@@ -239,6 +239,8 @@ fn parse(args: &[String]) -> Result<Request, String> {
             [c] if c == "new" || c == "close" => req(c.clone(), false, false),
             [c, path] if c == "new" => req(format!("new\t{}", absolute(path)), false, false),
             [c, n] if (c == "close" || c == "switch") && n.parse::<u32>().is_ok() => req(format!("{c}\t{n}"), false, false),
+            [c] if c == "detach" => req("detach".into(), false, false),
+            [c, n] if c == "detach" && n.parse::<u32>().is_ok() => req(format!("detach\t{n}"), false, false),
             [c, from, to] if c == "move" && from.parse::<u32>().is_ok() && to.parse::<u32>().is_ok() => req(format!("move\t{from}\t{to}"), false, false),
             _ => Err(USAGE.into()),
         },
@@ -389,6 +391,8 @@ mod tests {
         assert_eq!(ok(&["tab", "new", "/tmp"]), t("tab", "new\t/tmp", false, false));
         assert_eq!(ok(&["tab", "switch", "2"]), t("tab", "switch\t2", false, false));
         assert_eq!(ok(&["tab", "move", "0", "2"]), t("tab", "move\t0\t2", false, false));
+        assert_eq!(ok(&["tab", "detach"]), t("tab", "detach", false, false));
+        assert_eq!(ok(&["tab", "detach", "1"]), t("tab", "detach\t1", false, false));
         assert_eq!(ok(&["tab", "close"]), t("tab", "close", false, false));
         assert_eq!(ok(&["view", "icons"]), t("view", "icons", false, false));
         assert_eq!(ok(&["dialog", "replace"]), t("dialog", "replace", false, false));

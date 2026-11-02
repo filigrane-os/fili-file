@@ -82,7 +82,7 @@ pub fn record(path: &str) {
     let _ = std::fs::write(f, format(&list));
 }
 
-// Retire un dossier de la liste (« Retirer des fréquents »): il y revient s'il est de nouveau visité
+// Retire un dossier de la liste (« Retirer des récents »): il y revient s'il est de nouveau visité
 pub fn forget_in(list: &mut Vec<Visit>, path: &str) -> bool {
     let before = list.len();
     list.retain(|v| v.path != path);
