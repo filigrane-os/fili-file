@@ -1673,7 +1673,7 @@ ApplicationWindow {
         property string level: "normal"
         property bool skipHidden: false
         function open(list) {
-            paths = list.join("\n");
+            paths = list;
             nameField.text = folder.archiveName(paths);
             visible = true;
         }
