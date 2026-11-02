@@ -225,6 +225,8 @@ ApplicationWindow {
     Action { id: aShare; text: Fili.tr("Share…"); enabled: win.canAct && !folder.inTrash && !win.picking && win.shareable().length > 0; onTriggered: shareBox.open() }
     Action { id: aNearby; text: Fili.tr("Nearby"); shortcut: "Ctrl+Shift+R"; enabled: !win.picking; onTriggered: win.open("nearby:") }
     Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
+    Action { id: aCompress; text: Fili.tr("Compress…"); enabled: win.canAct && !folder.inTrash && !win.picking && Object.keys(files.selected).length > 0; onTriggered: compressBox.open(files.targetsText()) }
+    Action { id: aExtract; text: Fili.tr("Extract Here"); enabled: win.canAct && !folder.inTrash && !win.picking && Object.keys(files.selected).length > 0 && folder.allArchives(files.targetsText()); onTriggered: folder.extract(files.targetsText(), "") }
     Action { id: aConnect; text: Fili.tr("Connect to Server…"); shortcut: "Ctrl+K"; onTriggered: connectBox.open() }
     // « / » comme Ctrl+F (façon vim, yazi); sans libellé: la barre de menus ne montre que Ctrl+F
     Action { id: aSearchSlash; shortcut: "/"; enabled: win.canAct; onTriggered: searchInput.forceActiveFocus() }
@@ -234,7 +236,7 @@ ApplicationWindow {
     // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
     readonly property var menuActions: ({
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "share": aShare, "nearby": aNearby, "trash": aTrash, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
-        "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "rename": aRename, "bulk-rename": aBulk,
+        "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "compress": aCompress, "extract": aExtract, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
     })
@@ -479,9 +481,9 @@ ApplicationWindow {
         else if (id === "putback")
             win.putBack();
         else if (id === "extract")
-            folder.extract(t);
+            aExtract.trigger();
         else if (id === "compress")
-            compressBox.open(t);
+            aCompress.trigger();
         else if (id === "share")
             aShare.trigger();
         else if (id === "newfolder")
@@ -1666,14 +1668,124 @@ ApplicationWindow {
         }
         FocusRing {}
     }
+    component PasswordField: Rectangle {
+        property alias text: input.text
+        property alias field: input
+        property string label
+        signal accepted()
+        signal cancelled()
+        width: parent ? parent.width : 100
+        height: 26
+        radius: FiliTheme.radiusControl
+        color: FiliTheme.nuit
+        border.width: 1
+        border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+        Text {
+            visible: input.text === ""
+            anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+            text: parent.label
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.size
+            color: FiliTheme.ardoise
+        }
+        TextInput {
+            id: input
+            anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+            verticalAlignment: TextInput.AlignVCenter
+            clip: true
+            echoMode: TextInput.Password
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.size
+            color: FiliTheme.brume
+            selectByMouse: true
+            onAccepted: parent.accepted()
+            Keys.onEscapePressed: parent.cancelled()
+        }
+    }
+    // Mot de passe d'une archive à extraire (demandé quand fili-archive dit qu'elle est protégée)
+    Rectangle {
+        id: passwordBox
+        property string paths: ""
+        property bool wrong: false
+        function open(list, bad) {
+            paths = list;
+            wrong = bad;
+            pwField.text = "";
+            visible = true;
+        }
+        function apply() {
+            if (pwField.text === "")
+                return;
+            visible = false;
+            folder.extract(paths, pwField.text);
+        }
+        anchors.fill: parent
+        visible: false
+        z: 200
+        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        onVisibleChanged: if (visible) pwField.field.forceActiveFocus(); else files.focusList()
+        Connections {
+            target: folder
+            function onPasswordNeeded(list, bad) { passwordBox.open(list, bad); }
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: passwordBox.visible = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 380
+            height: pwCard.implicitHeight + 2 * FiliTheme.space4
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.nuit2
+            border.width: 1
+            border.color: FiliTheme.nuit4
+            Column {
+                id: pwCard
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
+                spacing: FiliTheme.space3
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: Fili.tr("“%1” is protected by a password").replace("%1", passwordBox.paths.split("\n")[0].split("/").pop())
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.brume
+                }
+                Text {
+                    visible: passwordBox.wrong
+                    width: parent.width
+                    text: Fili.tr("Wrong password. Try again.")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
+                }
+                PasswordField {
+                    id: pwField
+                    label: Fili.tr("Password")
+                    onAccepted: passwordBox.apply()
+                    onCancelled: passwordBox.visible = false
+                }
+                Row {
+                    spacing: FiliTheme.space2
+                    anchors.right: parent.right
+                    TextButton { label: Fili.tr("Cancel"); onClicked: passwordBox.visible = false }
+                    TextButton { label: Fili.tr("Extract"); primary: true; onClicked: passwordBox.apply() }
+                }
+            }
+        }
+    }
     Rectangle {
         id: compressBox
         property string paths: ""
         property string format: "zip"
         property string level: "normal"
         property bool skipHidden: false
+        readonly property bool canEncrypt: format === "zip" || format === "7z"
         function open(list) {
             paths = list;
+            passField2.text = "";
             nameField.text = folder.archiveName(paths);
             visible = true;
         }
@@ -1681,7 +1793,7 @@ ApplicationWindow {
             if (nameField.text.trim() === "")
                 return;
             visible = false;
-            folder.compress(paths, nameField.text, format, level, skipHidden);
+            folder.compress(paths, nameField.text, format, level, skipHidden, canEncrypt ? passField2.text : "");
         }
         anchors.fill: parent
         visible: false
@@ -1770,7 +1882,7 @@ ApplicationWindow {
                     width: parent.width
                     height: 22
                     activeFocusOnTab: true
-                    KeyNavigation.tab: nameField
+                    KeyNavigation.tab: compressBox.canEncrypt ? passField2.field : nameField
                     function flip() { compressBox.skipHidden = !compressBox.skipHidden; }
                     Keys.onSpacePressed: flip()
                     Keys.onReturnPressed: compressBox.apply()
@@ -1806,6 +1918,23 @@ ApplicationWindow {
                         onClicked: { hiddenRow.flip(); hiddenRow.forceActiveFocus(); }
                     }
                     FocusRing {}
+                }
+                PasswordField {
+                    id: passField2
+                    visible: compressBox.canEncrypt
+                    label: Fili.tr("Password (optional)")
+                    onAccepted: compressBox.apply()
+                    onCancelled: compressBox.visible = false
+                    field.KeyNavigation.tab: nameField
+                }
+                Text {
+                    visible: !compressBox.canEncrypt
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: Fili.tr("Only zip and 7z archives can have a password.")
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.sizeList
+                    color: FiliTheme.brume2
                 }
                 Row {
                     spacing: FiliTheme.space2

@@ -172,14 +172,18 @@ pub mod qobject {
         #[cxx_name = "allArchives"]
         fn all_archives(self: &FolderModel, paths: &QString) -> bool;
         #[qinvokable]
-        fn extract(self: Pin<&mut FolderModel>, paths: &QString);
+        fn extract(self: Pin<&mut FolderModel>, paths: &QString, password: &QString);
+        // Une archive demande un mot de passe (ou le mot de passe donné est faux): la vue le demande, puis rappelle extract avec ces archives
+        #[qsignal]
+        #[cxx_name = "passwordNeeded"]
+        fn password_needed(self: Pin<&mut FolderModel>, paths: &QString, wrong: bool);
         // Nom proposé par le panneau de compression (sans extension)
         #[qinvokable]
         #[cxx_name = "archiveName"]
         fn archive_name(self: &FolderModel, paths: &QString) -> QString;
         // Compresse avec les choix du panneau: nom (sans extension), format, niveau (fast|normal|best), sans fichiers cachés
         #[qinvokable]
-        fn compress(self: Pin<&mut FolderModel>, paths: &QString, name: &QString, format: &QString, level: &QString, skip_hidden: bool);
+        fn compress(self: Pin<&mut FolderModel>, paths: &QString, name: &QString, format: &QString, level: &QString, skip_hidden: bool, password: &QString);
         #[qinvokable]
         fn cancel(self: Pin<&mut FolderModel>);
         // Renommage en lot (modes replace, number, case; voir ops::bulk_name). L'aperçu rend du JSON
@@ -1997,8 +2001,8 @@ impl FolderModel {
         !list.is_empty() && list.iter().all(|p| archive_stem(&base(p)).is_some())
     }
 
-    pub fn extract(self: Pin<&mut Self>, paths: &QString) {
-        self.start_archive(paths_of(paths), None);
+    pub fn extract(self: Pin<&mut Self>, paths: &QString, password: &QString) {
+        self.start_archive(paths_of(paths), None, password.to_string());
     }
 
     pub fn archive_name(&self, paths: &QString) -> QString {
@@ -2015,7 +2019,7 @@ impl FolderModel {
         })
     }
 
-    pub fn compress(self: Pin<&mut Self>, paths: &QString, name: &QString, format: &QString, level: &QString, skip_hidden: bool) {
+    pub fn compress(self: Pin<&mut Self>, paths: &QString, name: &QString, format: &QString, level: &QString, skip_hidden: bool, password: &QString) {
         let format = match format.to_string().as_str() {
             f @ ("zip" | "7z" | "tar.gz" | "tar.xz" | "tar.zst") => f.to_string(),
             _ => "zip".into(),
@@ -2027,11 +2031,14 @@ impl FolderModel {
         // Pas de séparateur de chemin dans le nom
         let name = name.to_string().replace('/', "-").trim().to_string();
         let opts = ArchiveOpts { name, format, level, skip_hidden };
-        self.start_archive(paths_of(paths), Some(opts));
+        // Seuls zip et 7z chiffrent
+        let password = if matches!(opts.format.as_str(), "zip" | "7z") { password.to_string() } else { String::new() };
+        self.start_archive(paths_of(paths), Some(opts), password);
     }
 
-    // Extraction (tar, 7z) ou compression (zip) en arrière-plan, annulable; le résultat se défait (corbeille)
-    fn start_archive(mut self: Pin<&mut Self>, items: Vec<String>, opts: Option<ArchiveOpts>) {
+    // Compression ou extraction en arrière-plan par fili-archive (-q: pas de transaction ni de notification), annulable;
+    // le résultat se défait (corbeille). Un mot de passe passe par l'entrée standard du programme, jamais en argument.
+    fn start_archive(mut self: Pin<&mut Self>, items: Vec<String>, opts: Option<ArchiveOpts>, password: String) {
         let compress = opts.is_some();
         if items.is_empty() {
             return;
@@ -2065,66 +2072,67 @@ impl FolderModel {
                 }
             };
             let (mut created, mut error): (Vec<PathBuf>, Option<String>) = (Vec::new(), None);
-            // Jobs: (programme, arguments, dossier ou fichier créé, nom pour les erreurs)
-            let mut jobs: Vec<(&str, Vec<String>, PathBuf, String)> = Vec::new();
+            // Archives à rouvrir avec un mot de passe: (celles qui restent, mauvais mot de passe)
+            let mut ask: Option<(Vec<String>, bool)> = None;
+            // Jobs: (arguments de fili-archive, nom pour les erreurs, archives restantes à partir de celle-ci)
+            let mut jobs: Vec<(Vec<String>, String, Vec<String>)> = Vec::new();
+            let base_args = |sub: &str| -> Vec<String> {
+                let mut a: Vec<String> = vec![sub.into(), "-q".into()];
+                if !password.is_empty() {
+                    a.push("--password-stdin".into());
+                }
+                a
+            };
             if let Some(o) = &opts {
                 let name = if o.name.is_empty() || o.name.starts_with('.') { i18n::tr("Archive").to_string() } else { o.name.clone() };
                 let out = ops::unique(&dir, &format!("{name}.{}", o.format), "", false);
-                // fili-archive écrit sous un nom caché puis renomme; -q: pas de transaction ni de notification (fili-file a les siens)
-                let mut args: Vec<String> = ["pack", "-q", "-f", &o.format, "-l", &o.level].map(String::from).into();
+                let mut args = base_args("pack");
+                args.extend(["-f", &o.format, "-l", &o.level].map(String::from));
                 if o.skip_hidden {
                     args.push("--no-hidden".into());
                 }
                 args.extend(["-o".into(), out.to_string_lossy().into_owned(), "--".into()]);
                 args.extend(items.iter().cloned());
-                jobs.push(("fili-archive", args, out, name));
+                jobs.push((args, name, Vec::new()));
             } else {
-                for item in &items {
+                for (i, item) in items.iter().enumerate() {
                     let name = base(item);
-                    let Some(stem) = archive_stem(&name) else { continue };
-                    let out = ops::unique(&dir, &stem, "", true);
-                    let out_s = out.to_string_lossy().into_owned();
-                    let (program, args) = if name.contains(".tar") || name.ends_with(".tgz") {
-                        ("tar", vec!["-xf".to_string(), item.clone(), "-C".to_string(), out_s])
-                    } else {
-                        ("7z", vec!["x".to_string(), "-y".to_string(), format!("-o{out_s}"), item.clone()])
-                    };
-                    if !compress && std::fs::create_dir(&out).is_err() {
-                        error = Some(msg(&name, i18n::tr("permission denied")));
-                        break;
+                    if archive_stem(&name).is_none() {
+                        continue;
                     }
-                    jobs.push((program, args, out, name));
+                    let mut args = base_args("unpack");
+                    args.extend(["-o".into(), dir.to_string_lossy().into_owned(), "--".into(), item.clone()]);
+                    jobs.push((args, name, items[i..].to_vec()));
                 }
             }
-            for (program, args, out, name) in jobs {
-                let child = Command::new(program)
+            for (args, name, remaining) in jobs {
+                let child = Command::new("fili-archive")
                     .args(&args)
                     .current_dir(&dir)
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(if program == "fili-archive" { Stdio::piped() } else { Stdio::null() })
+                    .stdin(if password.is_empty() { Stdio::null() } else { Stdio::piped() })
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
                     .spawn();
                 let mut child = match child {
                     Ok(c) => c,
                     Err(e) => {
-                        let _ = ops::remove_tree(&out);
                         error = Some(msg(&name, &fs::error(&e)));
                         break;
                     }
                 };
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = std::io::Write::write_all(&mut stdin, format!("{password}\n").as_bytes());
+                }
                 let ok = loop {
                     if cancel.load(Ordering::Relaxed) {
                         let _ = child.kill();
                         let _ = child.wait();
-                        if program == "fili-archive" {
-                            // le programme tué laisse son fichier de travail caché (« .nom.PID.part.ext »)
-                            if let Some(n) = out.file_name() {
-                                let prefix = format!(".{}.{}.part.", n.to_string_lossy(), child.id());
-                                for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
-                                    if e.file_name().to_string_lossy().starts_with(&prefix) {
-                                        let _ = std::fs::remove_file(e.path());
-                                    }
-                                }
+                        // le programme tué laisse son fichier ou dossier de travail caché (« .nom.PID.part… »)
+                        let marker = format!(".{}.part", child.id());
+                        for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                            let n = e.file_name().to_string_lossy().into_owned();
+                            if n.starts_with('.') && n.contains(&marker) {
+                                let _ = ops::remove_tree(&e.path());
                             }
                         }
                         break None;
@@ -2135,24 +2143,27 @@ impl FolderModel {
                         Err(_) => break Some(false),
                     }
                 };
+                let (mut out, mut err) = (String::new(), String::new());
+                if let Some(mut o) = child.stdout.take() {
+                    let _ = std::io::Read::read_to_string(&mut o, &mut out);
+                }
+                if let Some(mut e) = child.stderr.take() {
+                    let _ = std::io::Read::read_to_string(&mut e, &mut err);
+                }
                 match ok {
-                    Some(true) => created.push(out),
+                    Some(true) => created.extend(out.lines().filter(|l| !l.is_empty()).map(PathBuf::from)),
                     Some(false) => {
-                        let _ = ops::remove_tree(&out);
-                        // fili-archive dit pourquoi sur sa sortie d'erreur (« fili-archive: cannot compress: … »)
-                        let mut err = String::new();
-                        if let Some(mut se) = child.stderr.take() {
-                            let _ = std::io::Read::read_to_string(&mut se, &mut err);
-                        }
-                        let why = err.lines().last().map(|l| l.trim_start_matches("fili-archive: ").trim().to_string());
+                        // « fili-archive: cannot extract “x”: la raison »
+                        let why = err.lines().last().map(|l| l.rsplit(": ").next().unwrap_or("").trim().to_string());
                         let why = why.filter(|w| !w.is_empty()).unwrap_or_else(|| i18n::tr("the tool reported an error").to_string());
-                        error = Some(msg(&name, &why));
+                        if !compress && (why.contains("protected by a password") || why == "wrong password") {
+                            ask = Some((remaining, why == "wrong password"));
+                        } else {
+                            error = Some(msg(&name, &why));
+                        }
                         break;
                     }
-                    None => {
-                        let _ = ops::remove_tree(&out);
-                        break;
-                    }
+                    None => break,
                 }
             }
             let _ = qt.queue(move |mut m| {
@@ -2170,6 +2181,9 @@ impl FolderModel {
                 m.as_mut().changed();
                 m.as_mut().reloaded();
                 m.as_mut().next_job();
+                if let Some((rest, wrong)) = ask {
+                    m.as_mut().password_needed(&QString::from(&rest.join("\n")), wrong);
+                }
             });
         });
     }
