@@ -123,7 +123,11 @@ pub fn unmount(dev: &str) -> Result<(), String> {
         return Ok(());
     }
     if let Some(path) = dev.strip_prefix(GVFS) {
-        return run_plain("gio", &["mount", "-u", path]);
+        let done = run_plain("gio", &["mount", "-u", path]);
+        if done.is_ok() {
+            mtp_ejected(path);
+        }
+        return done;
     }
     if let Some(path) = dev.strip_prefix(NET) {
         return run_plain("umount", &[path]);
@@ -144,21 +148,68 @@ pub fn mtp_from_udev(file: &str, text: &str) -> Option<Volume> {
     Some(Volume { dev: format!("{MTP}/dev/bus/usb/{:03}/{:03}", minor / 128 + 1, minor % 128 + 1), name, mount: None })
 }
 
+// Appareils MTP branchés d'après la base udev, avec leur numéro de série
+fn mtp_detected() -> Vec<(Volume, String)> {
+    let Ok(dir) = std::fs::read_dir("/run/udev/data") else { return Vec::new() };
+    let mut out: Vec<(Volume, String)> = dir
+        .flatten()
+        .filter_map(|e| {
+            let file = e.file_name().to_string_lossy().into_owned();
+            let text = std::fs::read_to_string(e.path()).ok()?;
+            let serial = text.lines().find_map(|l| l.strip_prefix("E:ID_SERIAL_SHORT=")).unwrap_or("").to_string();
+            Some((mtp_from_udev(&file, &text)?, serial))
+        })
+        .collect();
+    out.sort_by(|a, b| a.0.dev.cmp(&b.0.dev));
+    out
+}
+
+// Appareils éjectés par l'utilisateur: absents de la barre latérale jusqu'à ce qu'on les débranche et les rebranche.
+// Une entrée disparaît dès que l'appareil n'est plus branché.
+// Gardés dans $XDG_RUNTIME_DIR (effacé à la déconnexion), donc communs à toutes les fenêtres de Casier.
+fn ejected_file() -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".into())).join("fili-file-ejected")
+}
+
+fn read_ejected() -> Vec<String> {
+    std::fs::read_to_string(ejected_file()).unwrap_or_default().lines().filter(|l| !l.is_empty()).map(String::from).collect()
+}
+
+fn write_ejected(list: &[String]) {
+    let _ = std::fs::write(ejected_file(), list.join("\n"));
+}
+
+// L'éjection d'un montage gvfs « mtp:host=FABRICANT_MODELE_SERIE »: cache l'appareil qui porte ce numéro de série
+// (à défaut de le reconnaître, tous ceux qui sont branchés)
+fn mtp_ejected(mount_path: &str) {
+    let Some(host) = mount_path.rsplit('/').next().filter(|n| n.starts_with("mtp:")) else { return };
+    let all = mtp_detected();
+    let mut hit: Vec<&Volume> = all.iter().filter(|(_, s)| !s.is_empty() && host.ends_with(s.as_str())).map(|(v, _)| v).collect();
+    if hit.is_empty() {
+        hit = all.iter().map(|(v, _)| v).collect();
+    }
+    let mut ejected = read_ejected();
+    for v in hit {
+        if !ejected.contains(&v.dev) {
+            ejected.push(v.dev.clone());
+        }
+    }
+    write_ejected(&ejected);
+}
+
 pub fn mtp_devices() -> Vec<Volume> {
+    let all = mtp_detected();
+    let mut ejected = read_ejected();
+    let before = ejected.len();
+    ejected.retain(|d| all.iter().any(|(v, _)| v.dev == *d));
+    if ejected.len() != before {
+        write_ejected(&ejected);
+    }
     // Déjà monté (entrée « mtp:host=… » de gvfs): la barre latérale montre celui-là
     if std::fs::read_dir(gvfs_dir()).is_ok_and(|d| d.flatten().any(|e| e.file_name().to_string_lossy().starts_with("mtp:"))) {
         return Vec::new();
     }
-    let Ok(dir) = std::fs::read_dir("/run/udev/data") else { return Vec::new() };
-    let mut out: Vec<Volume> = dir
-        .flatten()
-        .filter_map(|e| {
-            let file = e.file_name().to_string_lossy().into_owned();
-            mtp_from_udev(&file, &std::fs::read_to_string(e.path()).ok()?)
-        })
-        .collect();
-    out.sort_by(|a, b| a.dev.cmp(&b.dev));
-    out
+    all.into_iter().map(|(v, _)| v).filter(|v| !ejected.contains(&v.dev)).collect()
 }
 
 // Adresse à monter d'un appareil: « Volume(0): … unix-device: '/dev/bus/usb/004/011' … activation_root=mtp://X/ » (gio mount -li)
