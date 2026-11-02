@@ -63,6 +63,7 @@ text_secondary = "#a9b8c8"    # secondary text
 text = "#dbe7f4"              # main text
 warning = "#d2bf92"
 danger = "#c98f93"
+success = "#a3bfa8"
 # accent = "#9dbbd6"          # fixed accent; unset = follows `fili-theme accent` (see [theme.accents])
 # accent_bright = "#b9d0e4"
 
@@ -79,6 +80,7 @@ text_secondary = "#4f5e70"
 text = "#1c222b"
 warning = "#80662b"
 danger = "#9a4f55"
+success = "#4a7354"
 # accent = "#3f5a78"
 # accent_bright = "#2f4a66"
 

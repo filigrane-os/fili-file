@@ -96,11 +96,12 @@ mod tests {
         let colors = [
             ("nuit", "background"), ("nuitProfond", "background_deep"), ("nuit2", "surface"), ("nuit3", "surface_hover"),
             ("nuit4", "surface_active"), ("ardoise", "muted"), ("brume2", "text_secondary"), ("brume", "text"),
-            ("sable", "warning"), ("cendre", "danger"),
+            ("sable", "warning"), ("cendre", "danger"), ("sauge", "success"), ("border", "border"),
         ];
         for (token, key) in colors {
             let v = &shell[token];
-            let hexes: Vec<&str> = v.split('"').skip(1).step_by(2).collect();
+            assert!(v.starts_with(&format!("ov(\"{key}\", ")), "{token}: ov(\"{key}\", ...)");
+            let hexes: Vec<&str> = v.split('"').skip(1).step_by(2).filter(|h| h.starts_with('#')).collect();
             let (light, dark) = if hexes.len() == 2 { (hexes[0], hexes[1]) } else { (hexes[0], hexes[0]) };
             assert_eq!(d[&("theme.light".to_string(), key.to_string())], light, "{token} clair");
             assert_eq!(d[&("theme.dark".to_string(), key.to_string())], dark, "{token} sombre");
@@ -111,10 +112,13 @@ mod tests {
             ("sizeLabel", "size_label"), ("sizeTitle", "size_title"), ("weightAccent", "weight_accent"),
             ("radiusMark", "radius_mark"), ("radiusControl", "radius_control"), ("radiusWindow", "radius_window"),
             ("space1", "space_1"), ("space2", "space_2"), ("space3", "space_3"), ("space4", "space_4"),
-            ("space5", "space_5"), ("space6", "space_6"),
+            ("space5", "space_5"), ("space6", "space_6"), ("borderWidth", "border_width"),
         ];
         for (token, key) in plain {
-            let want = match shell[token].as_str() {
+            let v = &shell[token];
+            assert!(v.starts_with(&format!("ov(\"{key}\", ")), "{token}: ov(\"{key}\", ...)");
+            let v = v.split_once(", ").unwrap().1.trim_end_matches(')');
+            let want = match v {
                 "Font.DemiBold" => "600".to_string(),
                 v => v.trim_matches('"').to_string(),
             };

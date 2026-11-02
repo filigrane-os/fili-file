@@ -105,6 +105,7 @@ const KEYS: &[(&str, Kind)] = &[
     ("text", Kind::Color),
     ("warning", Kind::Color),
     ("danger", Kind::Color),
+    ("success", Kind::Color),
     ("accent", Kind::Color),        // facultatif: sans valeur, l'accent suit fili-theme
     ("accent_bright", Kind::Color), // facultatif
     ("font", Kind::Str),
