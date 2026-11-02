@@ -92,7 +92,7 @@ Rectangle {
                     height: 24
                     radius: FiliTheme.radiusControl
                     color: FiliTheme.nuit3
-                    border.width: 1
+                    border.width: FiliTheme.borderWidth
                     border.color: FiliTheme.voile
                     Text {
                         anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
@@ -316,7 +316,7 @@ Rectangle {
                     anchors { left: parent.left; verticalCenter: parent.verticalCenter }
                     width: 1
                     height: 14
-                    color: FiliTheme.nuit4
+                    color: FiliTheme.border
                 }
                 MouseArea {
                     anchors.fill: parent
@@ -358,7 +358,7 @@ Rectangle {
         anchors.top: header.bottom
         width: parent.width
         height: 1
-        color: FiliTheme.nuit4
+        color: FiliTheme.border
     }
 
     // Saisie au clavier: lettres tapées à moins d'une seconde d'intervalle
@@ -631,7 +631,7 @@ Rectangle {
                 visible: row.editing
                 radius: FiliTheme.radiusControl
                 color: FiliTheme.nuit2
-                border.width: 1
+                border.width: FiliTheme.borderWidth
                 border.color: FiliTheme.voile
                 TextInput {
                     id: input

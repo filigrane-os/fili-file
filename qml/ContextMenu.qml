@@ -98,8 +98,8 @@ Item {
         height: col.height + 2 * FiliTheme.space1
         radius: FiliTheme.radiusControl + 2
         color: FiliTheme.nuit2
-        border.width: 1
-        border.color: FiliTheme.nuit4
+        border.width: FiliTheme.borderWidth
+        border.color: FiliTheme.border
         // Gouttière des coches (colonnes affichées...)
         readonly property bool gutter: model.some(i => i.checked !== undefined)
         Column {
@@ -120,7 +120,7 @@ Item {
                         visible: it.modelData.separator === true
                         anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
                         height: 1
-                        color: FiliTheme.nuit4
+                        color: FiliTheme.border
                     }
                     Rectangle {
                         visible: !it.modelData.separator

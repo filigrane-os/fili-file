@@ -128,7 +128,7 @@ Item {
         visible: bar.editing
         radius: FiliTheme.radiusControl
         color: FiliTheme.nuit2
-        border.width: 1
+        border.width: FiliTheme.borderWidth
         border.color: FiliTheme.voile
         TextInput {
             id: input
@@ -167,8 +167,8 @@ Item {
         height: Math.min(bar.suggestions.length, 8) * 26 + 2 * FiliTheme.space1
         radius: FiliTheme.radiusControl
         color: FiliTheme.nuit2
-        border.width: 1
-        border.color: FiliTheme.nuit4
+        border.width: FiliTheme.borderWidth
+        border.color: FiliTheme.border
         ListView {
             id: sugList
             anchors { fill: parent; margins: FiliTheme.space1 }

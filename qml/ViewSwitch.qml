@@ -12,8 +12,8 @@ Rectangle {
     height: 30
     radius: 8
     color: FiliTheme.nuit2
-    border.width: 1
-    border.color: FiliTheme.nuit4
+    border.width: FiliTheme.borderWidth
+    border.color: FiliTheme.border
 
     component Segment: Rectangle {
         id: seg

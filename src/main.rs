@@ -71,19 +71,66 @@ mod tests {
             .collect()
     }
 
-    // Les tokens de fili-file sont ceux du fili-shell: un token commun garde la même valeur
-    #[test]
-    fn same_tokens_as_the_shell() {
-        let shell = tokens(&read("../../dotfiles/config/quickshell/FiliTheme.qml"));
-        let ours = tokens(&read("qml/FiliTheme.qml"));
-        let mut common = 0;
-        // light, accent: même rôle, autre source (Fili suit l'état de fili-theme)
-        for (name, value) in ours.iter().filter(|(n, _)| *n != "light" && *n != "accent") {
-            if let Some(v) = shell.get(name) {
-                assert_eq!(v, value, "token {name}");
-                common += 1;
+    // « [section] clé = "valeur" # c » de theme.toml -> (section, clé) = valeur
+    fn defaults() -> HashMap<(String, String), String> {
+        let mut out = HashMap::new();
+        let mut section = String::new();
+        for line in read("theme.toml").lines() {
+            let line = line.split(" #").next().unwrap_or("").trim();
+            if let Some(n) = line.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+                section = n.to_string();
+            } else if let Some((k, v)) = line.split_once('=') {
+                out.insert((section.clone(), k.trim().to_string()), v.trim().trim_matches('"').to_string());
             }
         }
+        out
+    }
+
+    // Les valeurs par défaut de theme.toml sont celles du fili-shell: un jeton commun garde la même valeur
+    #[test]
+    fn default_theme_matches_the_shell() {
+        let shell = tokens(&read("../../dotfiles/config/quickshell/FiliTheme.qml"));
+        let d = defaults();
+        let mut common = 0;
+        // (jeton du shell, clé de theme.toml): couleurs par mode (« light ? clair : sombre »), le reste commun
+        let colors = [
+            ("nuit", "background"), ("nuitProfond", "background_deep"), ("nuit2", "surface"), ("nuit3", "surface_hover"),
+            ("nuit4", "surface_active"), ("ardoise", "muted"), ("brume2", "text_secondary"), ("brume", "text"),
+            ("sable", "warning"), ("cendre", "danger"),
+        ];
+        for (token, key) in colors {
+            let v = &shell[token];
+            let hexes: Vec<&str> = v.split('"').skip(1).step_by(2).collect();
+            let (light, dark) = if hexes.len() == 2 { (hexes[0], hexes[1]) } else { (hexes[0], hexes[0]) };
+            assert_eq!(d[&("theme.light".to_string(), key.to_string())], light, "{token} clair");
+            assert_eq!(d[&("theme.dark".to_string(), key.to_string())], dark, "{token} sombre");
+            common += 1;
+        }
+        let plain = [
+            ("font", "font"), ("mono", "mono"), ("size", "size"), ("sizeList", "size_list"), ("sizeSmall", "size_small"),
+            ("sizeLabel", "size_label"), ("sizeTitle", "size_title"), ("weightAccent", "weight_accent"),
+            ("radiusMark", "radius_mark"), ("radiusControl", "radius_control"), ("radiusWindow", "radius_window"),
+            ("space1", "space_1"), ("space2", "space_2"), ("space3", "space_3"), ("space4", "space_4"),
+            ("space5", "space_5"), ("space6", "space_6"),
+        ];
+        for (token, key) in plain {
+            let want = match shell[token].as_str() {
+                "Font.DemiBold" => "600".to_string(),
+                v => v.trim_matches('"').to_string(),
+            };
+            assert_eq!(d[&("theme".to_string(), key.to_string())], want, "token {token}");
+            common += 1;
+        }
+        // Teintes d'accentuation: chacune de theme.toml figure telle quelle dans le shell
+        let tones = &shell["accentTones"];
+        let toml = read("theme.toml");
+        let mut n = 0;
+        for line in toml.lines().skip_while(|l| !l.starts_with("[theme.accents]")).skip(1) {
+            let Some((name, list)) = line.split_once('=') else { continue };
+            assert!(tones.contains(&format!("{}: {}", name.trim(), list.trim())), "accent {}", name.trim());
+            n += 1;
+        }
+        assert!(n >= 7);
         assert!(common >= 25, "{common} tokens en commun");
     }
 

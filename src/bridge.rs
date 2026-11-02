@@ -301,6 +301,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "volumeError"]
         fn volume_error(self: Pin<&mut Fili>, message: &QString);
+        // Thème fusionné (défauts de theme.toml + ~/.config/filigrane/fili-file.toml), en JSON: voir config::theme_json_from
+        #[qinvokable]
+        #[cxx_name = "themeJson"]
+        fn theme_json(self: &Fili) -> QString;
         // Mode sélecteur de fichiers (portail FileChooser): "" hors de ce mode, sinon "open" ou "save"
         #[qinvokable]
         #[cxx_name = "pickKind"]
@@ -2542,6 +2546,12 @@ fn ui_store(key: &str, value: &str) {
 fn columns_file() -> PathBuf {
     let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
     PathBuf::from(state).join("filigrane/fili-file-columns")
+}
+
+impl qobject::Fili {
+    pub fn theme_json(&self) -> QString {
+        QString::from(&crate::config::theme_json())
+    }
 }
 
 // État de fili-theme (« light » ou « dark »), comme FiliTheme.qml du fili-shell

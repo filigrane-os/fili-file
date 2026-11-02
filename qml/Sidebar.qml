@@ -111,7 +111,7 @@ Rectangle {
                 height: 7
                 radius: 3.5
                 color: FiliTheme.voileVif
-                border.width: 1
+                border.width: FiliTheme.borderWidth
                 border.color: row.sel ? FiliTheme.nuit3 : FiliTheme.nuitProfond
             }
             Text {

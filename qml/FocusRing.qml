@@ -10,7 +10,7 @@ Rectangle {
     anchors { fill: target; margins: -gap }
     radius: Math.max(0, (target.radius ?? FiliTheme.radiusControl) + gap)
     color: "transparent"
-    border.width: 1
+    border.width: FiliTheme.borderWidth
     border.color: FiliTheme.voile
     visible: shown && Fili.keyNav
 }

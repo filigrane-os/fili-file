@@ -158,7 +158,7 @@ Rectangle {
                             radius: 32
                             color: drop.containsDrag || hit.containsMouse ? FiliTheme.nuit4 : FiliTheme.nuit3
                             border.width: drop.containsDrag ? 2 : 1
-                            border.color: drop.containsDrag ? FiliTheme.voile : FiliTheme.nuit4
+                            border.color: drop.containsDrag ? FiliTheme.voile : FiliTheme.border
                             Text {
                                 anchors.centerIn: parent
                                 text: dev.modelData.name.charAt(0).toUpperCase()

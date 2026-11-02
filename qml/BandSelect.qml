@@ -65,7 +65,7 @@ MouseArea {
         visible: false
         radius: 2
         color: FiliTheme.alpha(FiliTheme.voile, 0.15)
-        border.width: 1
+        border.width: FiliTheme.borderWidth
         border.color: FiliTheme.voile
     }
 }

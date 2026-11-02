@@ -254,17 +254,6 @@ pub fn file(e: &Entry) -> String {
     find(&names)
 }
 
-// Teintes d'accentuation [sombre, clair] (FiliTheme.qml, accentTones; vérifiées par un test)
-const ACCENTS: [(&str, &str, &str); 7] = [
-    ("default", "#dbe7f4", "#1c222b"),
-    ("voile", "#9dbbd6", "#3f5a78"),
-    ("ardoise", "#7f9ab6", "#4f6884"),
-    ("sauge", "#a3bfa8", "#4a7354"),
-    ("sable", "#d2bf92", "#80662b"),
-    ("cendre", "#c98f93", "#9a4f55"),
-    ("brume", "#dbe7f4", "#4f5e70"),
-];
-
 // Dossier « folder-blue* » (deux aplats, #5294e2 devant et #4877b1 derrière) recoloré à l'accent: copie
 // dans ~/.cache/fili-file/tint, nommée d'après l'icône et la couleur. Toute autre icône est rendue telle quelle.
 pub fn tint(url: &str, accent: &str, light: bool) -> String {
@@ -287,8 +276,9 @@ pub fn tint(url: &str, accent: &str, light: bool) -> String {
             return format!("file://{own}");
         }
     }
-    let (_, dark, clear) = ACCENTS.iter().find(|a| a.0 == accent).unwrap_or(&ACCENTS[0]);
-    let front = if light { clear } else { dark };
+    // Teintes de [theme.accents] (theme.toml surchargé par la config de l'utilisateur)
+    let tone = crate::config::accent_tone(accent);
+    let Some(front) = tone.get(if light { 2 } else { 0 }) else { return url.to_string() };
     let rgb: Vec<u32> = (0..3).map(|i| u32::from_str_radix(&front[1 + 2 * i..3 + 2 * i], 16).unwrap_or(0)).collect();
     let back = format!("#{:02x}{:02x}{:02x}", rgb[0] * 85 / 100, rgb[1] * 85 / 100, rgb[2] * 85 / 100);
     let Ok(home) = std::env::var("HOME") else { return url.to_string() };
@@ -307,15 +297,6 @@ pub fn tint(url: &str, accent: &str, light: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn accents_match_the_shell() {
-        let qml = fs::read_to_string(format!("{}/qml/FiliTheme.qml", env!("CARGO_MANIFEST_DIR"))).unwrap();
-        for (name, dark, light) in ACCENTS {
-            assert!(qml.contains(&format!("{name}: [\"{dark}\"")), "{name} sombre");
-            assert!(qml.contains(&format!("\"{light}\", \"")), "{name} clair");
-        }
-    }
 
     #[test]
     fn recolor_replaces_hex_colors_only() {

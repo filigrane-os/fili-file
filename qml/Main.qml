@@ -898,8 +898,8 @@ ApplicationWindow {
             height: 30
             radius: 8
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
         }
         Row {
             id: nav
@@ -925,8 +925,8 @@ ApplicationWindow {
             height: 26
             radius: FiliTheme.radiusControl
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: searchInput.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: searchInput.activeFocus ? FiliTheme.voile : FiliTheme.border
             Text {
                 anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 visible: searchInput.text === ""
@@ -1004,7 +1004,7 @@ ApplicationWindow {
         anchors.top: toolbar.bottom
         width: parent.width
         height: 1
-        color: FiliTheme.nuit4
+        color: FiliTheme.border
     }
 
     Sidebar {
@@ -1020,7 +1020,7 @@ ApplicationWindow {
         id: sideLine
         anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: sidebar.right }
         width: 1
-        color: FiliTheme.nuit4
+        color: FiliTheme.border
     }
 
     // Onglets (à partir de deux): nom du dossier, × au survol; clic du milieu ferme
@@ -1212,7 +1212,7 @@ ApplicationWindow {
         id: previewLine
         anchors { top: toolbarLine.bottom; bottom: pickbar.top; right: preview.left }
         width: preview.visible ? 1 : 0
-        color: FiliTheme.nuit4
+        color: FiliTheme.border
     }
     Preview {
         id: preview
@@ -1268,7 +1268,7 @@ ApplicationWindow {
         Rectangle {
             width: parent.width
             height: 1
-            color: FiliTheme.nuit4
+            color: FiliTheme.border
         }
         Rectangle {
             visible: win.pickKind === "save"
@@ -1277,8 +1277,8 @@ ApplicationWindow {
             height: 26
             radius: FiliTheme.radiusControl
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: nameInput.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: nameInput.activeFocus ? FiliTheme.voile : FiliTheme.border
             TextInput {
                 id: nameInput
                 anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
@@ -1334,7 +1334,7 @@ ApplicationWindow {
         Rectangle {
             width: parent.width
             height: 1
-            color: FiliTheme.nuit4
+            color: FiliTheme.border
         }
         // Fil d'Ariane à gauche (clic: y aller, clic droit: menu), information sur la sélection à droite; une erreur,
         // un message ou une opération en cours prennent toute la barre
@@ -1435,8 +1435,8 @@ ApplicationWindow {
             height: win.tasks.length * 30 + 2 * FiliTheme.space1
             radius: FiliTheme.radiusControl
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             Column {
                 anchors { fill: parent; margins: FiliTheme.space1 }
                 Repeater {
@@ -1522,8 +1522,8 @@ ApplicationWindow {
             height: matchCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             Column {
                 id: matchCard
                 anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
@@ -1541,7 +1541,7 @@ ApplicationWindow {
                     height: 26
                     radius: FiliTheme.radiusControl
                     color: FiliTheme.nuit
-                    border.width: 1
+                    border.width: FiliTheme.borderWidth
                     border.color: FiliTheme.voile
                     TextInput {
                         id: patternInput
@@ -1637,8 +1637,8 @@ ApplicationWindow {
             height: shareCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             MouseArea { anchors.fill: parent }
             Column {
                 id: shareCard
@@ -1760,8 +1760,8 @@ ApplicationWindow {
             height: 26
             radius: FiliTheme.radiusControl
             color: FiliTheme.nuit
-            border.width: 1
-            border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.border
             Text {
                 visible: input.text === ""
                 anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
@@ -1791,8 +1791,8 @@ ApplicationWindow {
             height: connectCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             Column {
                 id: connectCard
                 anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
@@ -1834,8 +1834,8 @@ ApplicationWindow {
         height: 26
         radius: FiliTheme.radiusControl
         color: FiliTheme.nuit
-        border.width: 1
-        border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+        border.width: FiliTheme.borderWidth
+        border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.border
         Text {
             visible: input.text === ""
             anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
@@ -1911,8 +1911,8 @@ ApplicationWindow {
             height: bulkCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             MouseArea { anchors.fill: parent }
             Column {
                 id: bulkCard
@@ -1962,8 +1962,8 @@ ApplicationWindow {
                     height: Math.min(bulkBox.plan.length, 8) * 22 + 2 * FiliTheme.space1
                     radius: FiliTheme.radiusControl
                     color: FiliTheme.nuit
-                    border.width: 1
-                    border.color: FiliTheme.nuit4
+                    border.width: FiliTheme.borderWidth
+                    border.color: FiliTheme.border
                     ListView {
                         anchors { fill: parent; margins: FiliTheme.space1 }
                         clip: true
@@ -2068,8 +2068,8 @@ ApplicationWindow {
             height: conflictCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             Column {
                 id: conflictCard
                 anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
@@ -2155,8 +2155,8 @@ ApplicationWindow {
         height: 26
         radius: FiliTheme.radiusControl
         color: FiliTheme.nuit
-        border.width: 1
-        border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+        border.width: FiliTheme.borderWidth
+        border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.border
         Text {
             visible: input.text === ""
             anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
@@ -2215,8 +2215,8 @@ ApplicationWindow {
             height: pwCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             Column {
                 id: pwCard
                 anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
@@ -2287,8 +2287,8 @@ ApplicationWindow {
             height: compressCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             Column {
                 id: compressCard
                 anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
@@ -2306,8 +2306,8 @@ ApplicationWindow {
                     height: 26
                     radius: FiliTheme.radiusControl
                     color: FiliTheme.nuit
-                    border.width: 1
-                    border.color: nameField.activeFocus ? FiliTheme.voile : FiliTheme.nuit4
+                    border.width: FiliTheme.borderWidth
+                    border.color: nameField.activeFocus ? FiliTheme.voile : FiliTheme.border
                     TextInput {
                         id: nameField
                         anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
@@ -2372,8 +2372,8 @@ ApplicationWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         radius: 3
                         color: FiliTheme.nuit
-                        border.width: 1
-                        border.color: compressBox.skipHidden ? FiliTheme.voile : FiliTheme.nuit4
+                        border.width: FiliTheme.borderWidth
+                        border.color: compressBox.skipHidden ? FiliTheme.voile : FiliTheme.border
                         Text {
                             anchors.centerIn: parent
                             visible: compressBox.skipHidden
@@ -2464,8 +2464,8 @@ ApplicationWindow {
             height: card.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             Column {
                 id: card
                 anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
@@ -2579,8 +2579,8 @@ ApplicationWindow {
             height: grid.implicitHeight + okRow.height + 3 * FiliTheme.space4 + (infoCard.mode >= 0 ? permBox.height + FiliTheme.space3 : 0)
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             Grid {
                 id: grid
                 anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space4 }
@@ -2633,8 +2633,8 @@ ApplicationWindow {
                                 height: 22
                                 radius: FiliTheme.radiusControl
                                 color: on ? FiliTheme.nuit4 : permArea.containsMouse ? FiliTheme.nuit3 : FiliTheme.nuit
-                                border.width: 1
-                                border.color: on ? FiliTheme.voile : FiliTheme.nuit4
+                                border.width: FiliTheme.borderWidth
+                                border.color: on ? FiliTheme.voile : FiliTheme.border
                                 Text {
                                     anchors.centerIn: parent
                                     text: modelData.ch
@@ -2696,8 +2696,8 @@ ApplicationWindow {
             height: aboutColumn.implicitHeight + 2 * FiliTheme.space5
             radius: FiliTheme.radiusWindow
             color: FiliTheme.nuit2
-            border.width: 1
-            border.color: FiliTheme.nuit4
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
             MouseArea { anchors.fill: parent }
             Column {
                 id: aboutColumn
