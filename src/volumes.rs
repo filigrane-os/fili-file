@@ -334,6 +334,12 @@ pub fn answer(prompt: &str, user: &str, password: &str) -> Option<String> {
 // Runs `cmd` (gio mount ...) and answers its questions with the given user and password; error after 60 s.
 // Returns the error output on failure.
 pub fn run_mount(cmd: &mut Command, user: &str, password: &str) -> Result<(), String> {
+    run_gio(cmd, user, password).map(|_| ())
+}
+
+// Like run_mount, and returns what the command printed (questions included). A password asked a second time means the
+// first one was refused: that fails at once instead of answering the same thing until the time is out.
+fn run_gio(cmd: &mut Command, user: &str, password: &str) -> Result<String, String> {
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -358,6 +364,7 @@ pub fn run_mount(cmd: &mut Command, user: &str, password: &str) -> Result<(), St
         s
     });
     let (mut seen, start) = (String::new(), Instant::now());
+    let (mut output, mut password_answers) = (String::new(), 0);
     let status = loop {
         if let Some(st) = child.try_wait().map_err(|e| e.to_string())? {
             break st;
@@ -369,7 +376,16 @@ pub fn run_mount(cmd: &mut Command, user: &str, password: &str) -> Result<(), St
         }
         if let Ok(chunk) = rx.recv_timeout(Duration::from_millis(100)) {
             seen.push_str(&String::from_utf8_lossy(&chunk));
+            output.push_str(&String::from_utf8_lossy(&chunk));
             if let Some(reply) = answer(&seen, user, password) {
+                if seen.rsplit('\n').next().unwrap_or("").to_lowercase().starts_with("password") {
+                    password_answers += 1;
+                    if password_answers > 1 {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err(tr("Wrong user name or password").to_string());
+                    }
+                }
                 let _ = writeln!(stdin, "{reply}");
                 let _ = stdin.flush();
                 seen.clear();
@@ -377,14 +393,54 @@ pub fn run_mount(cmd: &mut Command, user: &str, password: &str) -> Result<(), St
         }
     };
     if status.success() {
-        return Ok(());
+        return Ok(output);
     }
     let msg = err.join().unwrap_or_default();
     // "Error mounting location: Location is already mounted" counts as a success
     if msg.contains("already mounted") {
-        return Ok(());
+        return Ok(output);
     }
     Err(msg.trim().rsplit(": ").next().unwrap_or("").to_string())
+}
+
+// Names of the shares printed by `gio list smb://host/` (the questions of the authentication are not names)
+fn shares_from(output: &str) -> Vec<String> {
+    output
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.contains(':') && !l.starts_with("Authentication") && !l.ends_with('$'))
+        .map(String::from)
+        .collect()
+}
+
+// Connects the shares of an SMB server given without one: at most MAX_SHARES, the first connected one is returned
+const MAX_SHARES: usize = 8;
+
+fn connect_shares(root: &str, user: &str, password: &str) -> Result<String, String> {
+    let mut cmd = if Command::new("stdbuf").arg("--version").output().is_ok() {
+        let mut c = Command::new("stdbuf");
+        c.args(["-o0", "gio", "list", root]);
+        c
+    } else {
+        let mut c = Command::new("gio");
+        c.args(["list", root]);
+        c
+    };
+    let shares = shares_from(&run_gio(&mut cmd, user, password)?);
+    if shares.is_empty() {
+        return Err(tr("No shares found on this server").to_string());
+    }
+    let base = root.trim_end_matches('/');
+    let (mut first, mut last_error) = (None, String::new());
+    for share in shares.iter().take(MAX_SHARES) {
+        match connect(&format!("{base}/{share}"), user, password) {
+            Ok(folder) => {
+                first.get_or_insert(folder);
+            }
+            Err(e) => last_error = e,
+        }
+    }
+    first.ok_or(last_error)
 }
 
 // ---- remembered servers ---------------------------------------------------------------------------------
@@ -473,6 +529,10 @@ pub fn connect(uri: &str, user: &str, password: &str) -> Result<String, String> 
         return Err(tr("Enter an address such as smb://server/share or sftp://server").to_string());
     };
     let full = if !user.is_empty() && !rest.contains('@') { format!("{scheme}://{user}@{rest}") } else { uri.to_string() };
+    // An SMB server without a share has no folder to open: connect its shares instead (the first one opens)
+    if scheme == "smb" && rest.split_once('/').map_or(true, |(_, path)| path.trim_matches('/').is_empty()) {
+        return connect_shares(&full, user, password);
+    }
     let before: Vec<String> = network().into_iter().filter_map(|v| v.mount).collect();
     let mut cmd = if Command::new("stdbuf").arg("--version").output().is_ok() {
         let mut c = Command::new("stdbuf");
@@ -571,6 +631,22 @@ mod tests {
         assert_eq!(answer("x\nPassword: ", "bob", "pw"), Some("pw".into()));
         assert_eq!(answer("Anonymous? (y/n) ", "bob", "pw"), Some("n".into()));
         assert_eq!(answer("Authentication Required\n", "bob", "pw"), None);
+    }
+
+    #[test]
+    fn shares_are_read_from_a_listing() {
+        assert_eq!(shares_from("Authentication Required\nEnter password for “nas”:\nDomain [WORKGROUP]: Password: \npublic\nSauvegarde\nIPC$\n"), vec!["public", "Sauvegarde"]);
+        assert!(shares_from("").is_empty());
+    }
+
+    #[test]
+    fn a_refused_password_fails_at_once() {
+        // Asks for the password twice, like gio does when the first one is wrong
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "printf 'Password: '; read p; printf '\nPassword: '; read p; sleep 30"]);
+        let t = Instant::now();
+        assert_eq!(run_mount(&mut cmd, "bob", "bad"), Err("Wrong user name or password".into()));
+        assert!(t.elapsed() < Duration::from_secs(10));
     }
 
     #[test]

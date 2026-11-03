@@ -17,6 +17,7 @@
  "%1, %2 available": "%1, %2 disponibles",
  "%1-%2-%3 %4": "%3/%2/%1 %4",
  "* stands for any text, ? for one character: *.pdf, photo*, a?.txt": "* remplace n'importe quel texte, ? un caractère: *.pdf, photo*, a?.txt",
+ "@decimal": ",",
  "A file with this name already exists. Replacing it overwrites its content.": "Un fichier de ce nom existe déjà. Le remplacer écrase son contenu.",
  "About Casier": "À propos de Casier",
  "Add to Favorites": "Ajouter aux favoris",
@@ -121,6 +122,7 @@
  "No preview": "Aucun aperçu",
  "No preview available": "Aperçu indisponible",
  "No server connected. Connect to Server… (Ctrl+K) adds one.": "Aucun serveur connecté. « Se connecter au serveur… » (Ctrl+K) en ajoute un.",
+ "No shares found on this server": "Aucun partage trouvé sur ce serveur",
  "Nothing can be created in the Trash": "Rien ne peut être créé dans la corbeille",
  "Nothing can be pasted into the Trash": "Rien ne peut être collé dans la corbeille",
  "Nothing to send: drop files from a folder.": "Rien à envoyer: dépose des fichiers (pas des dossiers) depuis une fenêtre de fichiers.",
@@ -145,6 +147,7 @@
  "Put Back": "Remettre en place",
  "Put back": "Remettre en place",
  "Quick Look": "Aperçu rapide",
+ "Quit": "Quitter",
  "Received recently": "Reçus récemment",
  "Recents": "Récents",
  "Reload": "Actualiser",
@@ -204,6 +207,7 @@
  "Visible as “%1”. Each transfer asks for your approval.": "Visible sous le nom « %1 ». Chaque envoi demande ton accord.",
  "Where": "Emplacement",
  "Wrong password. Try again.": "Mot de passe incorrect. Réessaie.",
+ "Wrong user name or password": "Nom d'utilisateur ou mot de passe incorrect",
  "Yesterday, %1": "Hier, %1",
  "copy": "copie",
  "lowercase": "minuscules",
@@ -217,7 +221,5 @@
  "untitled folder": "dossier sans titre",
  "“%1” already exists": "« %1 » existe déjà",
  "“%1” already exists in “%2”.": "« %1 » existe déjà dans « %2 ».",
- "“%1” is protected by a password": "« %1 » est protégée par un mot de passe",
- "Quit": "Quitter",
- "@decimal": ","
+ "“%1” is protected by a password": "« %1 » est protégée par un mot de passe"
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1
+
+- Connecting to an SMB server given without a share (`smb://host/`, what a discovered server fills in) now works: an SMB
+  server has no folder of its own, so Casier lists its shares with the credentials you typed and connects each of them (up
+  to 8). The first one opens, the others appear in the sidebar.
+- A refused password fails at once with "Wrong user name or password" instead of waiting 60 seconds.
+
 ## 1.2.0
 
 - Servers on the local network are discovered: those that announce `_smb._tcp` or `_sftp-ssh._tcp` (multicast DNS: NAS
