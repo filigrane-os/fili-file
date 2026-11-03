@@ -126,10 +126,32 @@ ApplicationWindow {
     // Transient message (volumes): cleared after 6 s
     property string notice: ""
     Timer { id: noticeTimer; interval: 6000; onTriggered: win.notice = "" }
+    // A share of a server was opened in the list: connect it (the password kept in the keyring is used)
+    Connections {
+        target: folder
+        function onConnectRequested(uri) {
+            Fili.connectServer(uri, "", "", false);
+        }
+    }
     Connections {
         target: Fili
         function onMounted(path) {
             win.open(path);
+        }
+        // A network folder of a favorite or a recent was reconnected: it can be opened now
+        function onReconnected(path) {
+            win.open(path);
+        }
+        // No password is kept for this server, or it was refused: Connect to Server opens with the address filled in
+        function onCredentialsNeeded(uri) {
+            connectBox.open(uri);
+        }
+        // The shares of a server, shown as folders; opening one connects it
+        function onSharesListed(base, name, names) {
+            win.nearby = false;
+            folder.showShares(name, base, names);
+            files.select(0);
+            files.focusList();
         }
         function onVolumeError(message) {
             win.notice = message;
@@ -149,6 +171,17 @@ ApplicationWindow {
     property bool nearby: false
     property string nearbyFrom: ""
     function open(path) {
+        // A folder of a share that is not mounted any more (favorite, recent): reconnect it first (reconnected opens it)
+        if (Fili.reconnect(path))
+            return;
+        // A network address typed in the path bar or given to ctl: a server lists its shares, a share is connected
+        if (path.startsWith("smb://")) {
+            if (/^smb:\/\/[^\/]+\/?$/.test(path))
+                Fili.listShares(path, path.replace(/^smb:\/\/(.*@)?/, "").replace(/\/$/, ""));
+            else
+                Fili.connectServer(path, "", "", false);
+            return;
+        }
         if (path === "nearby:") {
             if (picking)
                 return;
@@ -1020,6 +1053,7 @@ ApplicationWindow {
         current: win.nearby && !win.picking ? "nearby:" : win.networkView ? "network:" : folder.shown
         onOpen: p => win.open(p)
         onConnectTo: address => connectBox.open(address)
+        onOpenServer: (uri, name) => Fili.listShares(uri, name)
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
         onContext: (path, removable, frequent, x, y) => win.openPathMenu(path, x, y, false, removable, frequent)
     }
@@ -1730,8 +1764,11 @@ ApplicationWindow {
     Rectangle {
         id: connectBox
         property bool busy: false
+        // Keep the password in the keyring (needs secret-tool): the next connection of this server asks for nothing
+        property bool remember: Fili.hasTool("secret-tool")
         function open(address) {
             busy = false;
+            remember = Fili.hasTool("secret-tool");
             serverField.text = address || "";
             userField.text = "";
             passField.text = "";
@@ -1741,7 +1778,7 @@ ApplicationWindow {
             if (busy || serverField.text.trim() === "")
                 return;
             busy = true;
-            Fili.connectServer(serverField.text, userField.text, passField.text);
+            Fili.connectServer(serverField.text, userField.text, passField.text, remember);
         }
         anchors.fill: parent
         visible: false
@@ -1815,6 +1852,40 @@ ApplicationWindow {
                 ConnectField { id: serverField; label: Fili.tr("smb://server/share"); next: userField }
                 ConnectField { id: userField; label: Fili.tr("User (optional)"); next: passField }
                 ConnectField { id: passField; label: Fili.tr("Password (optional)"); secret: true; next: serverField }
+                Item {
+                    visible: Fili.hasTool("secret-tool")
+                    width: parent.width
+                    height: 20
+                    Rectangle {
+                        id: rememberBox
+                        width: 14
+                        height: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        radius: 3
+                        color: FiliTheme.background
+                        border.width: FiliTheme.borderWidth
+                        border.color: connectBox.remember ? FiliTheme.accentColor : FiliTheme.border
+                        Text {
+                            anchors.centerIn: parent
+                            visible: connectBox.remember
+                            text: "✓"
+                            font.family: FiliTheme.font
+                            font.pixelSize: FiliTheme.sizeList
+                            color: FiliTheme.accentColor
+                        }
+                    }
+                    Text {
+                        anchors { left: rememberBox.right; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                        text: Fili.tr("Remember password")
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.sizeList
+                        color: FiliTheme.text
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: connectBox.remember = !connectBox.remember
+                    }
+                }
                 Text {
                     width: parent.width
                     wrapMode: Text.Wrap

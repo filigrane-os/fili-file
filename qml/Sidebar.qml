@@ -11,6 +11,8 @@ Rectangle {
     signal open(string path)
     // A server found on the network was clicked: Connect to Server opens with its address
     signal connectTo(string address)
+    // A server of the sidebar was clicked: its shares are listed
+    signal openServer(string uri, string name)
     signal dropped(string urls, string dest, bool copy)
     // Right click on a place: its data and the position in the window
     signal context(string path, bool removable, bool frequent, real x, real y)
@@ -167,6 +169,8 @@ Rectangle {
                     list.currentIndex = row.index;
                     if (row.dev.startsWith("find:"))
                         side.connectTo(row.dev.slice(5));
+                    else if (row.dev.startsWith("srv:smb://"))
+                        side.openServer(row.dev.slice(4), row.name);
                     else if (row.path === "")
                         Fili.mountVolume(row.dev);
                     else
@@ -180,6 +184,8 @@ Rectangle {
                 const p = places.get(currentIndex);
                 if (p.dev.startsWith("find:"))
                     side.connectTo(p.dev.slice(5));
+                else if (p.dev.startsWith("srv:smb://"))
+                    side.openServer(p.dev.slice(4), p.name);
                 else if (p.path === "")
                     Fili.mountVolume(p.dev);
                 else

@@ -441,6 +441,16 @@ fn reply_kind(question: &str, reply: &str) -> String {
     }
 }
 
+// After a successful connection: the server is remembered (one line in the sidebar) and, if asked, so is the password
+fn finish(full: &str, host: &str, user: &str, password: &str, remember_password: bool) {
+    remember_server(&server_uri(full));
+    if remember_password && !user.is_empty() && !password.is_empty() {
+        if let Err(e) = crate::creds::store(host, user, password) {
+            journal(&format!("the password could not be kept in the keyring: {e}"));
+        }
+    }
+}
+
 // Names of the shares printed by `gio list smb://host/` (the questions of the authentication are not names)
 fn shares_from(output: &str) -> Vec<String> {
     output
@@ -454,7 +464,8 @@ fn shares_from(output: &str) -> Vec<String> {
 // Connects the shares of an SMB server given without one: at most MAX_SHARES, the first connected one is returned
 const MAX_SHARES: usize = 8;
 
-fn connect_shares(root: &str, user: &str, password: &str) -> Result<String, String> {
+// The shares of an SMB server, `root` being "smb://user@host/"
+pub fn list_shares(root: &str, user: &str, password: &str) -> Result<Vec<String>, String> {
     let mut cmd = if Command::new("stdbuf").arg("--version").output().is_ok() {
         let mut c = Command::new("stdbuf");
         c.args(["-o0", "gio", "list", root]);
@@ -464,7 +475,32 @@ fn connect_shares(root: &str, user: &str, password: &str) -> Result<String, Stri
         c.args(["list", root]);
         c
     };
-    let shares = shares_from(&run_gio(&mut cmd, user, password)?);
+    Ok(shares_from(&run_gio(&mut cmd, user, password)?))
+}
+
+// The shares of a server with the password kept in the keyring (anonymous listing otherwise)
+pub fn list_shares_of(uri: &str) -> Result<Vec<String>, String> {
+    let (user, host, _) = address_parts(uri);
+    let password = crate::creds::lookup(&host, &user).unwrap_or_default();
+    list_shares(&server_uri(uri), &user, &password)
+}
+
+// "smb://user@host/share" for a path inside a gvfs mount that is not mounted any more (a favorite or a recent folder of a
+// share that was ejected, or from before the last login); None for any other path
+pub fn unmounted_share_uri(path: &str) -> Option<String> {
+    let rest = path.strip_prefix(&gvfs_dir())?.trim_start_matches('/');
+    let name = rest.split('/').next()?;
+    let fields = name.strip_prefix("smb-share:")?;
+    if Path::new(&format!("{}/{name}", gvfs_dir())).exists() {
+        return None;
+    }
+    let field = |k: &str| fields.split(',').find_map(|p| p.strip_prefix(&format!("{k}="))).unwrap_or("").to_string();
+    let (host, share, user) = (field("server"), field("share"), field("user"));
+    (!host.is_empty() && !share.is_empty()).then(|| if user.is_empty() { format!("smb://{host}/{share}") } else { format!("smb://{user}@{host}/{share}") })
+}
+
+fn connect_shares(root: &str, user: &str, password: &str) -> Result<String, String> {
+    let shares = list_shares(root, user, password)?;
     if shares.is_empty() {
         return Err(tr("No shares found on this server").to_string());
     }
@@ -526,35 +562,50 @@ pub fn remember_server(uri: &str) {
 }
 
 pub fn forget_server(uri: &str) {
+    let (user, host, _) = address_parts(uri);
+    crate::creds::forget(&host, &user);
     let mut list = read_servers();
     list.retain(|u| u != uri);
     write_servers(&list);
 }
 
 // Remembered servers that are not connected (a gvfs mount talks about the same host, and the same share for SMB)
-pub fn saved_servers() -> Vec<Volume> {
-    let mounted: Vec<String> = std::fs::read_dir(gvfs_dir())
-        .map(|d| d.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect())
-        .unwrap_or_default();
-    read_servers()
+// Name shown for a server: the name it announces on the network (discover.rs) when the address matches, else the host
+fn server_name(host: &str) -> String {
+    crate::discover::cached()
         .into_iter()
+        .find(|s| s.uri.contains(&format!("//{host}/")))
+        .map(|s| s.name.trim_end_matches("(SMB)").trim().to_string())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| host.to_string())
+}
+
+// One row per server in the sidebar: the servers already used and the ones with a folder mounted right now (a share is
+// reached through its server). A click opens the server (its shares), the cross forgets it.
+pub fn saved_servers() -> Vec<Volume> {
+    let mut uris: Vec<String> = read_servers().iter().map(|u| server_uri(u)).collect();
+    for v in network() {
+        // smb-share:server=nas,share=docs,user=ana
+        let Some(name) = v.mount.as_deref().and_then(|m| m.rsplit('/').next().filter(|n| n.starts_with("smb-share:"))) else { continue };
+        let field = |k: &str| name.split(',').find_map(|p| p.trim_start_matches("smb-share:").strip_prefix(&format!("{k}="))).unwrap_or("").to_string();
+        let (host, user) = (field("server"), field("user"));
+        if !host.is_empty() {
+            uris.push(if user.is_empty() { format!("smb://{host}/") } else { format!("smb://{user}@{host}/") });
+        }
+    }
+    let mut seen: Vec<String> = Vec::new();
+    uris.into_iter()
         .filter(|u| {
-            let rest = u.split_once("://").map_or("", |(_, r)| r);
-            let host = rest.split('/').next().unwrap_or("").rsplit('@').next().unwrap_or("");
-            let share = rest.split('/').nth(1).unwrap_or("");
-            !mounted.iter().any(|m| {
-                m.contains(&format!("={host}")) && (share.is_empty() || !u.starts_with("smb") || m.contains(&format!("share={share}")))
-            })
+            let (user, host, _) = address_parts(u);
+            let key = format!("{}@{}", user.to_lowercase(), host.to_lowercase());
+            !seen.contains(&key) && {
+                seen.push(key);
+                true
+            }
         })
         .map(|u| {
-            let rest = u.split_once("://").map_or("", |(_, r)| r);
-            let host = rest.split('/').next().unwrap_or("").rsplit('@').next().unwrap_or("");
-            let share = rest.split('/').nth(1).filter(|s| !s.is_empty());
-            let name = match share {
-                Some(sh) => trf("%1 on %2", &[&sh, &host]),
-                None => host.to_string(),
-            };
-            Volume { dev: format!("{SRV}{u}"), name, mount: None }
+            let (_, host, _) = address_parts(&u);
+            Volume { dev: format!("{SRV}{u}"), name: server_name(&host), mount: None }
         })
         .collect()
 }
@@ -562,14 +613,44 @@ pub fn saved_servers() -> Vec<Volume> {
 // Connects to a server (smb://host/share, sftp://host, davs://..., ftp://..., nfs://...) with gvfs and returns the
 // FUSE folder of the mount. A typed user name is put in the address; without a full address: error.
 pub fn connect(uri: &str, user: &str, password: &str) -> Result<String, String> {
+    connect_with(uri, user, password, false)
+}
+
+// (user, host, path) of an address such as smb://ana@nas/docs/x; the user may be empty
+pub fn address_parts(uri: &str) -> (String, String, String) {
+    let rest = uri.split_once("://").map_or(uri, |(_, r)| r);
+    let (auth, path) = rest.split_once('/').unwrap_or((rest, ""));
+    match auth.rsplit_once('@') {
+        Some((user, host)) => (user.split(':').next().unwrap_or("").to_string(), host.to_string(), path.to_string()),
+        None => (String::new(), auth.to_string(), path.to_string()),
+    }
+}
+
+// The server alone: "smb://ana@nas/docs/x" -> "smb://ana@nas/"
+pub fn server_uri(uri: &str) -> String {
+    let scheme = uri.split_once("://").map_or("smb", |(s, _)| s);
+    let (user, host, _) = address_parts(uri);
+    if user.is_empty() { format!("{scheme}://{host}/") } else { format!("{scheme}://{user}@{host}/") }
+}
+
+// Like connect. Without a password, the one kept in the keyring for this user on this host is used; `remember` keeps the
+// password that worked there for next time.
+pub fn connect_with(uri: &str, user: &str, password: &str, remember: bool) -> Result<String, String> {
     let uri = uri.trim();
     let Some((scheme, rest)) = uri.split_once("://").filter(|(s, r)| !s.is_empty() && !r.is_empty()) else {
         return Err(tr("Enter an address such as smb://server/share or sftp://server").to_string());
     };
+    let (uri_user, host, _) = address_parts(uri);
+    let user = if user.is_empty() { uri_user } else { user.to_string() };
+    let user = user.as_str();
+    let kept = if password.is_empty() { crate::creds::lookup(&host, user) } else { None };
+    let password = kept.as_deref().unwrap_or(password);
     let full = if !user.is_empty() && !rest.contains('@') { format!("{scheme}://{user}@{rest}") } else { uri.to_string() };
     // An SMB server without a share has no folder to open: connect its shares instead (the first one opens)
     if scheme == "smb" && rest.split_once('/').map_or(true, |(_, path)| path.trim_matches('/').is_empty()) {
-        return connect_shares(&full, user, password);
+        let folder = connect_shares(&full, user, password)?;
+        finish(&full, &host, user, password, remember && kept.is_none());
+        return Ok(folder);
     }
     let before: Vec<String> = network().into_iter().filter_map(|v| v.mount).collect();
     let mut cmd = if Command::new("stdbuf").arg("--version").output().is_ok() {
@@ -582,7 +663,7 @@ pub fn connect(uri: &str, user: &str, password: &str) -> Result<String, String> 
         c
     };
     run_mount(&mut cmd, user, password)?;
-    remember_server(&full);
+    finish(&full, &host, user, password, remember && kept.is_none());
     // The new gvfs folder; otherwise the one that talks about the same host (already mounted)
     let now = network();
     let host = rest.split('/').next().unwrap_or("").rsplit('@').next().unwrap_or("").to_string();

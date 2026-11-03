@@ -199,6 +199,10 @@ struct Request {
 }
 
 fn absolute(p: &str) -> String {
+    // A network address (smb://nas/) is not a relative path
+    if p.contains("://") && !p.starts_with("file://") {
+        return p.to_string();
+    }
     std::path::absolute(p).map_or_else(|_| p.to_string(), |p| p.to_string_lossy().into_owned())
 }
 

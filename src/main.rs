@@ -7,6 +7,7 @@ mod apps;
 mod bridge;
 mod config;
 mod context;
+mod creds;
 mod discover;
 mod fs;
 mod icon_theme;

@@ -76,6 +76,14 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "showNetwork"]
         fn show_network(self: Pin<&mut FolderModel>, title: &QString);
+        // The shares of a server as folders (base = "smb://user@host/", one name per line): opening one connects it
+        #[qinvokable]
+        #[cxx_name = "showShares"]
+        fn show_shares(self: Pin<&mut FolderModel>, title: &QString, base: &QString, names: &QString);
+        // A row that is a network address was opened: the window connects it (then opens the folder)
+        #[qsignal]
+        #[cxx_name = "connectRequested"]
+        fn connect_requested(self: Pin<&mut FolderModel>, uri: &QString);
         #[qinvokable]
         #[cxx_name = "closeResults"]
         fn close_results(self: Pin<&mut FolderModel>);
@@ -450,7 +458,24 @@ pub mod qobject {
         // Network drive (gvfs): address smb://, sftp://, davs://, ftp://, nfs://; answer through mounted / volumeError
         #[qinvokable]
         #[cxx_name = "connectServer"]
-        fn connect_server(self: Pin<&mut Fili>, uri: &QString, user: &QString, password: &QString);
+        fn connect_server(self: Pin<&mut Fili>, uri: &QString, user: &QString, password: &QString, remember: bool);
+        // The password of a server is unknown or was refused: Connect to Server opens with this address
+        #[qsignal]
+        #[cxx_name = "credentialsNeeded"]
+        fn credentials_needed(self: Pin<&mut Fili>, uri: &QString);
+        // The shares of a server (smb://user@host/), one name per line, through sharesListed
+        #[qinvokable]
+        #[cxx_name = "listShares"]
+        fn list_shares(self: Pin<&mut Fili>, uri: &QString, name: &QString);
+        #[qsignal]
+        #[cxx_name = "sharesListed"]
+        fn shares_listed(self: Pin<&mut Fili>, base: &QString, name: &QString, names: &QString);
+        // A folder of a network share that is not mounted any more (favorite, recent): true when it is being reconnected,
+        // then reconnected(path) says it can be opened
+        #[qinvokable]
+        fn reconnect(self: Pin<&mut Fili>, path: &QString) -> bool;
+        #[qsignal]
+        fn reconnected(self: Pin<&mut Fili>, path: &QString);
         #[qinvokable]
         fn tr(self: &Fili, text: &QString) -> QString;
         // Folder icon in the accent color (other icons unchanged)
@@ -807,6 +832,11 @@ fn archive_command() -> Command {
 }
 
 // Program to run: its full path when found (PATH, then ~/.local/bin), else the bare name
+// Whether a connection error means the credentials are missing or wrong (so the user is asked), not a broken network
+fn auth_refused(error: &str) -> bool {
+    ["password", "Invalid argument", "Permission denied", "Access denied", "denied"].iter().any(|k| error.contains(k))
+}
+
 fn bin(name: &str) -> String {
     crate::tools::find(name).map_or_else(|| name.to_string(), |p| p.to_string_lossy().into_owned())
 }
@@ -1207,7 +1237,8 @@ impl FolderModel {
             let all: Vec<fs::Entry> = self
                 .all
                 .iter()
-                .filter_map(|e| fs::entry(Path::new(&e.path)).map(|n| fs::Entry { name: e.name.clone(), ..n }))
+                // A network address (the shares of a server) is not on the disk: it stays as it is
+                .filter_map(|e| if e.path.contains("://") { Some(e.clone()) } else { fs::entry(Path::new(&e.path)).map(|n| fs::Entry { name: e.name.clone(), ..n }) })
                 .collect();
             self.as_mut().rust_mut().all = all;
             self.as_mut().apply();
@@ -1402,6 +1433,28 @@ impl FolderModel {
         self.as_mut().changed();
     }
 
+    pub fn show_shares(mut self: Pin<&mut Self>, title: &QString, base: &QString, names: &QString) {
+        if self.dir.is_empty() {
+            return;
+        }
+        let base = base.to_string();
+        let all: Vec<fs::Entry> = names
+            .to_string()
+            .lines()
+            .filter(|n| !n.is_empty())
+            .map(|n| fs::Entry { name: n.to_string(), path: format!("{base}{n}"), is_dir: true, size: 0, mtime: 0, exec: false, created: 0, mode: 0, uid: 0, kind: i18n::tr("Share").to_string() })
+            .collect();
+        let dir = QString::from(&self.dir);
+        let mut r = self.as_mut().rust_mut();
+        r.all = all;
+        r.filter = QString::default();
+        r.results = title.clone();
+        r.shown = dir;
+        self.as_mut().drop_index();
+        self.as_mut().rebuild();
+        self.as_mut().changed();
+    }
+
     pub fn close_results(mut self: Pin<&mut Self>) {
         if !self.results.is_empty() {
             let dir = QString::from(&self.dir);
@@ -1429,8 +1482,13 @@ impl FolderModel {
         row
     }
 
-    pub fn activate(self: Pin<&mut Self>, row: i32) -> i32 {
+    pub fn activate(mut self: Pin<&mut Self>, row: i32) -> i32 {
         let Some(e) = self.row(row).cloned() else { return -1 };
+        // A share of a server (a network address, not a folder yet): the window connects it, then opens it
+        if e.is_dir && e.path.starts_with("smb://") {
+            self.as_mut().connect_requested(&QString::from(&e.path));
+            return -1;
+        }
         if e.is_dir {
             return self.navigate(PathBuf::from(&e.path), None);
         }
@@ -2450,7 +2508,8 @@ impl FolderModel {
             ROLE_PATH => QVariant::from(&QString::from(&e.path)),
             ROLE_DIR => QVariant::from(&e.is_dir),
             ROLE_SIZE => QVariant::from(&QString::from(&if e.is_dir { String::from("—") } else { fs::size(e.size) })),
-            ROLE_DATE => QVariant::from(&QString::from(&fs::date(e.mtime, self.now))),
+            // No date (the shares of a server are not files): a dash instead of 1970
+            ROLE_DATE => QVariant::from(&QString::from(&if e.mtime == 0 { String::from("—") } else { fs::date(e.mtime, self.now) })),
             ROLE_ICON => QVariant::from(&QString::from(&if e.is_dir {
                 icons::folder()
             } else {
@@ -2810,22 +2869,67 @@ impl Fili {
         spawn_detached(Command::new(bin("fili-share")).args(args));
     }
 
-    pub fn connect_server(self: Pin<&mut Self>, uri: &QString, user: &QString, password: &QString) {
+    pub fn connect_server(self: Pin<&mut Self>, uri: &QString, user: &QString, password: &QString, remember: bool) {
         let (uri, user, password) = (uri.to_string(), user.to_string(), password.to_string());
         let qt = self.qt_thread();
         std::thread::spawn(move || {
-            let r = volumes::connect(&uri, &user, &password);
+            let r = volumes::connect_with(&uri, &user, &password, remember);
             let _ = qt.queue(move |mut f| match r {
                 Ok(path) => {
                     f.as_mut().places_changed();
                     f.as_mut().mounted(&QString::from(&path));
                 }
                 Err(e) => {
+                    // Without a password of our own, a refusal means "ask the user"
+                    if password.is_empty() && auth_refused(&e) {
+                        f.as_mut().credentials_needed(&QString::from(&uri));
+                    } else {
+                        let msg = i18n::trf("Cannot connect to “%1”: %2", &[&uri, &e]);
+                        f.as_mut().volume_error(&QString::from(&msg));
+                    }
+                }
+            });
+        });
+    }
+
+    pub fn list_shares(self: Pin<&mut Self>, uri: &QString, name: &QString) {
+        let (uri, name) = (uri.to_string(), name.to_string());
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let r = volumes::list_shares_of(&uri);
+            let _ = qt.queue(move |mut f| match r {
+                Ok(names) if !names.is_empty() => {
+                    f.as_mut().shares_listed(&QString::from(&volumes::server_uri(&uri)), &QString::from(&name), &QString::from(&names.join("\n")));
+                }
+                Ok(_) => f.as_mut().credentials_needed(&QString::from(&uri)),
+                Err(e) if auth_refused(&e) => f.as_mut().credentials_needed(&QString::from(&uri)),
+                Err(e) => {
                     let msg = i18n::trf("Cannot connect to “%1”: %2", &[&uri, &e]);
                     f.as_mut().volume_error(&QString::from(&msg));
                 }
             });
         });
+    }
+
+    pub fn reconnect(self: Pin<&mut Self>, path: &QString) -> bool {
+        let path = path.to_string();
+        let Some(uri) = volumes::unmounted_share_uri(&path) else { return false };
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let r = volumes::connect_with(&uri, "", "", false);
+            let _ = qt.queue(move |mut f| match r {
+                Ok(_) => {
+                    f.as_mut().places_changed();
+                    f.as_mut().reconnected(&QString::from(&path));
+                }
+                Err(e) if auth_refused(&e) => f.as_mut().credentials_needed(&QString::from(&uri)),
+                Err(e) => {
+                    let msg = i18n::trf("Cannot connect to “%1”: %2", &[&uri, &e]);
+                    f.as_mut().volume_error(&QString::from(&msg));
+                }
+            });
+        });
+        true
     }
 
     pub fn unmount_volume(self: Pin<&mut Self>, dev: &QString) {
@@ -3054,7 +3158,8 @@ impl Fili {
         // Favorites added by the user (removable)
         let mut removable: Vec<String> = Vec::new();
         for (p, label) in bookmarks() {
-            if seen.contains(&p) || !Path::new(&p).is_dir() {
+            // A folder of a network share stays a favorite while the share is not mounted: a click reconnects it
+            if seen.contains(&p) || (!Path::new(&p).is_dir() && volumes::unmounted_share_uri(&p).is_none()) {
                 continue;
             }
             let label = if label.is_empty() { name(&p) } else { label };
@@ -3086,7 +3191,7 @@ impl Fili {
         // Servers already used, not connected: a click reconnects them, ✕ forgets them
         let saved = volumes::saved_servers();
         for v in &saved {
-            items.push((devices, v.name.clone(), String::new(), "folder-remote", v.dev.clone()));
+            items.push((devices, v.name.clone(), String::new(), "network-server", v.dev.clone()));
         }
         // Servers announced on the network (mDNS) that are not already listed: a click opens Connect to Server with the address
         let known: Vec<String> = saved.iter().map(|v| v.dev.clone()).chain(volumes::network().into_iter().map(|v| v.dev)).collect();
@@ -3098,6 +3203,10 @@ impl Fili {
         }
         // Connected network drives (gvfs, NFS, CIFS, sshfs): ejectable like volumes
         for v in volumes::network() {
+            // The shares of an SMB server are reached through the server's own row
+            if v.mount.as_deref().is_some_and(|m| m.contains("/smb-share:")) {
+                continue;
+            }
             items.push((devices, v.name, v.mount.unwrap_or_default(), "folder-remote", v.dev));
         }
         let _ = ops::ensure_trash(&ops::home_trash());

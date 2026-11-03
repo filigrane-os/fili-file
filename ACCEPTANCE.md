@@ -97,6 +97,7 @@ Ctrl+Shift+R (nearby), Ctrl+Shift+Delete (empty the trash), Ctrl+Q.
 - [x] **Real USB stick**: plugging in = appears in the sidebar without restarting; a click mounts it (or automatic mount); the content is shown; the eject button unmounts it and the row disappears; an abrupt unplug does not crash.
 - [x] Copy of big files to the stick: progress, cancel, queue of several copies, task list.
 - [x] **MTP phone**: plugged in, appears; mounting asks gio for the address if needed; browsing, copy in both directions; ejected, disappears until it is plugged in again.
+- [ ] **Remember password**: connect to a server with the box ticked, eject or restart, click the server in the sidebar then a share: nothing is asked. A favorite inside a share (right click, Add to Favorites) reconnects by a click. The ✕ of the server forgets it and its password.
 - [ ] **Discovered servers**: the servers of the local network (NAS...) show up under Locations within a few seconds of opening a window; a click opens Connect to Server with the address filled in and the cursor on the user name; connecting works.
 - [ ] **Server** (Ctrl+K): address `smb://…` or `sftp://…`, credentials, readable address error. _(fixed after the first checklist run, to be checked again)_
 - [x] "Nearby" (Ctrl+Shift+R) and Share: list of devices, sending a file, receiving.

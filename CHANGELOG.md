@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0
+
+- Servers in the sidebar: one row per server (`Nas`), no longer one per share. A click lists the server's shares as
+  folders; opening one connects it and opens it. The cross forgets the server and its password.
+- Remember password: a check box in Connect to Server keeps the password in the user's keyring (Secret Service, through
+  `secret-tool`: gnome-keyring, KeePassXC...), never in a file of ours. A kept password is used by every later connection
+  to that server, so a click asks for nothing.
+- Favorites and recent folders inside a network share stay in the sidebar when the share is not mounted; a click
+  reconnects the share (with the kept password) and opens the folder. When there is no kept password or it was refused,
+  Connect to Server opens with the address filled in.
+- A network address typed in the path bar opens the server (`smb://host/`) or connects the share (`smb://host/share`).
+- Shares and other network entries without a date show a dash instead of 1970.
+
 ## 1.2.3
 
 - Fixed: Connect to Server (Ctrl+K, and a server clicked in the sidebar) did nothing: the button showed "Connecting…"
