@@ -331,7 +331,7 @@ mod tests {
         let u = theme_json_from("[theme]\nradius_control = 9\nsize = big\ntext = \"#fff\" # c\n[theme.light]\nradius_control = 3\nbackground = \"nope\"\naccent = \"#336699\"\n[theme.accents]\nsauge = [\"#111111\", \"#222222\", \"#333333\", \"#444444\"]\nbad = [\"#111\"]\n");
         assert_eq!(val(&u, "dark", "radius_control").as_deref(), Some("9"));
         assert_eq!(val(&u, "light", "radius_control").as_deref(), Some("3"));
-        assert_eq!(val(&u, "dark", "size").as_deref(), Some("13"));
+        assert_eq!(val(&u, "dark", "size").as_deref(), Some("14"));
         assert_eq!(val(&u, "dark", "text").as_deref(), Some("#fff"));
         assert_eq!(val(&u, "light", "background").as_deref(), Some("#f3f1ec"));
         assert_eq!(val(&u, "light", "accent").as_deref(), Some("#336699"));

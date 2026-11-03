@@ -243,13 +243,15 @@ pub fn tint(url: &str, accent: &str, light: bool) -> String {
     let Some(path) = url.strip_prefix("file://").filter(|p| p.contains("/folder-blue") && p.ends_with(".svg")) else {
         return url.to_string();
     };
+    // The default accent is sand in dark mode and slate in light mode
+    let accent = match (accent, light) {
+        ("default", false) => "sable",
+        ("default", true) => "ardoise",
+        _ => accent,
+    };
     // A theme that already provides its "folder-accent-<accent>.svg" folders (scripts/icon-theme.sh): use them
     if let Some(dir) = path.strip_suffix("/folder-blue.svg") {
-        let kind = match (accent, light) {
-            ("default", false) => "dark-default".to_string(),
-            ("default", true) => "light-default".to_string(),
-            _ => format!("accent-{accent}"),
-        };
+        let kind = format!("accent-{accent}");
         let own = format!("{dir}/folder-{kind}.svg");
         if Path::new(&own).exists() {
             return format!("file://{own}");

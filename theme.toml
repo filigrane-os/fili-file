@@ -21,10 +21,10 @@ font = "Jost"
 mono = "JetBrains Mono"
 icons = "Fili Icons"
 # Type scale (px)
-size = 13
-size_list = 12
-size_small = 11
-size_label = 10
+size = 14
+size_list = 13
+size_small = 12
+size_label = 11
 size_title = 18
 # Weight of emphasized text (400 regular, 600 semibold, 700 bold)
 weight_accent = 600
@@ -85,9 +85,9 @@ success = "#4a7354"
 # accent_bright = "#2f4a66"
 
 # Accent colors chosen with `fili-theme accent <name>`: [dark, dark bright, light, light bright].
-# An unknown accent name falls back to `default`.
+# No accent chosen (or an unknown name) means `default`: sand in dark mode, slate in light mode.
 [theme.accents]
-default = ["#dbe7f4", "#f3f1ec", "#1c222b", "#0f1319"]
+default = ["#d2bf92", "#e0d1ab", "#4f6884", "#3d5470"]   # sand in dark mode, slate in light mode
 voile = ["#9dbbd6", "#b9d0e4", "#3f5a78", "#2f4a66"]
 ardoise = ["#7f9ab6", "#9ab2ca", "#4f6884", "#3d5470"]
 sauge = ["#a3bfa8", "#bcd3c0", "#4a7354", "#385a42"]

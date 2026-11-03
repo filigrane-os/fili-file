@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1
+
+- Default accent: sand in dark mode, slate in light mode (it was mist / black). Folder icons follow. A chosen accent is unchanged.
+- Type scale +1 px (14 / 13 / 12 / 11): Jost has a small x-height, so the sizes copied from Apple's Lucida Grande looked small.
+
 ## 1.3.0
 
 - Servers in the sidebar: one row per server (`Nas`), no longer one per share. A click lists the server's shares as
