@@ -9,7 +9,6 @@ mod context;
 mod fs;
 mod icon_theme;
 #[allow(dead_code)]
-#[path = "../../bar-stats/src/i18n.rs"]
 mod i18n;
 mod icons;
 mod ops;
@@ -63,7 +62,14 @@ mod tests {
         fs::read_to_string(format!("{}/{rel}", env!("CARGO_MANIFEST_DIR"))).unwrap()
     }
 
-    // « readonly property <type> <nom>: <valeur> » -> valeur
+    // A file of the fili-shell (directory FILI_SHELL_DIR). The parity tests below compare the application with the
+    // shell: they run from the Filigrane repository (tests/fili-shell/run.sh sets the variable) and are skipped elsewhere.
+    fn shell(file: &str) -> Option<String> {
+        let dir = std::env::var_os("FILI_SHELL_DIR")?;
+        Some(fs::read_to_string(std::path::Path::new(&dir).join(file)).unwrap())
+    }
+
+    // "readonly property <type> <name>: <value>" -> value
     fn tokens(qml: &str) -> HashMap<String, String> {
         qml.lines()
             .filter_map(|l| l.trim().strip_prefix("readonly property "))
@@ -74,7 +80,7 @@ mod tests {
             .collect()
     }
 
-    // « [section] clé = "valeur" # c » de theme.toml -> (section, clé) = valeur
+    // "[section] key = "value" # comment" of theme.toml -> (section, key) = value
     fn defaults() -> HashMap<(String, String), String> {
         let mut out = HashMap::new();
         let mut section = String::new();
@@ -89,13 +95,14 @@ mod tests {
         out
     }
 
-    // Les valeurs par défaut de theme.toml sont celles du fili-shell: un jeton commun garde la même valeur
+    // The defaults of theme.toml are the ones of the fili-shell: a shared token keeps the same value
     #[test]
-    fn default_theme_matches_the_shell() {
-        let shell = tokens(&read("../../dotfiles/config/quickshell/FiliTheme.qml"));
+    fn shell_parity_default_theme() {
+        let Some(shell_qml) = shell("FiliTheme.qml") else { return };
+        let shell = tokens(&shell_qml);
         let d = defaults();
         let mut common = 0;
-        // (jeton du shell, clé de theme.toml): couleurs par mode (« light ? clair : sombre »), le reste commun
+        // (shell token, theme.toml key): colors per mode ("light ? light : dark"), the rest shared
         let colors = [
             ("nuit", "background"), ("nuitProfond", "background_deep"), ("nuit2", "surface"), ("nuit3", "surface_hover"),
             ("nuit4", "surface_active"), ("ardoise", "muted"), ("brume2", "text_secondary"), ("brume", "text"),
@@ -106,8 +113,8 @@ mod tests {
             assert!(v.starts_with(&format!("ov(\"{key}\", ")), "{token}: ov(\"{key}\", ...)");
             let hexes: Vec<&str> = v.split('"').skip(1).step_by(2).filter(|h| h.starts_with('#')).collect();
             let (light, dark) = if hexes.len() == 2 { (hexes[0], hexes[1]) } else { (hexes[0], hexes[0]) };
-            assert_eq!(d[&("theme.light".to_string(), key.to_string())], light, "{token} clair");
-            assert_eq!(d[&("theme.dark".to_string(), key.to_string())], dark, "{token} sombre");
+            assert_eq!(d[&("theme.light".to_string(), key.to_string())], light, "{token} light");
+            assert_eq!(d[&("theme.dark".to_string(), key.to_string())], dark, "{token} dark");
             common += 1;
         }
         let plain = [
@@ -128,7 +135,7 @@ mod tests {
             assert_eq!(d[&("theme".to_string(), key.to_string())], want, "token {token}");
             common += 1;
         }
-        // Teintes d'accentuation: chacune de theme.toml figure telle quelle dans le shell
+        // Accent tones: each one of theme.toml appears as it is in the shell
         let tones = &shell["accentTones"];
         let toml = read("theme.toml");
         let mut n = 0;
@@ -138,11 +145,12 @@ mod tests {
             n += 1;
         }
         assert!(n >= 7);
-        assert!(common >= 25, "{common} tokens en commun");
+        assert!(common >= 25, "{common} shared tokens");
     }
 
     #[test]
-    fn same_kinetic_scroll_as_the_shell() {
-        assert_eq!(read("qml/KineticScroll.qml"), read("../../dotfiles/config/quickshell/KineticScroll.qml"));
+    fn shell_parity_kinetic_scroll() {
+        let Some(shell_qml) = shell("KineticScroll.qml") else { return };
+        assert_eq!(read("qml/KineticScroll.qml"), shell_qml);
     }
 }
