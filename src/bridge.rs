@@ -211,7 +211,7 @@ pub mod qobject {
         // Copie dans le dossier même (nom « copie »)
         #[qinvokable]
         fn duplicate(self: Pin<&mut FolderModel>, paths: &QString);
-        // Terminal (foot) dans ce dossier, sinon dans le dossier affiché
+        // Terminal in that folder, else in the folder shown ($TERMINAL, xdg-terminal-exec or the first known terminal)
         #[qinvokable]
         fn terminal(self: &FolderModel, path: &QString);
         // Infos d'un ou plusieurs éléments, en JSON: [[libellé, valeur]]; la taille des dossiers suit par infoSize
@@ -309,6 +309,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "pickKind"]
         fn pick_kind(self: &Fili) -> QString;
+        // Whether an optional program (fili-archive, fili-share) is installed
+        #[qinvokable]
+        #[cxx_name = "hasTool"]
+        fn has_tool(self: &Fili, name: &QString) -> bool;
         #[qinvokable]
         #[cxx_name = "pickTitle"]
         fn pick_title(self: &Fili) -> QString;
@@ -790,9 +794,9 @@ fn share_run(args: &[&str]) -> String {
     }
 }
 
+// Program to run: its full path when found (PATH, then ~/.local/bin), else the bare name
 fn bin(name: &str) -> String {
-    let p = format!("{}/.local/bin/{name}", home());
-    if Path::new(&p).exists() { p } else { name.to_string() }
+    crate::tools::find(name).map_or_else(|| name.to_string(), |p| p.to_string_lossy().into_owned())
 }
 
 #[derive(Default)]
@@ -1958,7 +1962,11 @@ impl FolderModel {
     pub fn terminal(&self, path: &QString) {
         let p = path.to_string();
         let dir = if !p.is_empty() && Path::new(&p).is_dir() { p } else { self.dir.clone() };
-        let child = Command::new("foot").current_dir(&dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).process_group(0).spawn();
+        let Some(program) = crate::tools::terminal() else {
+            eprintln!("fili-file: no terminal found (install one or set $TERMINAL)");
+            return;
+        };
+        let child = Command::new(program).current_dir(&dir).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).process_group(0).spawn();
         if let Ok(mut child) = child {
             std::thread::spawn(move || child.wait());
         }
@@ -2184,7 +2192,7 @@ impl FolderModel {
                 }
             }
             for (args, name, remaining) in jobs {
-                let child = Command::new("fili-archive")
+                let child = Command::new(bin("fili-archive"))
                     .args(&args)
                     .current_dir(&dir)
                     .stdin(if password.is_empty() { Stdio::null() } else { Stdio::piped() })
@@ -2560,8 +2568,12 @@ fn theme_file() -> PathBuf {
     PathBuf::from(state).join("filigrane/theme")
 }
 
+// Light mode: Filigrane's state file when there is one, else the desktop's color scheme (settings portal), else dark
 fn read_light() -> bool {
-    std::fs::read_to_string(theme_file()).is_ok_and(|t| t.trim() == "light")
+    match std::fs::read_to_string(theme_file()) {
+        Ok(t) => t.trim() == "light",
+        Err(_) => crate::appearance::prefers_light().unwrap_or(false),
+    }
 }
 
 // Couleur d'accentuation (nom), « default » par défaut
@@ -2651,7 +2663,21 @@ impl cxx_qt::Initialize for Fili {
                 }
             }
         });
-        // Suivi du dossier d'état (inotify, fil bloqué sur read: aucun réveil tant que rien ne change)
+        // Without Filigrane's state file, follow the desktop's color scheme (settings portal signal, blocking thread)
+        if !theme_file().exists() {
+            let qt = self.qt_thread();
+            std::thread::spawn(move || {
+                crate::appearance::watch(|light| {
+                    let _ = qt.queue(move |mut f| {
+                        if f.light != light {
+                            f.as_mut().rust_mut().light = light;
+                            f.as_mut().theme_changed();
+                        }
+                    });
+                });
+            });
+        }
+        // Follow the state directory (inotify, thread blocked on read: no wake-up while nothing changes)
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let file = theme_file();
@@ -2796,6 +2822,10 @@ impl Fili {
 
     pub fn pick_kind(&self) -> QString {
         QString::from(pick::get().map_or("", |p| p.kind.as_str()))
+    }
+
+    pub fn has_tool(&self, name: &QString) -> bool {
+        crate::tools::available(&name.to_string())
     }
 
     pub fn pick_title(&self) -> QString {
@@ -3013,7 +3043,9 @@ impl Fili {
             items.push((frequent, name(&v.path), v.path.clone(), "folder", String::new()));
         }
         // Partage de proximité (vue À proximité de la fenêtre, pas un dossier)
-        items.push((devices, i18n::tr("Nearby").to_string(), "nearby:".into(), "network-wireless", String::new()));
+        if crate::tools::available("fili-share") {
+            items.push((devices, i18n::tr("Nearby").to_string(), "nearby:".into(), "network-wireless", String::new()));
+        }
         // Serveurs et partages connectés (vue de résultats, pas un dossier)
         items.push((devices, i18n::tr("Network").to_string(), "network:".into(), "network-workgroup", String::new()));
         items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "computer", String::new()));

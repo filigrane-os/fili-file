@@ -29,6 +29,9 @@ ApplicationWindow {
     // Mode sélecteur de fichiers
     readonly property string pickKind: Fili.pickKind()
     readonly property bool picking: pickKind !== ""
+    // Optional programs: the features that need them are switched off when they are not installed
+    readonly property bool hasArchive: Fili.hasTool("fili-archive")
+    readonly property bool hasShare: Fili.hasTool("fili-share")
     // Entrée 0: tous les fichiers (défaut); entrée i: filtre i - 1 de l'application
     readonly property var pickFilters: picking ? [Fili.tr("All files")].concat(JSON.parse(Fili.pickFilters())) : []
     property int pickFilterIndex: 0
@@ -255,11 +258,11 @@ ApplicationWindow {
     Action { id: aBack; text: Fili.tr("Back"); shortcut: "Alt+Left"; enabled: folder.canBack; onTriggered: win.show(folder.back()) }
     Action { id: aForward; text: Fili.tr("Forward"); shortcut: "Alt+Right"; enabled: folder.canForward; onTriggered: win.show(folder.forward()) }
     Action { id: aUp; text: Fili.tr("Enclosing Folder"); shortcut: "Alt+Up"; onTriggered: win.show(folder.up()) }
-    Action { id: aShare; text: Fili.tr("Share…"); enabled: win.canAct && !folder.inTrash && !win.picking && win.shareable().length > 0; onTriggered: shareBox.open() }
-    Action { id: aNearby; text: Fili.tr("Nearby"); shortcut: "Ctrl+Shift+R"; enabled: !win.picking; onTriggered: win.open("nearby:") }
+    Action { id: aShare; text: Fili.tr("Share…"); enabled: win.hasShare && win.canAct && !folder.inTrash && !win.picking && win.shareable().length > 0; onTriggered: shareBox.open() }
+    Action { id: aNearby; text: Fili.tr("Nearby"); shortcut: "Ctrl+Shift+R"; enabled: win.hasShare && !win.picking; onTriggered: win.open("nearby:") }
     Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
-    Action { id: aCompress; text: Fili.tr("Compress…"); enabled: win.canAct && !folder.inTrash && !win.picking && win.selCount > 0; onTriggered: compressBox.open(files.targetsText()) }
-    Action { id: aExtract; text: Fili.tr("Extract Here"); enabled: win.canAct && !folder.inTrash && !win.picking && Object.keys(files.selected).length > 0 && folder.allArchives(files.targetsText()); onTriggered: folder.extract(files.targetsText(), "") }
+    Action { id: aCompress; text: Fili.tr("Compress…"); enabled: win.hasArchive && win.canAct && !folder.inTrash && !win.picking && win.selCount > 0; onTriggered: compressBox.open(files.targetsText()) }
+    Action { id: aExtract; text: Fili.tr("Extract Here"); enabled: win.hasArchive && win.canAct && !folder.inTrash && !win.picking && Object.keys(files.selected).length > 0 && folder.allArchives(files.targetsText()); onTriggered: folder.extract(files.targetsText(), "") }
     Action { id: aConnect; text: Fili.tr("Connect to Server…"); shortcut: "Ctrl+K"; onTriggered: connectBox.open() }
     // « / » comme Ctrl+F (façon vim, yazi); sans libellé: la barre de menus ne montre que Ctrl+F
     Action { id: aSearchSlash; shortcut: "/"; enabled: win.canAct; onTriggered: searchInput.forceActiveFocus() }
