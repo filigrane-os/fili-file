@@ -12,7 +12,7 @@ First stable release.
 ### Not re-verified by hand before this release
 
 The automated checks pass (unit tests and the headless scenarios of `tests/`). These manual checks of the acceptance
-list (`RECETTE.md`) were not repeated for 1.0.0, because they need a pointer, other applications or real devices:
+list (`ACCEPTANCE.md`) were not repeated for 1.0.0, because they need a pointer, other applications or real devices:
 Delete and Ctrl+Z, double-click on folders, files and archives, rubber-band selection, context menus, wheel and
 touchpad scrolling, in-place rename and rename conflicts, drag and drop (several items, sidebar places, tabs, from and
 to other applications, Esc to cancel, name conflicts), the menu entries of the fili-bar, path entry and suggestions,
