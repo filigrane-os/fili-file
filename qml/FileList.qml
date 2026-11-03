@@ -446,7 +446,7 @@ Rectangle {
             width: list.width
             height: Math.max(list.height, list.contentHeight)
             onDropped: drop => {
-                view.dropped(drop.urls.map(u => u.toString()).join("\n"), view.folder.path, drop.proposedAction === Qt.CopyAction);
+                view.dropped(drop.urls.map(u => u.toString()).join("\n"), view.folder.path, DropMode.isCopy(drop));
                 drop.acceptProposedAction();
             }
         }
@@ -495,7 +495,7 @@ Rectangle {
             width: grid.width
             height: Math.max(grid.height, grid.contentHeight)
             onDropped: drop => {
-                view.dropped(drop.urls.map(u => u.toString()).join("\n"), view.folder.path, drop.proposedAction === Qt.CopyAction);
+                view.dropped(drop.urls.map(u => u.toString()).join("\n"), view.folder.path, DropMode.isCopy(drop));
                 drop.acceptProposedAction();
             }
         }
@@ -708,7 +708,7 @@ Rectangle {
                 anchors.fill: parent
                 enabled: row.isDir
                 onDropped: d => {
-                    view.dropped(d.urls.map(u => u.toString()).join("\n"), row.path, d.proposedAction === Qt.CopyAction);
+                    view.dropped(d.urls.map(u => u.toString()).join("\n"), row.path, DropMode.isCopy(d));
                     d.acceptProposedAction();
                 }
             }

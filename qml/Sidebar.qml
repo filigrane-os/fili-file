@@ -144,7 +144,7 @@ Rectangle {
                 anchors.fill: parent
                 enabled: row.path !== "nearby:" && row.path !== "network:"
                 onDropped: d => {
-                    side.dropped(d.urls.map(u => u.toString()).join("\n"), row.path, d.proposedAction === Qt.CopyAction);
+                    side.dropped(d.urls.map(u => u.toString()).join("\n"), row.path, DropMode.isCopy(d));
                     d.acceptProposedAction();
                 }
             }

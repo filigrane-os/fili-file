@@ -1070,7 +1070,7 @@ ApplicationWindow {
                         onExited: spring.stop()
                         onDropped: d => {
                             spring.stop();
-                            folder.dropItems(d.urls.map(u => u.toString()).join("\n"), path, d.proposedAction === Qt.CopyAction);
+                            folder.dropItems(d.urls.map(u => u.toString()).join("\n"), path, DropMode.isCopy(d));
                             d.acceptProposedAction();
                         }
                         Timer {

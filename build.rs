@@ -28,6 +28,7 @@ fn main() {
                 "qml/KineticScroll.qml",
             ])
             .qml_file(QmlFile::from("qml/FiliTheme.qml").singleton(true))
+            .qml_file(QmlFile::from("qml/DropMode.qml").singleton(true))
             .depend("QtQuick")
             .depend("QtQuick.Controls"),
     )

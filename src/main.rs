@@ -170,6 +170,19 @@ mod tests {
         }
     }
 
+    // A singleton that is not registered in build.rs is "not defined" at run time, which no other test would notice
+    #[test]
+    fn every_qml_singleton_is_registered() {
+        let build = read("build.rs");
+        for entry in fs::read_dir(format!("{}/qml", env!("CARGO_MANIFEST_DIR"))).unwrap() {
+            let path = entry.unwrap().path();
+            if fs::read_to_string(&path).unwrap().contains("pragma Singleton") {
+                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                assert!(build.contains(&format!("\"qml/{name}\").singleton(true)")), "{name} is not registered as a singleton in build.rs");
+            }
+        }
+    }
+
     #[test]
     fn shell_parity_kinetic_scroll() {
         let Some(shell_qml) = shell("KineticScroll.qml") else { return };
