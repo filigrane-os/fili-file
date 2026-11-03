@@ -1,11 +1,11 @@
-// Panneau d'aperçu à droite (Ctrl+Maj+P): image, première page d'un PDF, début d'un texte, contenu d'un dossier.
-// Suit la sélection (un seul élément), avec un court délai pour ne pas travailler pendant qu'on fait défiler.
+// Preview panel on the right (Ctrl+Shift+P): image, first page of a PDF, beginning of a text, content of a folder.
+// Follows the selection (a single item), with a short delay so as not to work while scrolling.
 import QtQuick
 import Fili.Files
 
 Rectangle {
     id: pane
-    // Chemin de l'élément sélectionné (vide: aucun ou plusieurs)
+    // Path of the selected item (empty: none or several)
     property string path: ""
     color: FiliTheme.background
 

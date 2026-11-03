@@ -1,5 +1,5 @@
-// Chemin du dossier affiché, en segments cliquables (depuis le dossier personnel quand on y est, sinon depuis la
-// racine). Ctrl+L le change en champ de saisie: Entrée y va, Échap annule.
+// Path of the folder shown, in clickable segments (from the home folder when inside it, else from the
+// root). Ctrl+L turns it into an input field: Enter goes there, Esc cancels.
 import QtQuick
 import Fili.Files
 
@@ -9,25 +9,25 @@ Item {
     property bool editing: false
     property int fontSize: FiliTheme.size
     signal open(string path)
-    // Clic droit sur un segment: chemin complet et position dans la fenêtre
+    // Right click on a segment: full path and position in the window
     signal context(string path, real x, real y)
     signal done()
 
-    // Propositions façon fzf pour ce qui est tapé (Haut/Bas choisissent, Tab complète, Entrée valide la proposition choisie,
-    // la première par défaut après une frappe, ou, sans choix, le texte tel quel)
+    // fzf-like suggestions for what is typed (Up/Down choose, Tab completes, Enter validates the chosen suggestion,
+    // the first by default after a keystroke, or, with no choice, the text as it is)
     property var suggestions: []
     property int selected: -1
     function shown(p) {
         const h = Fili.home();
         return p === h ? "~" : p.startsWith(h + "/") ? "~" + p.slice(h.length) : p;
     }
-    // preselect: après une frappe, la première proposition est choisie d'avance (Entrée la valide sans les flèches),
-    // sauf quand le texte finit par « / » (dossier complet: Entrée y va tel quel, les flèches choisissent un contenu)
+    // preselect: after a keystroke, the first suggestion is chosen in advance (Enter validates it without the arrows),
+    // except when the text ends with "/" (complete folder: Enter goes there as it is, the arrows choose a content)
     function refresh(preselect) {
         suggestions = editing ? JSON.parse(Fili.pathSuggest(input.text)) : [];
         selected = preselect === true && suggestions.length > 0 && !input.text.endsWith("/") ? 0 : -1;
     }
-    // Remplace le texte par la proposition i (un « / » en fin pour un dossier, où l'on continue de taper)
+    // Replaces the text with suggestion i (a trailing "/" for a folder, where typing goes on)
     function accept(i) {
         const c = suggestions[i];
         input.text = shown(c.path) + (c.dir ? "/" : "");
@@ -160,7 +160,7 @@ Item {
         }
     }
 
-    // Liste des propositions, au-dessus du champ (la barre d'état est en bas de la fenêtre)
+    // List of suggestions, above the field (the status bar is at the bottom of the window)
     Rectangle {
         visible: bar.editing && bar.suggestions.length > 0
         anchors { left: parent.left; right: parent.right; bottom: parent.top; bottomMargin: FiliTheme.space2 }

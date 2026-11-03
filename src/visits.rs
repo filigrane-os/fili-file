@@ -1,6 +1,6 @@
-// Dossiers visités, classés par « fréquence récente » (comme zoxide): chaque visite compte, les anciennes pèsent moins.
-// Fichier ~/.local/state/filigrane/fili-file-visits: « nombre<TAB>dernière visite (s)<TAB>chemin », 200 dossiers au plus.
-// Sans Qt: testé par cargo test.
+// Visited folders, ranked by "recent frequency" (like zoxide): each visit counts, old ones weigh less.
+// File ~/.local/state/filigrane/fili-file-visits: "count<TAB>last visit (s)<TAB>path", 200 folders at most.
+// Without Qt: tested by cargo test.
 use std::{
     env,
     path::PathBuf,
@@ -39,7 +39,7 @@ pub fn format(list: &[Visit]) -> String {
     list.iter().map(|v| format!("{}\t{}\t{}\n", v.count, v.last, v.path)).collect()
 }
 
-// Poids: le nombre de visites, multiplié selon l'ancienneté de la dernière (heure ×4, jour ×2, semaine ×0,5, plus ×0,25)
+// Weight: the number of visits, multiplied according to the age of the last one (hour ×4, day ×2, week ×0.5, older ×0.25)
 pub fn score(v: &Visit, now: i64) -> f64 {
     let age = (now - v.last).max(0);
     let w = if age < 3600 {
@@ -82,7 +82,7 @@ pub fn record(path: &str) {
     let _ = std::fs::write(f, format(&list));
 }
 
-// Retire un dossier de la liste (« Retirer des récents »): il y revient s'il est de nouveau visité
+// Removes a folder from the list ("Remove from recents"): it comes back if it is visited again
 pub fn forget_in(list: &mut Vec<Visit>, path: &str) -> bool {
     let before = list.len();
     list.retain(|v| v.path != path);
@@ -96,7 +96,7 @@ pub fn forget(path: &str) {
     }
 }
 
-// Dossiers qui existent encore, les mieux classés d'abord
+// Folders that still exist, best ranked first
 pub fn ranked() -> Vec<Visit> {
     let t = now();
     let mut list: Vec<Visit> = load().into_iter().filter(|v| std::path::Path::new(&v.path).is_dir()).collect();
@@ -116,7 +116,7 @@ mod tests {
         bump(&mut l, "/b", 1_000_020);
         assert_eq!(l.iter().find(|v| v.path == "/a").map(|v| v.count), Some(2));
         let now = 1_000_000 + 30 * 86_400;
-        // Une visite d'il y a une minute passe devant deux visites vieilles d'un mois
+        // A visit from a minute ago comes before two visits a month old
         let fresh = Visit { count: 1, last: now - 60, path: "/c".into() };
         assert!(score(&fresh, now) > score(&l[0], now));
         assert_eq!(parse(&format(&l)), l);

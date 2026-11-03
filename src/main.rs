@@ -1,5 +1,5 @@
-// fili-file: explorateur de fichiers de Filigrane. Moteur en Rust (lecture des dossiers, tri, icônes, ouverture),
-// interface en QML avec les tokens du fili-shell (qml/FiliTheme.qml). Usage: fili-file [dossier | fichier | file://...]
+// fili-file: file manager of Filigrane. Engine in Rust (folder reading, sorting, icons, opening),
+// interface in QML with the tokens of the fili-shell (qml/FiliTheme.qml). Usage: fili-file [folder | file | file://...]
 mod about;
 mod appearance;
 mod apps;
@@ -22,7 +22,7 @@ mod watch;
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 
 fn main() {
-    // Commande à une instance ouverte (assistant): fili-file ctl goto|show ...
+    // Command to an open instance (assistant): fili-file ctl goto|show ...
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).is_some_and(|a| a == "ctl") {
         match context::ctl(&args[2..]) {
@@ -34,7 +34,7 @@ fn main() {
         }
         return;
     }
-    // Service du portail FileChooser: sans interface, lancé par D-Bus (voir portal.rs)
+    // FileChooser portal service: no interface, started by D-Bus (see portal.rs)
     if std::env::args().any(|a| a == "--portal") {
         if let Err(e) = portal::serve() {
             eprintln!("fili-file --portal: {e}");
@@ -43,7 +43,7 @@ fn main() {
         return;
     }
     let mut app = QGuiApplication::new();
-    // app-id Wayland (règles niri, fili-file.desktop)
+    // Wayland app-id (niri rules, fili-file.desktop)
     QGuiApplication::set_desktop_file_name(&QString::from(if pick::get().is_some() { "fili-file-picker" } else { "fili-file" }));
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {

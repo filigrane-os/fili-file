@@ -1,6 +1,6 @@
-// Barre latérale à la manière du Finder: lieux (dossier personnel, dossiers XDG, signets GTK, corbeille) et appareils,
-// en sections à intertitres (11 px DemiGras ardoise, sans capitales), glyphes monochromes teintés voile. Le lieu
-// affiché est sélectionné (fond nuit3, texte voile). Décision à valider: lignes de 28, intertitres 11 DemiGras.
+// Finder-style sidebar: places (home folder, XDG folders, GTK bookmarks, trash) and devices,
+// in sections with headings (11 px DemiBold muted, no capitals), monochrome glyphs tinted accentColor. The place
+// shown is selected (surfaceHover background, accentColor text). To be validated: rows of 28, headings 11 DemiBold.
 import QtQuick
 import QtQuick.Effects
 import Fili.Files
@@ -10,7 +10,7 @@ Rectangle {
     property string current
     signal open(string path)
     signal dropped(string urls, string dest, bool copy)
-    // Clic droit sur un lieu: ses données et la position dans la fenêtre
+    // Right click on a place: its data and the position in the window
     signal context(string path, bool removable, bool frequent, real x, real y)
 
     color: FiliTheme.backgroundDeep
@@ -32,7 +32,7 @@ Rectangle {
         id: list
         anchors.fill: parent
         anchors.topMargin: FiliTheme.space1
-        // Les lignes sont inset px du bord (le ListView impose x = 0 à ses délégués: la marge est celle du contenu)
+        // The rows are inset px from the edge (the ListView forces x = 0 on its delegates: the margin is the content's)
         readonly property int inset: FiliTheme.space2 + 2
         leftMargin: inset
         rightMargin: inset
@@ -41,17 +41,17 @@ Rectangle {
         boundsBehavior: Flickable.StopAtBounds
         model: places
         keyNavigationEnabled: true
-        // Un liseré entre les lignes: le fond du lieu courant ne touche pas celui du survol
+        // A hairline between rows: the background of the current place does not touch the hover one
         spacing: 2
         activeFocusOnTab: true
         highlightMoveDuration: 0
-        // Déposer un dossier entre les lieux (ou dans le vide): l'ajouter aux favoris
+        // Drop a folder between places (or in the empty space): add it to the favorites
         DropArea {
             z: -1
             width: list.width
             height: Math.max(list.height, list.contentHeight)
             onDropped: d => {
-                // addFavorite attend un chemin, pas une URL file://
+                // addFavorite expects a path, not a file:// URL
                 d.urls.forEach(u => Fili.addFavorite(decodeURIComponent(u.toString().replace(/^file:\/\//, ""))));
                 d.acceptProposedAction();
             }
@@ -102,7 +102,7 @@ Rectangle {
                     colorizationColor: row.sel ? FiliTheme.accentBright : FiliTheme.accentColor
                 }
             }
-            // Corbeille pleine: pastille sur le glyphe (le glyphe plein ne se distingue guère à 16 px)
+            // Full trash: badge on the glyph (the full glyph is hardly distinguishable at 16 px)
             Rectangle {
                 visible: row.full
                 x: img.x + img.width - 6
@@ -123,10 +123,10 @@ Rectangle {
                 font.pixelSize: FiliTheme.size
                 color: row.sel ? FiliTheme.accentColor : FiliTheme.text
             }
-            // Éjecter un volume monté; oublier un serveur mémorisé (non connecté)
+            // Eject a mounted volume; forget a remembered server (not connected)
             Text {
                 id: eject
-                z: 2 // au-dessus de la zone de clic de la ligne, déclarée plus bas
+                z: 2 // above the click area of the row, declared further down
                 visible: row.dev !== "" && (row.path !== "" || row.dev.startsWith("srv:"))
                 anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 text: row.path === "" ? "✕" : "⏏"

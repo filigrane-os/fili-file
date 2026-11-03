@@ -1,8 +1,8 @@
-// Menu contextuel (clic droit ou touche Menu): liste à rayon 6, lignes de 24, survol nuit3, entrée désactivée en
-// ardoise, séparateurs, raccourci à droite. Une entrée peut porter un sous-menu (children) qui s'ouvre à droite.
-// Flèches ↑/↓ et Entrée, → ouvre le sous-menu, ← le ferme, Échap ou clic ailleurs ferme.
-// items: [{ id, label, hint, enabled, separator, checked, children: [{ id, label }] }]; si une entrée porte « checked »,
-// toutes les lignes gagnent une gouttière à gauche pour la coche
+// Context menu (right click or Menu key): list with radius 6, rows of 24, hover surfaceHover, disabled entry in
+// muted, separators, shortcut on the right. An entry can carry a submenu (children) that opens on the right.
+// Arrows up/down and Enter, right opens the submenu, left closes it, Esc or a click elsewhere closes.
+// items: [{ id, label, hint, enabled, separator, checked, children: [{ id, label }] }]; if one entry carries "checked",
+// every row gets a gutter on the left for the check mark
 import QtQuick
 import Fili.Files
 
@@ -26,7 +26,7 @@ Item {
         current = -1;
         subOpen = false;
         panel.x = Math.max(FiliTheme.space1, Math.min(x, menu.width - menuWidth - FiliTheme.space1));
-        // Hauteur connue d'avance (le Repeater n'a pas encore créé ses lignes); trop bas: le menu s'ouvre vers le haut
+        // Height known in advance (the Repeater has not created its rows yet); too low: the menu opens upwards
         const h = list.reduce((a, i) => a + (i.separator ? 9 : menu.itemHeight), 0) + 2 * FiliTheme.space1;
         panel.y = Math.max(FiliTheme.space1, y + h > menu.height ? y - h : y);
         visible = true;
@@ -100,7 +100,7 @@ Item {
         color: FiliTheme.surface
         border.width: FiliTheme.borderWidth
         border.color: FiliTheme.border
-        // Gouttière des coches (colonnes affichées...)
+        // Gutter of the check marks (columns shown...)
         readonly property bool gutter: model.some(i => i.checked !== undefined)
         Column {
             id: col

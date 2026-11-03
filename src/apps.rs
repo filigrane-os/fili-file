@@ -1,5 +1,5 @@
-// Applications qui ouvrent un type de fichier (« Ouvrir avec »): fichiers .desktop, mimeapps.list (défaut et
-// associations ajoutées), mimeinfo.cache. Lancement par l'interprétation du champ Exec. Sans Qt: testé par cargo test.
+// Applications that open a file type ("Open with"): .desktop files, mimeapps.list (default and
+// added associations), mimeinfo.cache. Launched by interpreting the Exec field. Without Qt: tested by cargo test.
 use std::{
     collections::HashMap,
     env, fs,
@@ -56,7 +56,7 @@ pub fn desktop(id: &str) -> Option<App> {
     app_dirs().iter().find_map(|d| parse_desktop(id, &fs::read_to_string(d.join(id)).ok()?))
 }
 
-// Lignes « type=a.desktop;b.desktop » d'un fichier à sections, pour la section demandée
+// "type=a.desktop;b.desktop" lines of a file with sections, for the requested section
 fn section_map(text: &str, wanted: &str) -> HashMap<String, Vec<String>> {
     let mut out = HashMap::new();
     let mut in_section = false;
@@ -71,7 +71,7 @@ fn section_map(text: &str, wanted: &str) -> HashMap<String, Vec<String>> {
     out
 }
 
-// Applications pour un type MIME: celle par défaut d'abord, puis les associations ajoutées, puis le cache
+// Applications for a MIME type: the default one first, then the added associations, then the cache
 pub fn for_mime(mime: &str) -> Vec<App> {
     let config = env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{}/.config", home()));
     let list = fs::read_to_string(format!("{config}/mimeapps.list")).unwrap_or_default();
@@ -90,7 +90,7 @@ pub fn for_mime(mime: &str) -> Vec<App> {
             continue;
         }
         seen.push(id.clone());
-        // Les entrées cachées (NoDisplay) ne sont proposées que si l'utilisateur les a choisies par défaut
+        // Hidden entries (NoDisplay) are only offered if the user chose them as the default
         if let Some(app) = desktop(&id).filter(|a| !a.hidden || i == 0) {
             out.push(app);
         }
@@ -98,7 +98,7 @@ pub fn for_mime(mime: &str) -> Vec<App> {
     out
 }
 
-// Découpe un champ Exec (guillemets doubles, antislash) en arguments, codes %f %F %u %U remplacés par path
+// Splits an Exec field (double quotes, backslash) into arguments, codes %f %F %u %U replaced by path
 pub fn command(app: &App, path: &str) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
     let (mut cur, mut quoted, mut any) = (String::new(), false, false);

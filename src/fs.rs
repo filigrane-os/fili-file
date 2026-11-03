@@ -1,4 +1,4 @@
-// Lecture d'un dossier, tri et mise en forme des colonnes (taille, date). Sans Qt: testé par cargo test.
+// Reading of a folder, sorting and formatting of the columns (size, date). Without Qt: tested by cargo test.
 use crate::i18n::{num, tr, trf};
 use std::{
     cmp::Ordering,
@@ -15,7 +15,7 @@ pub struct Entry {
     pub size: u64,
     pub mtime: i64,
     pub exec: bool,
-    // Création (date de naissance du fichier, à défaut la modification), droits (rwxr-xr-x), propriétaire, type lisible
+    // Creation (birth date of the file, else the modification), permissions (rwxr-xr-x), owner, readable type
     pub created: i64,
     pub mode: u32,
     pub uid: u32,
@@ -29,7 +29,7 @@ impl Entry {
 }
 
 pub fn entry(path: &Path) -> Option<Entry> {
-    // Un lien prend le type de sa cible (lien vers un dossier = dossier); lien cassé: le lien lui-même
+    // A link takes the type of its target (link to a folder = folder); broken link: the link itself
     let m = fs::metadata(path).or_else(|_| fs::symlink_metadata(path)).ok()?;
     Some(build(path, &m))
 }
@@ -50,8 +50,8 @@ fn build(path: &Path, m: &fs::Metadata) -> Entry {
     }
 }
 
-// Lecture d'un dossier: les métadonnées viennent du descripteur du dossier (plus rapide qu'un stat par chemin
-// complet); seuls les liens passent par la résolution de leur cible
+// Reading of a folder: the metadata come from the folder descriptor (faster than a stat per full
+// path); only links go through the resolution of their target
 fn list_one(dir: &Path) -> io::Result<Vec<Entry>> {
     Ok(fs::read_dir(dir)?
         .filter_map(|e| {
@@ -65,7 +65,7 @@ fn list_one(dir: &Path) -> io::Result<Vec<Entry>> {
         .collect())
 }
 
-// La Corbeille regroupe celle du dossier personnel et celles des autres volumes montés (.Trash-UID d'une clé, de /tmp...)
+// The Trash gathers the one of the home folder and the ones of the other mounted volumes (.Trash-UID of a USB stick, of /tmp...)
 pub fn list(dir: &Path) -> io::Result<Vec<Entry>> {
     let mut all = list_one(dir)?;
     if dir == crate::ops::trash_files() {
@@ -101,7 +101,7 @@ impl Key {
     }
 }
 
-// Tri global sur la colonne choisie: dossiers et fichiers mêlés. La taille d'un dossier n'est pas affichée: elle compte pour 0.
+// Global sort on the chosen column: folders and files mixed. The size of a folder is not shown: it counts as 0.
 pub fn sort(v: &mut [Entry], key: Key, desc: bool) {
     let size = |e: &Entry| if e.is_dir { 0 } else { e.size };
     v.sort_by(|a, b| {
@@ -119,7 +119,7 @@ pub fn sort(v: &mut [Entry], key: Key, desc: bool) {
     });
 }
 
-// Nom du propriétaire (passwd), gardé en mémoire; à défaut le numéro
+// Name of the owner (passwd), kept in memory; otherwise the number
 pub fn owner(uid: u32) -> String {
     static CACHE: std::sync::Mutex<Vec<(u32, String)>> = std::sync::Mutex::new(Vec::new());
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
@@ -136,12 +136,12 @@ pub fn owner(uid: u32) -> String {
     name
 }
 
-// Droits à la façon de ls: rwxr-xr-x
+// Permissions in the style of ls: rwxr-xr-x
 pub fn permissions(mode: u32) -> String {
     "rwxrwxrwx".chars().enumerate().map(|(i, c)| if mode & (0o400 >> i) != 0 { c } else { '-' }).collect()
 }
 
-// Ordre naturel: sans casse ni accents, nombres comparés par valeur (« photo 2 » avant « photo 10 »)
+// Natural order: ignoring case and accents, numbers compared by value ("photo 2" before "photo 10")
 pub fn natural(a: &str, b: &str) -> Ordering {
     let (mut x, mut y) = (a.chars().peekable(), b.chars().peekable());
     loop {
@@ -169,13 +169,13 @@ pub fn natural(a: &str, b: &str) -> Ordering {
     }
 }
 
-// Le nom commence par prefix, sans casse ni accents (saisie au clavier dans la liste)
+// The name starts with prefix, ignoring case and accents (keyboard input in the list)
 pub fn starts_with(name: &str, prefix: &str) -> bool {
     let mut n = name.chars().map(fold);
     prefix.chars().map(fold).all(|c| n.next() == Some(c))
 }
 
-// Motif de sélection: « * » (suite de caractères) et « ? » (un caractère), sans casse; sans joker, le nom doit contenir le motif
+// Selection pattern: "*" (sequence of characters) and "?" (one character), ignoring case; without wildcard, the name must contain the pattern
 pub fn glob_match(name: &str, pattern: &str) -> bool {
     let n: Vec<char> = name.to_lowercase().chars().collect();
     let p: Vec<char> = pattern.trim().to_lowercase().chars().collect();
@@ -185,7 +185,7 @@ pub fn glob_match(name: &str, pattern: &str) -> bool {
     if !p.iter().any(|c| matches!(c, '*' | '?')) {
         return name.to_lowercase().contains(&p.iter().collect::<String>());
     }
-    // Retour arrière sur la dernière « * »
+    // Backtrack on the last "*"
     let (mut i, mut j, mut star, mut mark) = (0, 0, None, 0);
     while i < n.len() {
         if j < p.len() && (p[j] == '?' || p[j] == n[i]) {
@@ -207,14 +207,14 @@ pub fn glob_match(name: &str, pattern: &str) -> bool {
 }
 
 #[cfg(test)]
-// Le nom contient needle, sans casse ni accents (filtre du dossier)
+// The name contains needle, ignoring case and accents (folder filter)
 pub fn contains(name: &str, needle: &str) -> bool {
     let n: String = name.chars().map(fold).collect();
     n.contains(&needle.chars().map(fold).collect::<String>())
 }
 
-// Recherche floue façon fzf: chaque mot de needle (séparés par des espaces) doit apparaître dans l'ordre dans le
-// chemin, sans casse ni accents. Score plus haut = meilleur (lettres consécutives, débuts de mots, nom de fichier).
+// Fuzzy search in the style of fzf: each word of needle (separated by spaces) must appear in order in the
+// path, ignoring case and accents. Higher score = better (consecutive letters, word starts, file name).
 pub fn fuzzy(path: &str, needle: &str) -> Option<i64> {
     let hay: Vec<char> = path.chars().map(fold).collect();
     let base = hay.iter().rposition(|&c| c == '/').map_or(0, |i| i + 1);
@@ -223,7 +223,7 @@ pub fn fuzzy(path: &str, needle: &str) -> Option<i64> {
     for word in needle.split_whitespace() {
         any = true;
         let w: Vec<char> = word.chars().map(fold).collect();
-        // Fin du plus court appariement vers l'avant, puis début le plus serré en revenant en arrière
+        // End of the shortest forward match, then the tightest start walking backwards
         let mut j = 0;
         let mut end = 0;
         for (i, &c) in hay.iter().enumerate() {
@@ -270,13 +270,13 @@ pub fn fuzzy(path: &str, needle: &str) -> Option<i64> {
         }
         total += score;
     }
-    // Chemins courts d'abord à égalité
+    // Short paths first on a tie
     any.then_some(total * 4 - (hay.len() - base) as i64)
 }
 
-// Tout le contenu de root, niveau par niveau (les liens vers des dossiers ne sont pas suivis), sans lire les
-// métadonnées (name = chemin relatif, le reste est complété pour les seuls résultats affichés). Les dossiers cachés ne
-// sont parcourus que si hidden. emit reçoit les éléments par paquets; s'arrête à cap éléments ou quand emit rend false.
+// The whole content of root, level by level (links to folders are not followed), without reading the
+// metadata (name = relative path, the rest is filled in for the displayed results only). Hidden folders are
+// only walked if hidden. emit receives the items in batches; stops at cap items or when emit returns false.
 pub fn walk(root: &Path, hidden: bool, cap: usize, mut emit: impl FnMut(Vec<Entry>) -> bool) {
     let mut batch = Vec::new();
     let mut total = 0;
@@ -338,7 +338,7 @@ fn fold(c: char) -> char {
     }
 }
 
-// Tailles en unités binaires, comme le fili-shell (Gio, Mio)
+// Sizes in binary units, like the fili-shell (GiB, MiB)
 pub fn size(n: u64) -> String {
     const UNITS: [&str; 4] = ["%1 KiB", "%1 MiB", "%1 GiB", "%1 TiB"];
     if n < 1024 {
@@ -359,7 +359,7 @@ pub fn size(n: u64) -> String {
     }
 }
 
-// Heure locale (y, m, j, h, min, jour de l'année)
+// Local time (y, m, d, h, min, day of the year)
 fn local(t: i64) -> (i32, i32, i32, i32, i32, i32) {
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
     let t = t as libc::time_t;
@@ -367,7 +367,7 @@ fn local(t: i64) -> (i32, i32, i32, i32, i32, i32) {
     (tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_yday)
 }
 
-// « Aujourd'hui, 14:32 », « Hier, 09:10 », sinon la date dans l'ordre de la langue (catalogue)
+// "Today, 14:32", "Yesterday, 09:10", otherwise the date in the order of the language (catalog)
 pub fn date(t: i64, now: i64) -> String {
     let (y, mo, d, h, mi, yd) = local(t);
     let hm = format!("{h:02}:{mi:02}");
@@ -386,7 +386,7 @@ pub fn count(n: usize) -> String {
     if n == 1 { trf("%1 item", &[&n]) } else { trf("%1 items", &[&n]) }
 }
 
-// Espace libre du système de fichiers qui contient dir
+// Free space of the file system that contains dir
 pub fn free(dir: &Path) -> Option<u64> {
     let c = std::ffi::CString::new(dir.as_os_str().as_encoded_bytes()).ok()?;
     let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
@@ -428,7 +428,7 @@ mod tests {
         assert_eq!(names(&v), ["a.txt", "b.txt", "c", "Z"]);
         sort(&mut v, Key::Name, true);
         assert_eq!(names(&v), ["Z", "c", "b.txt", "a.txt"]);
-        // un dossier compte pour une taille de 0
+        // a folder counts for a size of 0
         sort(&mut v, Key::Size, true);
         assert_eq!(names(&v), ["a.txt", "b.txt", "Z", "c"]);
         sort(&mut v, Key::Date, false);
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn sizes() {
-        // Textes en anglais quelle que soit la langue de la session (le catalogue est lu une fois)
+        // English texts whatever the language of the session (the catalog is read once)
         unsafe { std::env::set_var("FILI_LANG", "en") };
         assert_eq!(size(512), "512 B");
         assert_eq!(size(1536), "1.5 KiB");

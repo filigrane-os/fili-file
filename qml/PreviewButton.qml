@@ -1,5 +1,5 @@
-// Bouton de la barre d'outils: montre ou cache le panneau d'aperçu (même commande que Ctrl+Maj+P). Pictogramme dessiné:
-// une fenêtre dont la bande de droite est pleine quand le panneau est ouvert.
+// Toolbar button: shows or hides the preview panel (same command as Ctrl+Shift+P). Drawn pictogram:
+// a window whose right band is filled when the panel is open.
 import QtQuick
 import Fili.Files
 

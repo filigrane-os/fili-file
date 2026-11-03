@@ -1,4 +1,4 @@
-// Bouton d'icône de la barre d'outils (glyphe Fili Icons): survol nuit3, pressé nuit4, désactivé ardoise
+// Toolbar icon button (Fili Icons glyph): hover surfaceHover, pressed surfaceActive, disabled muted
 import QtQuick
 import Fili.Files
 

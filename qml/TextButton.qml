@@ -1,5 +1,5 @@
-// Bouton à texte (barre d'outils de la corbeille, barre d'état, confirmation): survol nuit3, pressé nuit4.
-// primary: texte en voile (action par défaut).
+// Text button (trash toolbar, status bar, confirmation): hover surfaceHover, pressed surfaceActive.
+// primary: text in accentColor (default action).
 import QtQuick
 import Fili.Files
 

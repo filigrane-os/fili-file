@@ -1,16 +1,16 @@
-// « À proximité »: le partage de proximité de Casier, à la manière d'AirDrop dans le Finder. Les appareils joignables
-// (LocalSend sur le réseau local, Bluetooth appairés) sont des pastilles: on y dépose des fichiers (glisser depuis une
-// autre fenêtre) ou on clique pour choisir les fichiers à envoyer. En dessous, qui peut nous envoyer des fichiers
-// (interrupteurs par protocole) et les derniers fichiers reçus. Les demandes entrantes arrivent en notification.
+// "Nearby": Casier's proximity sharing, like AirDrop in the Finder. The reachable devices
+// (LocalSend on the local network, paired Bluetooth) are pills: files are dropped on them (dragged from another
+// window) or a click chooses the files to send. Below, who can send us files
+// (switches per protocol) and the last files received. Incoming requests arrive as notifications.
 import QtQuick
 import Fili.Files
 
 Rectangle {
     id: view
     color: FiliTheme.background
-    // Message passager de la fenêtre
+    // Transient message of the window
     signal notice(string text)
-    // Ouvrir un fichier reçu dans le dossier
+    // Open a file received, in its folder
     signal openPath(string path)
 
     property var info: ({ dest: "", confirm: "ask", minutes: 0, name: "", protocols: [] })
@@ -30,8 +30,8 @@ Rectangle {
         return out;
     }
 
-    // Un tour = infos de réception (protocoles disponibles), puis un scan par protocole. Pas de nouveau tour tant que
-    // le précédent n'est pas fini; les réponses portent l'étiquette de leur tour, les autres sont ignorées.
+    // One round = reception info (available protocols), then one scan per protocol. No new round until
+    // the previous one is over; answers carry the label of their round, the others are ignored.
     property int round: 0
     property bool wantScan: false
     function refresh() {
@@ -50,7 +50,7 @@ Rectangle {
     function when(t) {
         return Qt.formatDateTime(new Date(t * 1000), "d MMM, hh:mm");
     }
-    // Seuls les fichiers locaux (file://) sont envoyés; un nom avec saut de ligne ne passerait pas par la liste
+    // Only local files (file://) are sent; a name with a line break would not go through the list
     function pathsOf(urls) {
         const out = [];
         for (const u of urls) {
@@ -76,7 +76,7 @@ Rectangle {
     }
 
     onVisibleChanged: if (visible) refresh()
-    // Les appareils vont et viennent: nouvelle recherche toutes les 10 s tant que la vue est ouverte
+    // Devices come and go: new search every 10 s while the view is open
     Timer {
         interval: 10000
         running: view.visible
@@ -217,7 +217,7 @@ Rectangle {
 
             Rectangle { width: parent.width; height: 1; color: FiliTheme.surfaceActive }
 
-            // Réception: qui peut nous trouver
+            // Reception: who can find us
             Text {
                 text: Fili.tr("Allow others to find this computer")
                 font.family: FiliTheme.font
@@ -279,7 +279,7 @@ Rectangle {
                 color: FiliTheme.textSecondary
             }
 
-            // Reçus récemment
+            // Received recently
             Text {
                 visible: view.received.length > 0
                 text: Fili.tr("Received recently")

@@ -1,17 +1,17 @@
-// Vue du dossier, en liste (colonnes Nom, Taille, Modifié...; un clic sur un en-tête trie, un second inverse l'ordre) ou en
-// grille d'icônes de 64 px (nom sous l'icône, deux lignes au plus); même délégué, mêmes sélection et raccourcis.
-// Une ligne sélectionnée: fond nuit3 et nom en voile (brume quand la fenêtre n'est pas active); survol: fond nuit3.
-// Sélection multiple: tirer sur le fond trace une zone, Ctrl+clic ajoute ou retire, Maj+clic ou Maj+flèches étendent, Ctrl+A tout. Clavier: flèches,
-// Début/Fin, Page préc./suiv., Entrée ou Ctrl+↓ ouvre, Retour arrière ou Alt+↑ remonte, Espace aperçu rapide,
-// lettres = aller au nom qui commence ainsi. F2 renomme sur place (Entrée valide, Échap annule). Glisser les lignes
-// sélectionnées: text/uri-list, déposable sur un dossier de la liste, de la barre latérale ou dans une autre fenêtre.
+// View of the folder, as a list (Name, Size, Modified... columns; a click on a header sorts, a second one reverses the order) or as a
+// grid of 64 px icons (name under the icon, two lines at most); same delegate, same selection and shortcuts.
+// A selected row: surfaceHover background and name in accentColor (text when the window is not active); hover: surfaceHover background.
+// Multiple selection: dragging on the background draws an area, Ctrl+click adds or removes, Shift+click or Shift+arrows extend, Ctrl+A everything. Keyboard: arrows,
+// Home/End, Page Up/Down, Enter or Ctrl+Down opens, Backspace or Alt+Up goes to the parent, Space quick look,
+// letters = go to the name that starts with them. F2 renames in place (Enter validates, Esc cancels). Dragging the
+// selected rows: text/uri-list, droppable on a folder of the list, of the sidebar or in another window.
 import QtQuick
 import Fili.Files
 
 Rectangle {
     id: view
     required property FolderModel folder
-    // Vue affichée: "list" ou "grid" (choix gardé dans l'état de l'utilisateur)
+    // View shown: "list" or "grid" (choice kept in the user's state)
     property string viewMode: Fili.viewMode()
     readonly property bool tiles: viewMode === "grid"
     readonly property Item active: tiles ? grid : list
@@ -31,16 +31,16 @@ Rectangle {
     signal openRow(int row)
     signal goUp()
     signal dropped(string urls, string dest, bool copy)
-    // Clic droit (ou touche Menu): position dans cette vue; row = -1 hors des lignes
+    // Right click (or Menu key): position in this view; row = -1 outside the rows
     signal context(real x, real y)
 
     color: FiliTheme.background
 
-    // Lignes sélectionnées: chemin -> true. anchor: ligne de départ des sélections par plage.
+    // Selected rows: path -> true. anchor: starting row of range selections.
     property var selected: ({})
     property int anchor: 0
-    // Ligne en cours de renommage (-1: aucune)
-    // Miniatures PDF prêtes depuis l'ouverture du dossier: chemin -> true
+    // Row being renamed (-1: none)
+    // PDF thumbnails ready since the folder was opened: path -> true
     property var ready: ({})
     Connections {
         target: folder
@@ -50,11 +50,11 @@ Rectangle {
             view.ready = r;
         }
     }
-    // Description de la sélection (barre d'état), vide si rien n'est sélectionné
+    // Description of the selection (status bar), empty when nothing is selected
     readonly property string info: Object.keys(selected).length > 0 ? folder.describe(Object.keys(selected).join("\n")) : ""
     property int renaming: -1
     readonly property bool editing: renaming >= 0
-    // Fin du renommage sur place par un clic ailleurs: ce qui est tapé est validé (Échap seul annule)
+    // End of in-place renaming by a click elsewhere: what was typed is validated (only Esc cancels)
     signal commitEdit()
     function endRename() {
         if (renaming >= 0)
@@ -69,11 +69,11 @@ Rectangle {
         selected = s;
         anchor = row;
     }
-    // Image sous le curseur pendant un glisser: les noms (trois au plus) et le nombre d'éléments, préparée au clic
+    // Image under the cursor during a drag: the names (three at most) and the number of items, prepared on click
     property url dragImage: ""
     Item {
         id: dragPreview
-        // Hors de la fenêtre, mais rendu: grabToImage en fait l'image
+        // Outside the window, but rendered: grabToImage makes the image from it
         x: -4000
         width: 220
         height: stack.implicitHeight + 6
@@ -106,7 +106,7 @@ Rectangle {
                 }
             }
         }
-        // Pastille du nombre d'éléments
+        // Badge with the number of items
         Rectangle {
             visible: dragPreview.total > 1
             x: 200 - 6
@@ -130,10 +130,10 @@ Rectangle {
         const keys = selected[path] ? Object.keys(selected) : [path];
         dragPreview.names = keys.slice(0, 3).map(p => p.split("/").pop());
         dragPreview.total = keys.length;
-        // Le temps que les noms soient posés, puis une image de la taille de l'aperçu
+        // Wait for the names to be laid out, then an image of the size of the preview
         Qt.callLater(() => dragPreview.grabToImage(r => { view.dragImage = r.url; }, Qt.size(dragPreview.width, dragPreview.height)));
     }
-    // Clic sur l'élément de ce nom, une fois un renommage validé (ce qu'aurait fait un clic simple, Ctrl ou Maj)
+    // Click on the item of this name, once a rename is validated (what a simple click, Ctrl or Shift would have done)
     function clickNamed(name, modifiers) {
         const row = folder.rowOf(name);
         if (row < 0)
@@ -147,7 +147,7 @@ Rectangle {
             pick(row);
         active.forceActiveFocus();
     }
-    // Une seule ligne sélectionnée et courante
+    // A single row, selected and current
     function select(row) {
         if (row < 0)
             return;
@@ -200,7 +200,7 @@ Rectangle {
         }
         selected = s;
     }
-    // Chemins visés par une commande: la sélection, sinon la ligne courante
+    // Paths targeted by a command: the selection, else the current row
     function targets() {
         const keys = Object.keys(selected);
         if (keys.length > 0)
@@ -214,7 +214,7 @@ Rectangle {
         if (active.currentIndex >= 0)
             renaming = active.currentIndex;
     }
-    // Le dossier a changé sous la vue: ne garder que ce qui existe encore
+    // The folder changed under the view: keep only what still exists
     function reloaded() {
         const keep = {};
         for (const p of Object.keys(selected))
@@ -231,7 +231,7 @@ Rectangle {
         active.forceActiveFocus();
     }
 
-    // Colonnes après le nom: affichées selon le choix de l'utilisateur (clic droit sur un en-tête), dans cet ordre
+    // Columns after the name: shown according to the user's choice (right click on a header), in this order
     readonly property var allColumns: [
         { key: "size", sort: 1, role: "size", label: Fili.tr("Size"), width: 96, align: Text.AlignRight },
         { key: "modified", sort: 2, role: "modified", label: Fili.tr("Modified"), width: 160, align: Text.AlignLeft },
@@ -242,7 +242,7 @@ Rectangle {
     ]
     property var enabledKeys: Fili.columns().split(",")
     readonly property var cols: allColumns.filter(c => enabledKeys.indexOf(c.key) >= 0)
-    // Largeurs choisies par l'utilisateur (glisser le bord gauche d'un en-tête), gardées dans l'état: {clé: px}
+    // Widths chosen by the user (drag the left edge of a header), kept in the state: {key: px}
     property var colWidths: loadWidths()
     function loadWidths() {
         const w = {};
@@ -258,7 +258,7 @@ Rectangle {
     function baseWidth(c) {
         return colWidths[c.key] > 0 ? colWidths[c.key] : c.width;
     }
-    // px <= 0: retour à la largeur par défaut; save=false pendant le glisser (la valeur est gardée au relâchement)
+    // px <= 0: back to the default width; save=false during the drag (the value is kept on release)
     function setColWidth(key, px, save) {
         const w = Object.assign({}, colWidths);
         if (px > 0)
@@ -270,7 +270,7 @@ Rectangle {
             Fili.setUiState("col." + key, px > 0 ? String(w[key]) : "");
     }
     readonly property int colsWidth: cols.reduce((a, c) => a + baseWidth(c), 0)
-    // Fenêtre étroite: les colonnes se resserrent pour garder 200 px au nom (jusqu'à 35 % de leur largeur)
+    // Narrow window: the columns shrink to keep 200 px for the name (down to 35 % of their width)
     readonly property real colScale: colsWidth > 0 ? Math.max(0.35, Math.min(1, (view.width - 2 * FiliTheme.space2 - 200) / colsWidth)) : 1
     function colWidth(c) {
         return Math.round(baseWidth(c) * colScale);
@@ -281,11 +281,11 @@ Rectangle {
     }
     signal headerContext(real x, real y)
     readonly property int pad: FiliTheme.space3
-    // Début du nom dans une ligne: marge, icône, écart
+    // Start of the name in a row: margin, icon, gap
     readonly property int nameInset: FiliTheme.space2 + FiliTheme.iconSize + FiliTheme.space2
     readonly property int cellPad: FiliTheme.space3
 
-    // En-têtes de colonnes: petit 11, brume2; colonne de tri en brume avec son sens
+    // Column headers: small 11, textSecondary; sort column in text with its direction
     Row {
         id: header
         visible: !view.tiles
@@ -329,8 +329,8 @@ Rectangle {
                             view.select(view.folder.sortBy(col.modelData.sort, view.currentIndex));
                     }
                 }
-                // Bord gauche d'une colonne de données: le glisser la rend plus large (vers la gauche) ou plus étroite;
-                // un double-clic rend la largeur par défaut. Le nom prend le reste.
+                // Left edge of a data column: dragging it makes the column wider (to the left) or narrower;
+                // a double click restores the default width. The name takes the rest.
                 MouseArea {
                     id: grip
                     visible: col.index > 0
@@ -361,11 +361,11 @@ Rectangle {
         color: FiliTheme.border
     }
 
-    // Saisie au clavier: lettres tapées à moins d'une seconde d'intervalle
+    // Keyboard input: letters typed less than a second apart
     property string typed: ""
     Timer { id: typedReset; interval: 1000; onTriggered: view.typed = "" }
 
-    // Touches communes aux deux vues; perRow: nombre de colonnes de la grille (1 en liste)
+    // Keys shared by both views; perRow: number of columns of the grid (1 in list view)
     function handleKey(e, perRow) {
         Fili.keyNav = true;
         const ctrl = e.modifiers & Qt.ControlModifier, alt = e.modifiers & Qt.AltModifier, shift = e.modifiers & Qt.ShiftModifier;
@@ -410,7 +410,7 @@ Rectangle {
         visible: !view.tiles
         anchors { top: header.bottom; topMargin: 1 + 2; left: parent.left; right: parent.right; bottom: parent.bottom }
         clip: true
-        // Le ListView impose x = 0 à ses délégués: la marge des lignes est celle du contenu
+        // The ListView forces x = 0 on its delegates: the margin of the rows is the one of the content
         leftMargin: FiliTheme.space2
         rightMargin: FiliTheme.space2
         model: view.folder
@@ -438,7 +438,7 @@ Rectangle {
                 view.context(p.x, p.y);
             }
         }
-        // Déposer dans le dossier affiché (hors des lignes de dossier)
+        // Drop in the folder shown (outside the folder rows)
         DropArea {
             z: -1
             x: 0
@@ -464,7 +464,7 @@ Rectangle {
         cellWidth: 104
         cellHeight: 120
         readonly property int columns: Math.max(1, Math.floor((width - 2 * FiliTheme.space4) / cellWidth))
-        // Grille alignée à gauche (le GridView pose les cellules à partir de la marge du contenu)
+        // Grid aligned to the left (the GridView lays the cells out from the content margin)
         leftMargin: FiliTheme.space4
         rightMargin: FiliTheme.space4
         model: view.folder
@@ -526,7 +526,7 @@ Rectangle {
             readonly property bool stripe: !tile && index % 2 === 1
             width: tile ? grid.cellWidth - FiliTheme.space2 : view.width - 2 * FiliTheme.space2
             height: tile ? grid.cellHeight - FiliTheme.space2 : FiliTheme.rowHeight
-            // Lignes sélectionnées contiguës (liste): un seul bloc, arrondi en haut de la première et en bas de la dernière
+            // Contiguous selected rows (list): a single block, rounded at the top of the first and at the bottom of the last
             readonly property bool selAbove: sel && !tile && index > 0 && view.selected[view.folder.pathAt(index - 1)] === true
             readonly property bool selBelow: sel && !tile && index < view.active.count - 1 && view.selected[view.folder.pathAt(index + 1)] === true
             radius: tile ? FiliTheme.radiusControl + 2 : FiliTheme.radiusControl
@@ -566,7 +566,7 @@ Rectangle {
                 opacity: row.hidden ? 0.6 : 1
                 fillMode: Image.PreserveAspectFit
             }
-            // Miniature de PDF (première page), par-dessus l'icône du type
+            // PDF thumbnail (first page), over the icon of the type
             Image {
                 anchors.fill: img
                 visible: !row.tile && status === Image.Ready
@@ -576,7 +576,7 @@ Rectangle {
                 asynchronous: true
                 cache: false
             }
-            // Grille: icône de 64 px (ou miniature) et nom dessous, sur deux lignes au plus
+            // Grid: 64 px icon (or thumbnail) and the name below, on two lines at most
             Image {
                 id: tileImg
                 visible: row.tile
@@ -622,7 +622,7 @@ Rectangle {
                 font.pixelSize: FiliTheme.sizeList
                 color: row.ink
             }
-            // Renommage sur place
+            // In-place rename
             Rectangle {
                 x: row.tile ? FiliTheme.space1 : FiliTheme.space2 + FiliTheme.iconSize + FiliTheme.space2 - 4
                 y: row.tile ? tileImg.y + tileImg.height + FiliTheme.space1 : 1
@@ -654,7 +654,7 @@ Rectangle {
                         }
                         view.focusList();
                     }
-                    // Entrée valide, et s'arrête là (sans cela elle remonte à la liste, qui ouvrirait l'élément)
+                    // Enter validates and stops there (without it, it goes up to the list, which would open the item)
                     Keys.onReturnPressed: e => { commit(); e.accepted = true; }
                     Keys.onEnterPressed: e => { commit(); e.accepted = true; }
                     Connections {
@@ -690,7 +690,7 @@ Rectangle {
                 }
             }
 
-            // Glisser: la sélection (ou la ligne seule) part en text/uri-list
+            // Drag: the selection (or the single row) leaves as text/uri-list
             Item {
                 id: ghost
                 width: 1
@@ -732,7 +732,7 @@ Rectangle {
                     }
                     Fili.keyNav = false;
                     if (view.renaming >= 0) {
-                        // Valider le renommage d'abord: la ligne peut changer de place (tri), le clic se refait par le nom
+                        // Validate the rename first: the row can change place (sorting), the click is redone by name
                         const name = row.name, mods = e.modifiers;
                         view.endRename();
                         Qt.callLater(() => view.clickNamed(name, mods));
@@ -749,7 +749,7 @@ Rectangle {
                         view.pick(row.index);
                     } else {
                         view.active.currentIndex = row.index;
-                        // Sélection multiple: elle se réduit au relâchement s'il n'y a pas eu de glisser
+                        // Multiple selection: it shrinks on release if there was no drag
                         collapse = true;
                     }
                     view.prepareDrag(row.path);

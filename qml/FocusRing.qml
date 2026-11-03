@@ -1,5 +1,5 @@
-// Contour de l'élément choisi au clavier, visible seulement une fois le clavier utilisé (Fili.keyNav), comme le
-// FocusRing du fili-shell. gap négatif: contour dessiné à l'intérieur (vues collées à leurs voisines).
+// Outline of the item chosen with the keyboard, visible only once the keyboard has been used (Fili.keyNav), like the
+// FocusRing of the fili-shell. negative gap: outline drawn inside (views stuck to their neighbors).
 import QtQuick
 import Fili.Files
 

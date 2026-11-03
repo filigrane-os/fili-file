@@ -1,6 +1,6 @@
-// Backend xdg-desktop-portal pour org.freedesktop.impl.portal.FileChooser (fili-file --portal): le service D-Bus
-// est lancé à la demande (dbus-1/services), répond aux Ouvrir et Enregistrer des applications (Chrome...) en
-// lançant fili-file en mode sélecteur (pick.rs) et aux demandes FileManager1 (Afficher dans le dossier), puis s'arrête après deux minutes sans demande.
+// xdg-desktop-portal backend for org.freedesktop.impl.portal.FileChooser (fili-file --portal): the D-Bus service
+// is started on demand (dbus-1/services), answers the Open and Save requests of applications (Chrome...) by
+// starting fili-file in chooser mode (pick.rs) and the FileManager1 requests (Show in folder), then exits after two minutes without a request.
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -33,7 +33,7 @@ fn value<T: TryFrom<Value<'static>>>(o: &Options, key: &str) -> Option<T> {
     T::try_from(Value::from(v)).ok()
 }
 
-// Chemin envoyé en tableau d'octets terminé par un zéro (ay)
+// Path sent as a zero-terminated byte array (ay)
 fn path(o: &Options, key: &str) -> Option<String> {
     let mut b: Vec<u8> = value(o, key)?;
     while b.last() == Some(&0) {
@@ -56,7 +56,7 @@ fn json(s: &str) -> String {
     o
 }
 
-// a(sa(us)) -> [{"name":..,"globs":[..],"mimes":[..]}] (0: motif, 1: type MIME)
+// a(sa(us)) -> [{"name":..,"globs":[..],"mimes":[..]}] (0: pattern, 1: MIME type)
 fn filters_json(o: &Options) -> (String, Vec<String>) {
     let list: Vec<(String, Vec<(u32, String)>)> = value(o, "filters").unwrap_or_default();
     let names = list.iter().map(|(n, _)| n.clone()).collect();
@@ -91,7 +91,7 @@ fn pick(kind: &str, title: &str, o: &Options) -> Reply {
         .map(|s| s.trim_end_matches('\0').to_string())
         .collect();
     let mut args: Vec<String> = vec!["--out".into(), out.to_string_lossy().into_owned(), "--title".into(), title.into()];
-    // Enregistrer des fichiers existants dans un dossier: sélection d'un dossier
+    // Save existing files in a folder: choosing a folder
     let (mode, directory) = match kind {
         "save_files" => ("open", true),
         "save" => ("save", false),
@@ -123,7 +123,7 @@ fn pick(kind: &str, title: &str, o: &Options) -> Reply {
     let (filters, names) = filters_json(o);
     if !names.is_empty() {
         args.extend(["--filters".into(), filters]);
-        // current_filter: (nom, motifs)
+        // current_filter: (name, patterns)
         let current: Option<(String, Vec<(u32, String)>)> = value(o, "current_filter");
         if let Some(i) = current.and_then(|(n, _)| names.iter().position(|x| *x == n)) {
             args.extend(["--filter".into(), i.to_string()]);
@@ -136,7 +136,7 @@ fn pick(kind: &str, title: &str, o: &Options) -> Reply {
         return cancelled;
     }
     let mut paths: Vec<String> = text.lines().filter(|l| !l.is_empty()).map(String::from).collect();
-    // Première ligne « # filter N »: le filtre choisi (non utilisé par le portail), à retirer des chemins
+    // First line "# filter N": the chosen filter (not used by the portal), to remove from the paths
     if paths.first().is_some_and(|l| l.starts_with("# filter ")) {
         paths.remove(0);
     }
@@ -177,7 +177,7 @@ impl Chooser {
     }
 }
 
-// org.freedesktop.FileManager1 (Chrome « Afficher dans le dossier », etc.): une fenêtre fili-file par demande
+// org.freedesktop.FileManager1 (Chrome "Show in folder", etc.): one fili-file window per request
 struct FileManager;
 
 impl FileManager {
@@ -195,7 +195,7 @@ impl FileManager {
 
 #[interface(name = "org.freedesktop.FileManager1")]
 impl FileManager {
-    // Un fichier: son dossier s'ouvre avec lui sélectionné
+    // A file: its folder opens with it selected
     fn show_items(&self, uris: Vec<String>, _startup_id: &str) {
         self.launch(&uris, &[]);
     }
@@ -217,7 +217,7 @@ pub fn serve() -> zbus::Result<()> {
         .serve_at("/org/freedesktop/FileManager1", FileManager)?
         .build()?;
     LAST.store(now(), Ordering::SeqCst);
-    // Dort jusqu'à l'échéance de l'inactivité (au lieu de se réveiller toutes les 5 s); une requête repousse l'échéance
+    // Sleeps until the inactivity deadline (instead of waking up every 5 s); a request pushes the deadline back
     loop {
         let idle = now().saturating_sub(LAST.load(Ordering::SeqCst));
         if !BUSY.load(Ordering::SeqCst) && idle > IDLE.as_secs() {

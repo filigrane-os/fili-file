@@ -1,6 +1,6 @@
-// Sélection par zone: tirer la souris sur le fond de la liste ou de la grille sélectionne les éléments touchés par le
-// rectangle (Ctrl ou Maj: s'ajoute à la sélection). À poser dans le Flickable de la vue, sous les lignes; le rectangle
-// lui-même passe au-dessus d'elles.
+// Rubber-band selection: dragging the mouse on the background of the list or grid selects the items it touches
+// (Ctrl or Shift: adds to the selection). Place it in the view's Flickable, under the rows; the rectangle itself is
+// drawn above them.
 import QtQuick
 import Fili.Files
 
@@ -8,7 +8,7 @@ MouseArea {
     id: band
     required property Item view
     required property Flickable flick
-    // Dans le contenu de la vue, sous les lignes: ailleurs, la souris n'arrive pas jusqu'ici
+    // In the view content, under the rows: elsewhere the mouse never gets here
     parent: flick.contentItem
     z: -1
     x: -flick.leftMargin
@@ -38,7 +38,7 @@ MouseArea {
         const x = Math.max(0, Math.min(e.x, width)), y = Math.max(0, Math.min(e.y, height));
         if (!rect.visible && Math.abs(x - x0) + Math.abs(y - y0) < 4)
             return;
-        // rect vit dans le contenu de la vue (au-dessus des lignes): ses coordonnées incluent x de la zone
+        // rect lives in the view content (above the rows): its coordinates include the x of the area
         rect.x = Math.min(x0, x) + band.x;
         rect.y = Math.min(y0, y);
         rect.width = Math.abs(x - x0);
@@ -57,7 +57,7 @@ MouseArea {
     onReleased: rect.visible = false
     onCanceled: rect.visible = false
 
-    // Le rectangle se dessine au-dessus des lignes (la zone, elle, reste dessous pour leur laisser les clics)
+    // The rectangle is drawn above the rows (the area itself stays below to leave them the clicks)
     Rectangle {
         id: rect
         parent: band.flick.contentItem

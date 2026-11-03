@@ -1,7 +1,7 @@
-// Mode sélecteur de fichiers (lancé par le portail FileChooser, voir portal.rs): fili-file --pick open|save
-// [--multiple] [--directory] [--title T] [--name N] [--folder DOSSIER] [--accept LIBELLÉ] [--filters JSON]
-// [--filter N] --out FICHIER. La sélection est écrite dans FICHIER, un chemin par ligne (vide: annulé).
-// Sans Qt: testé par cargo test.
+// File chooser mode (started by the FileChooser portal, see portal.rs): fili-file --pick open|save
+// [--multiple] [--directory] [--title T] [--name N] [--folder FOLDER] [--accept LABEL] [--filters JSON]
+// [--filter N] --out FILE. The selection is written to FILE, one path per line (empty: cancelled).
+// Without Qt: tested by cargo test.
 use std::{env, sync::OnceLock};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -54,7 +54,7 @@ pub fn parse(args: &[String]) -> Option<Pick> {
     (!p.kind.is_empty()).then_some(p)
 }
 
-// Premier argument qui n'est ni une option ni la valeur d'une option (dossier, fichier ou URL à ouvrir)
+// First argument that is neither an option nor the value of an option (folder, file or URL to open)
 pub fn positional(args: &[String]) -> Option<String> {
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -100,7 +100,7 @@ fn parse_filters(json: &str) -> Vec<Filter> {
     out
 }
 
-// Chaîne JSON entre guillemets au début de s (après espaces): (valeur, reste)
+// Quoted JSON string at the start of s (after spaces): (value, rest)
 fn read_string(s: &str) -> Option<(String, &str)> {
     let s = s.trim_start().strip_prefix('"')?;
     let mut out = String::new();
@@ -119,7 +119,7 @@ fn read_string(s: &str) -> Option<(String, &str)> {
     None
 }
 
-// « * » et « ? » sans casse
+// "*" and "?" ignoring case
 fn glob(pattern: &str, name: &str) -> bool {
     fn go(p: &[char], n: &[char]) -> bool {
         match p.split_first() {

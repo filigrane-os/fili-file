@@ -1,6 +1,6 @@
 pragma Singleton
-// Tokens du fili-shell (dotfiles/config/quickshell/FiliTheme.qml), sans Quickshell: mêmes noms; valeurs par défaut
-// identiques (theme.toml, vérifié par cargo test, tests::default_theme_matches_the_shell), personnalisables. Mode clair suivi en direct par Fili (état de fili-theme).
+// Tokens of the fili-shell (dotfiles/config/quickshell/FiliTheme.qml), without Quickshell: same names; default values
+// identical (theme.toml, checked by cargo test, tests::shell_parity_default_theme), customizable. Light mode followed live by Fili (fili-theme state).
 import QtQuick
 import Fili.Files
 
@@ -8,8 +8,8 @@ QtObject {
     readonly property bool light: Fili.light
     readonly property string accent: Fili.accent
 
-    // Thème fusionné: défauts de theme.toml surchargés par ~/.config/filigrane/fili-file.toml (sections [theme],
-    // [theme.dark], [theme.light], [theme.accents]); les clés sont en anglais, les noms de jetons restent ceux du shell
+    // Merged theme: defaults of theme.toml overridden by ~/.config/filigrane/fili-file.toml (sections [theme],
+    // [theme.dark], [theme.light], [theme.accents]); the keys are in English, the token names are the shell's
     readonly property var theme: JSON.parse(Fili.themeJson())
     readonly property var m: light ? theme.light : theme.dark
     readonly property color background: m.background
@@ -20,8 +20,8 @@ QtObject {
     readonly property color border: m.border
     readonly property color muted: m.muted
     readonly property color textSecondary: m.text_secondary
-    // Couleur d'accentuation (fili-theme accent): [sombre, sombre vif, clair, clair vif]; défaut = brume en sombre, noir (nuit) en clair.
-    // Un `accent` fixé dans le mode passe devant.
+    // Accent color (fili-theme accent): [dark, dark bright, light, light bright]; default = text color in dark mode, black (background) in light mode.
+    // An `accent` set in the mode takes precedence.
     readonly property var accentTones: theme.accents
     readonly property var tone: accentTones[accent] || accentTones.default
     readonly property color accentColor: m.accent || (light ? tone[2] : tone[0])
@@ -53,12 +53,12 @@ QtObject {
     readonly property int space5: m.space_5
     readonly property int space6: m.space_6
 
-    // Propres à fili-file (décision à valider): ligne de liste et de barre latérale, icône de liste, barres
+    // Specific to fili-file (to be validated): list and sidebar row, list icon, bars
     readonly property int rowHeight: m.row_height
     readonly property int sideRowHeight: m.side_row_height
     readonly property int iconSize: m.icon_size
-    // Marge extérieure de la fenêtre: capsule de navigation, glyphes et intertitres de la barre latérale, fil d'Ariane,
-    // recherche et information de sélection s'alignent dessus
+    // Outer margin of the window: navigation capsule, glyphs and headings of the sidebar, breadcrumb,
+    // search and selection info align on it
     readonly property int margin: m.margin
     readonly property int toolbarHeight: m.toolbar_height
     readonly property int statusHeight: m.status_height

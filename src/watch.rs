@@ -1,5 +1,5 @@
-// Surveillance du dossier affiché (inotify). Un fil bloqué sur poll ne se réveille que si le dossier change; les
-// rafales d'événements (copie de gros dossier) sont regroupées: un seul appel de on_change après 120 ms de calme.
+// Watching of the folder shown (inotify). A thread blocked on poll only wakes up if the folder changes; bursts
+// of events (copy of a big folder) are grouped: a single on_change call after 120 ms of calm.
 use std::{
     ffi::CString,
     path::Path,
@@ -35,7 +35,7 @@ impl Watcher {
                 if unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) } <= 0 {
                     return;
                 }
-                // Attendre le calme: tant que des événements arrivent, les lire
+                // Wait for calm: as long as events arrive, read them
                 while unsafe { libc::poll(&mut pfd, 1, 120) } > 0 {
                     if unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) } <= 0 {
                         return;
@@ -47,7 +47,7 @@ impl Watcher {
         Some(Watcher { fd, wd: Arc::new(AtomicI32::new(-1)) })
     }
 
-    // Change de dossier surveillé
+    // Changes the folder being watched
     pub fn watch(&self, dir: &Path) {
         let old = self.wd.swap(-1, Ordering::SeqCst);
         if old >= 0 {

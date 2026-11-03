@@ -1,5 +1,5 @@
-// Bascule liste / grille de la barre d'outils: deux segments dans une capsule (comme les boutons de navigation), le mode
-// actif en nuit3 avec son pictogramme en voile. Pictogrammes dessinés (trois barres, quatre carrés).
+// List / grid switch of the toolbar: two segments in a capsule (like the navigation buttons), the active
+// mode in surfaceHover with its pictogram in accentColor. Drawn pictograms (three bars, four squares).
 import QtQuick
 import Fili.Files
 

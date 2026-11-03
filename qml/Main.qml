@@ -1,10 +1,10 @@
-// Fenêtre de fili-file: barre d'outils (précédent, suivant, chemin), barre latérale, liste, barre d'état.
-// Raccourcis: Alt+← / Alt+→ historique, Alt+↑ parent, Ctrl+L chemin (propositions façon fzf: Haut/Bas, Tab, Entrée), Ctrl+F ou / recherche floue récursive, Ctrl+H fichiers cachés, Ctrl+Maj+P panneau d'aperçu, F5 relire,
-// Ctrl+C / Ctrl+X / Ctrl+V copier, couper, coller, F2 renommer, Ctrl+Maj+N nouveau dossier, Suppr ou Ctrl+Retour
-// arrière corbeille, Ctrl+Z annuler, Ctrl+A tout sélectionner, Échap annule la copie en cours,
-// Ctrl+1 / Ctrl+2 vue en liste / en grille, Ctrl+Maj+Suppr vide la corbeille, Ctrl+W ou Ctrl+Q fermer; boutons précédent/suivant de la souris.
-// Mode sélecteur (fili-file --pick, lancé par le portail FileChooser): barre de validation en bas (nom en
-// enregistrement, filtres, Annuler, Ouvrir/Enregistrer); les opérations sur les fichiers sont désactivées.
+// Window of fili-file: toolbar (back, forward, path), sidebar, list, status bar.
+// Shortcuts: Alt+Left / Alt+Right history, Alt+Up parent, Ctrl+L path (fzf-like suggestions: Up/Down, Tab, Enter), Ctrl+F or / recursive fuzzy search, Ctrl+H hidden files, Ctrl+Shift+P preview panel, F5 reload,
+// Ctrl+C / Ctrl+X / Ctrl+V copy, cut, paste, F2 rename, Ctrl+Shift+N new folder, Delete trash,
+// Ctrl+Z undo, Ctrl+A select all, Esc cancels the copy in progress,
+// Ctrl+1 / Ctrl+2 list / grid view, Ctrl+Shift+Delete empties the trash, Ctrl+W or Ctrl+Q close; back/forward mouse buttons.
+// Picker mode (fili-file --pick, started by the FileChooser portal): confirmation bar at the bottom (name when
+// saving, filters, Cancel, Open/Save); file operations are disabled.
 import QtQuick
 import QtQuick.Controls.Basic
 import Fili.Files
@@ -23,19 +23,19 @@ ApplicationWindow {
     color: FiliTheme.background
     title: picking ? Fili.pickTitle() : win.searchLabel !== "" ? win.searchLabel : folder.shown === "/" ? "/" : folder.shown.split("/").pop()
 
-    // Nom de la recherche en cours (saisie ou résultats de l'assistant), vide hors recherche
+    // Name of the search in progress (typed or results from the assistant), empty outside a search
     readonly property string searchLabel: folder.filter.trim() !== "" ? Fili.tr("Search “%1”").replace("%1", folder.filter.trim()) : folder.results !== "" && folder.results !== "…" ? folder.results : folder.results !== "" ? Fili.tr("Search results") : ""
 
-    // Mode sélecteur de fichiers
+    // File picker mode
     readonly property string pickKind: Fili.pickKind()
     readonly property bool picking: pickKind !== ""
     // Optional programs: the features that need them are switched off when they are not installed
     readonly property bool hasArchive: Fili.hasTool("fili-archive")
     readonly property bool hasShare: Fili.hasTool("fili-share")
-    // Entrée 0: tous les fichiers (défaut); entrée i: filtre i - 1 de l'application
+    // Entry 0: all files (default); entry i: filter i - 1 of the application
     readonly property var pickFilters: picking ? [Fili.tr("All files")].concat(JSON.parse(Fili.pickFilters())) : []
     property int pickFilterIndex: 0
-    // Chemins que validerait le bouton (vide: bouton grisé)
+    // Paths the button would validate (empty: button greyed out)
     function pickedPaths() {
         if (!picking)
             return [];
@@ -65,7 +65,7 @@ ApplicationWindow {
         }
         Fili.pickFinish(picked.join("\n"), pickFilterIndex - 1);
     }
-    // Double-clic ou Entrée sur une ligne: un dossier s'ouvre; un fichier est choisi en mode sélecteur
+    // Double click or Enter on a row: a folder opens; a file is chosen in picker mode
     function openRow(row) {
         if (picking && !folder.pathIsDir(folder.pathAt(row))) {
             if (pickKind === "save")
@@ -89,7 +89,7 @@ ApplicationWindow {
     }
 
     FolderModel { id: folder }
-    // Icône de la corbeille (pleine ou vide): la barre latérale relit ses lieux quand l'état change
+    // Icon of the trash (full or empty): the sidebar reads its places again when the state changes
     property bool trashFull: Fili.trashFull()
     function checkTrash() {
         const full = Fili.trashFull();
@@ -104,8 +104,8 @@ ApplicationWindow {
         function onReloaded() { win.checkTrash(); }
     }
 
-    // Pas de fermeture pendant une opération (copie, déplacement, archive): attendre ou annuler (Échap), car une copie
-    // coupée en route laisse des fichiers à moitié écrits
+    // No closing during an operation (copy, move, archive): wait or cancel (Esc), because a copy
+    // cut short leaves half-written files
     readonly property bool working: folder.busy || win.tasks.length > 0
     function refuseClose() {
         win.notice = Fili.tr("An operation is in progress: wait for it to finish, or cancel it (Esc), before closing.");
@@ -123,7 +123,7 @@ ApplicationWindow {
             refuseClose();
         }
     }
-    // Message passager (volumes): effacé après 6 s
+    // Transient message (volumes): cleared after 6 s
     property string notice: ""
     Timer { id: noticeTimer; interval: 6000; onTriggered: win.notice = "" }
     Connections {
@@ -136,15 +136,15 @@ ApplicationWindow {
             noticeTimer.restart();
         }
     }
-    // Un volume branché ou une corbeille vidée en dehors: relire les lieux au retour dans la fenêtre
+    // A volume plugged in or a trash emptied elsewhere: read the places again when coming back to the window
     onActiveChanged: if (active) sidebar.reload()
 
     function show(row) {
         if (row >= 0)
             files.select(row);
     }
-    // « À proximité » (partage de proximité) remplace la liste des fichiers; tout changement de dossier la ferme
-    // Le lieu « Réseau » de la barre latérale est affiché (vue de résultats)
+    // "Nearby" (proximity sharing) replaces the file list; any change of folder closes it
+    // The "Network" place of the sidebar is shown (results view)
     readonly property bool networkView: folder.results === Fili.tr("Network")
     property bool nearby: false
     property string nearbyFrom: ""
@@ -172,13 +172,13 @@ ApplicationWindow {
         }
     }
 
-    // Contexte pour l'assistant (fili-context): dossier et sélection, écrits à chaque changement (regroupés)
+    // Context for the assistant (fili-context): folder and selection, written at every change (batched)
     Timer {
         id: contextTimer
         interval: 150
         onTriggered: Fili.publishContext(folder.path, Object.keys(files.selected).join("\n"), folder.results, win.disabledNow)
     }
-    // Commandes de menu impossibles maintenant (rien de sélectionné, dialogue ouvert...): publiées pour que la fili-bar les grise
+    // Menu commands that are impossible now (nothing selected, dialog open...): published so that the fili-bar greys them out
     readonly property string disabledNow: Object.keys(menuActions).filter(k => !menuActions[k].enabled).sort().join(",")
     onDisabledNowChanged: contextTimer.restart()
     Connections {
@@ -189,7 +189,7 @@ ApplicationWindow {
         target: folder
         function onChanged() { contextTimer.restart(); }
     }
-    // Commandes de l'assistant (fili-file ctl): aller à un endroit, afficher des résultats
+    // Commands of the assistant (fili-file ctl): go to a place, show results
     Connections {
         target: Fili
         function onCommand(id, verb, arg, body) {
@@ -210,22 +210,22 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+]"; onActivated: win.show(folder.forward()) }
 
 
-    // Éléments sélectionnés (ceux qu'on voit surlignés): les commandes de fichiers les visent, et sont grisées sans eux.
-    // Une ligne seulement « courante » (après un clic dans le vide) n'est pas une cible.
+    // Selected items (the ones you see highlighted): file commands target them, and are greyed out without them.
+    // A row that is only "current" (after a click on the empty space) is not a target.
     readonly property int selCount: Object.keys(files.selected).length
-    // Commandes de la barre de menus (exposée au menu global de la fili-bar par AT-SPI); chaque raccourci vit ici, une seule fois
+    // Commands of the menu bar (exposed to the global menu of the fili-bar through AT-SPI); each shortcut lives here, once
     readonly property bool canAct: !win.typing && !win.picking && !win.nearby
     Action { id: aNewFolder; text: Fili.tr("New Folder"); shortcut: "Ctrl+Shift+N"; enabled: win.canAct && !folder.inTrash; onTriggered: win.newFolder() }
     Action { id: aOpen; text: Fili.tr("Open"); enabled: win.canAct && win.selCount === 1; onTriggered: win.show(folder.activate(files.currentIndex)) }
-    // Espace: aperçu rapide (script quicklook; relancé sur le même fichier, il se referme). Désactivée pendant la saisie au
-    // clavier d'un début de nom (« mon fichier »): l'espace est alors une lettre.
+    // Space: quick look (quicklook script; started again on the same file, it closes). Disabled while typing the
+    // beginning of a name on the keyboard ("my file"): the space is then a letter.
     Action { id: aQuickLook; text: Fili.tr("Quick Look"); shortcut: "Space"; enabled: !win.typing && !win.nearby && files.typed === "" && win.selCount > 0; onTriggered: folder.quicklook(files.targets()[0]) }
     Action { id: aInfo; text: Fili.tr("Get Info"); shortcut: "Ctrl+I"; enabled: win.canAct; onTriggered: win.showInfo() }
     Action { id: aTrash; text: Fili.tr("Move to Trash"); shortcut: "Delete"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: win.trashSelection() }
     Action { id: aPutBack; text: Fili.tr("Put Back"); enabled: win.canAct && folder.inTrash && win.selCount > 0; onTriggered: win.putBack() }
     Action { id: aEmpty; text: Fili.tr("Empty Trash"); shortcut: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onTriggered: win.askEmpty() }
     Action { id: aAbout; text: Fili.tr("About Casier"); onTriggered: win.showAbout() }
-    // Ctrl+W ferme l'onglet, et la fenêtre quand il n'y en a plus qu'un
+    // Ctrl+W closes the tab, and the window when there is only one left
     Action { id: aClose; text: Fili.tr("Close"); shortcut: "Ctrl+W"; onTriggered: win.tabs.length > 1 ? win.closeTab(win.tabIndex) : win.quit() }
     Action { id: aNewTab; text: Fili.tr("New Tab"); shortcut: "Ctrl+T"; enabled: !win.picking; onTriggered: win.newTab() }
     Action { id: aDetachTab; text: Fili.tr("Move Tab to New Window"); enabled: !win.picking && win.tabs.length > 1; onTriggered: win.detachTab(win.tabIndex) }
@@ -237,7 +237,7 @@ ApplicationWindow {
     Action { id: aCopy; text: Fili.tr("Copy"); shortcut: "Ctrl+C"; enabled: win.canAct && win.selCount > 0; onTriggered: folder.copy(files.targetsText()) }
     Action { id: aPaste; text: Fili.tr("Paste"); shortcut: "Ctrl+V"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.paste() }
     Action { id: aDuplicate; text: Fili.tr("Duplicate"); shortcut: "Ctrl+D"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: folder.duplicate(files.targetsText()) }
-    // F2: renommer sur place; avec plusieurs éléments sélectionnés, renommer en lot
+    // F2: rename in place; with several items selected, bulk rename
     Action { id: aRename; text: Fili.tr("Rename"); shortcut: "F2"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: Object.keys(files.selected).length > 1 ? bulkBox.open() : files.startRename() }
     Action { id: aBulk; text: Fili.tr("Rename Items…"); enabled: win.canAct && !folder.inTrash && Object.keys(files.selected).length > 1; onTriggered: bulkBox.open() }
     Action { id: aSelectAll; text: Fili.tr("Select All"); shortcut: "Ctrl+A"; enabled: win.canAct; onTriggered: files.selectAll() }
@@ -264,24 +264,24 @@ ApplicationWindow {
     Action { id: aCompress; text: Fili.tr("Compress…"); enabled: win.hasArchive && win.canAct && !folder.inTrash && !win.picking && win.selCount > 0; onTriggered: compressBox.open(files.targetsText()) }
     Action { id: aExtract; text: Fili.tr("Extract Here"); enabled: win.hasArchive && win.canAct && !folder.inTrash && !win.picking && Object.keys(files.selected).length > 0 && folder.allArchives(files.targetsText()); onTriggered: folder.extract(files.targetsText(), "") }
     Action { id: aConnect; text: Fili.tr("Connect to Server…"); shortcut: "Ctrl+K"; onTriggered: connectBox.open() }
-    // « / » comme Ctrl+F (façon vim, yazi); sans libellé: la barre de menus ne montre que Ctrl+F
+    // "/" like Ctrl+F (vim, yazi style); without a label: the menu bar only shows Ctrl+F
     Action { id: aSearchSlash; shortcut: "/"; enabled: win.canAct; onTriggered: searchInput.forceActiveFocus() }
     Action { id: aSearch; text: Fili.tr("Search"); shortcut: "Ctrl+F"; onTriggered: searchInput.forceActiveFocus() }
 
-    // `fili-file ctl action NOM`: la fili-bar affiche ces commandes dans son menu (dotfiles/config/filigrane/appmenu/fili-file.json,
-    // test tests/fili-shell/check-fili-file-menu.py: mêmes noms, mêmes raccourcis). Une commande grisée ne fait rien.
+    // `fili-file ctl action NAME`: the fili-bar shows these commands in its menu (dotfiles/config/filigrane/appmenu/fili-file.json,
+    // test tests/fili-shell/check-fili-file-menu.py: same names, same shortcuts). A greyed out command does nothing.
     readonly property var menuActions: ({
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "put-back": aPutBack, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "detach-tab": aDetachTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "compress": aCompress, "extract": aExtract, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
     })
-    // Fichiers de la sélection qu'on peut envoyer (les dossiers ne sont pas envoyés tels quels)
+    // Files of the selection that can be sent (folders are not sent as they are)
     function shareable() {
         return files.targets().filter(p => !folder.pathIsDir(p));
     }
-    // Copie dans le presse-papiers (texte) le chemin, le nom, le nom sans extension ou le dossier parent des éléments
-    // sélectionnés, un par ligne
+    // Copies to the clipboard (text) the path, the name, the name without extension or the parent folder of the selected
+    // items, one per line
     function copyAs(kind) {
         const name = p => p.split("/").pop();
         const out = files.targets().map(p => {
@@ -297,8 +297,8 @@ ApplicationWindow {
         });
         Fili.copyText(out.join("\n"));
     }
-    // Onglets: chaque onglet garde son dossier (l'historique est celui de la fenêtre). La barre d'onglets n'apparaît
-    // qu'à partir de deux onglets.
+    // Tabs: each tab keeps its folder (the history is the window's). The tab bar only appears
+    // from two tabs on.
     property var tabs: [{ path: "" }]
     property int tabIndex: 0
     function newTab() {
@@ -318,7 +318,7 @@ ApplicationWindow {
         tabIndex = i;
         open(t[i].path);
     }
-    // Déplace l'onglet from à la place to (glisser un onglet); l'onglet affiché reste le même
+    // Moves tab from to the place to (dragging a tab); the tab shown stays the same
     function moveTab(from, to) {
         if (from === to || from < 0 || to < 0 || from >= tabs.length || to >= tabs.length)
             return;
@@ -330,7 +330,7 @@ ApplicationWindow {
         tabs = t;
         tabIndex = t.indexOf(current);
     }
-    // Détache l'onglet i dans une nouvelle fenêtre de Casier (même dossier) et le ferme ici. Rend false s'il est le seul.
+    // Detaches tab i into a new Casier window (same folder) and closes it here. Returns false if it is the only one.
     function detachTab(i) {
         if (tabs.length < 2 || i < 0 || i >= tabs.length)
             return false;
@@ -352,16 +352,16 @@ ApplicationWindow {
             open(t[next].path);
         files.focusList();
     }
-    // Panneau d'aperçu (choix gardé dans l'état de l'utilisateur)
+    // Preview panel (choice kept in the user's state)
     property bool previewOn: Fili.previewShown()
-    // Largeur choisie du panneau d'aperçu (glisser son bord gauche; double-clic: 300), gardée dans l'état. Le panneau
-    // la réduit si la fenêtre manque de place.
+    // Chosen width of the preview panel (drag its left edge; double click: 300), kept in the state. The panel
+    // shrinks it if the window lacks room.
     readonly property int previewDefault: 300
     property real previewWidth: {
         const v = parseInt(Fili.uiState("preview"));
         return v >= 160 ? Math.min(v, 900) : previewDefault;
     }
-    // px <= 0: largeur par défaut; save=false pendant le glisser
+    // px <= 0: default width; save=false during the drag
     function setPreviewWidth(px, save) {
         previewWidth = px > 0 ? Math.max(160, Math.min(900, Math.round(px))) : previewDefault;
         if (save !== false)
@@ -371,9 +371,9 @@ ApplicationWindow {
         previewOn = !previewOn;
         Fili.setPreviewShown(previewOn);
     }
-    // Déclenche une commande de menu; renvoie {ok} ou {ok:false, error} (inconnue, désactivée). Avec un argument
-    // (ctl action NOM ARG), les commandes à dialogue le sautent: rename NOM, select-matching MOTIF, compress NOM[.zip|.7z|
-    // .tar.gz|.tar.xz|.tar.zst], extract MOT_DE_PASSE, new-folder NOM, search TEXTE, path CHEMIN
+    // Triggers a menu command; returns {ok} or {ok:false, error} (unknown, disabled). With an argument
+    // (ctl action NAME ARG), the commands with a dialog skip it: rename NAME, select-matching PATTERN, compress NAME[.zip|.7z|
+    // .tar.gz|.tar.xz|.tar.zst], extract PASSWORD, new-folder NAME, search TEXT, path PATH
     function runAction(name, arg) {
         const a = menuActions[name];
         if (!a)
@@ -428,12 +428,12 @@ ApplicationWindow {
         }
         return { ok: false, error: name + " takes no argument" };
     }
-    // Aller à un chemin; un fichier est sélectionné dans son dossier
+    // Go to a path; a file is selected in its folder
     function gotoPath(path) {
         win.open(path);
         return folder.error === "" ? { ok: true } : { ok: false, error: folder.error };
     }
-    // Montrer un élément (dossier compris) dans son dossier parent, sélectionné
+    // Show an item (folder included) in its parent folder, selected
     function reveal(path) {
         const parent = path.replace(/\/[^\/]*\/?$/, "") || "/";
         const r = gotoPath(parent);
@@ -445,7 +445,7 @@ ApplicationWindow {
         files.focusList();
         return { ok: true };
     }
-    // Sélection: set (liste en corps), add, none, pattern (motif en argument); rend le nombre sélectionné et les chemins absents
+    // Selection: set (list in the body), add, none, pattern (pattern as argument); returns the number selected and the missing paths
     function selectCommand(mode, arg, body) {
         const list = body.split("\n").filter(p => p !== "");
         const missing = list.filter(p => !folder.has(p));
@@ -460,7 +460,7 @@ ApplicationWindow {
         } else {
             return { ok: false, error: "unknown selection mode: " + mode };
         }
-        // Comme un clic: la ligne courante est la première sélectionnée (Ouvrir, Aperçu rapide... partent d'elle)
+        // Like a click: the current row is the first one selected (Open, Quick Look... start from it)
         const first = Object.keys(files.selected)[0];
         if (first !== undefined) {
             const row = folder.rowOf(first.split("/").pop());
@@ -472,8 +472,8 @@ ApplicationWindow {
             return { ok: false, error: "not in the folder shown (" + folder.shown + "): " + missing.slice(0, 5).join(", ") + (missing.length > 5 ? " …" : ""), selected: n };
         return { ok: true, selected: n };
     }
-    // Largeurs: column NOM PX|reset (size, modified, kind, created, permissions, owner), preview PX|reset. Mêmes
-    // fonctions que le glisser des bords; PX est borné (colonne 56 à 600, aperçu 160 à 900)
+    // Widths: column NAME PX|reset (size, modified, kind, created, permissions, owner), preview PX|reset. Same
+    // functions as dragging the edges; PX is bounded (column 56 to 600, preview 160 to 900)
     function widthCommand(arg) {
         const parts = arg.split("\t");
         const usage = { ok: false, error: "usage: width column NAME PX|reset | width preview PX|reset" };
@@ -536,8 +536,8 @@ ApplicationWindow {
         }
         return { ok: false, error: "usage: tab new [PATH] | close [N] | switch N | move FROM TO | detach [N]" };
     }
-    // Répond au dialogue ouvert (ctl dialog accept|cancel; pour un conflit de nom aussi replace|skip|both): accept = le
-    // bouton par défaut, cancel = Échap. Les champs de saisie (renommage, chemin) et le menu contextuel ne se pilotent pas ici.
+    // Answers the open dialog (ctl dialog accept|cancel; for a name conflict also replace|skip|both): accept = the
+    // default button, cancel = Esc. The input fields (rename, path) and the context menu cannot be driven from here.
     function dialogCommand(choice) {
         const name = dialogName();
         if (name === "")
@@ -577,7 +577,7 @@ ApplicationWindow {
         }
         return { ok: false, error: "the " + name + " field is answered by the user (or use action rename NAME, path PATH...)" };
     }
-    // Dialogue ouvert, sinon ""
+    // Open dialog, otherwise ""
     function dialogName() {
         const open = { menu: menu.visible, confirm: confirm.visible, info: infoCard.visible, match: matchBox.visible, bulk: bulkBox.visible, conflict: conflictBox.visible, compress: compressBox.visible, password: passwordBox.visible, share: shareBox.visible, connect: connectBox.visible, about: aboutCard.visible };
         for (const k in open)
@@ -585,7 +585,7 @@ ApplicationWindow {
                 return k;
         return files.editing ? "rename" : pathBar.editing ? "path" : "";
     }
-    // État de la fenêtre pour ctl state
+    // State of the window for ctl state
     function stateObject() {
         const tabs = win.tabs.slice();
         tabs[tabIndex] = { path: folder.shown };
@@ -614,7 +614,7 @@ ApplicationWindow {
             }
         };
     }
-    // Commandes de menu avec libellé, raccourci et état (activée maintenant ou non)
+    // Menu commands with label, shortcut and state (enabled now or not)
     function actionList() {
         return {
             ok: true,
@@ -677,7 +677,7 @@ ApplicationWindow {
             const dir = parts[1] || "asc";
             if (key === undefined || (dir !== "asc" && dir !== "desc"))
                 return { ok: false, error: "usage: sort name|size|modified|kind|created|permissions|owner [asc|desc]" };
-            // sortBy bascule le sens si la colonne est déjà celle du tri, sinon trie en croissant
+            // sortBy reverses the direction if the column is already the sort column, otherwise sorts ascending
             if (folder.sortKey !== key || folder.sortDesc !== (dir === "desc"))
                 win.show(folder.sortBy(key, files.currentIndex));
             if (folder.sortDesc !== (dir === "desc"))
@@ -688,9 +688,9 @@ ApplicationWindow {
         return { ok: false, error: "unknown command: " + verb };
     }
 
-    // Pas de barre de menus dans la fenêtre: le menu vit dans la fili-bar (repli appmenu/fili-file.json, commandes ci-dessus)
+    // No menu bar in the window: the menu lives in the fili-bar (fallback appmenu/fili-file.json, commands above)
 
-    // Pas de raccourcis de fichiers pendant une saisie (renommage, chemin) ni sous la confirmation
+    // No file shortcuts while typing (rename, path) or under the confirmation
     readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible || matchBox.visible || bulkBox.visible || conflictBox.visible || compressBox.visible || passwordBox.visible || shareBox.visible || connectBox.visible || aboutCard.visible
     function trashSelection() {
         const row = folder.trash(files.targetsText(), files.currentIndex);
@@ -707,7 +707,7 @@ ApplicationWindow {
     function putBack() {
         win.show(folder.putBack(files.targetsText(), files.currentIndex));
     }
-    // Menu contextuel: entrées selon la sélection (aucune: le dossier lui-même)
+    // Context menu: entries depending on the selection (none: the folder itself)
     function openMenu(p) {
         if (picking)
             return;
@@ -771,7 +771,7 @@ ApplicationWindow {
             menuPath = t.length === 1 ? t[0] : "";
             list.push({ id: "terminal", label: Fili.tr("Open Terminal Here") });
         }
-        // Sur le fond du dossier: affichage (liste ou grille, fichiers cachés, tri)
+        // On the folder background: display (list or grid, hidden files, sort)
         if (t.length === 0) {
             list.push({ separator: true });
             list.push({ id: "view:list", label: Fili.tr("View as List"), hint: "Ctrl+1", checked: !files.tiles });
@@ -792,13 +792,13 @@ ApplicationWindow {
         }
         menu.open(p.x, p.y, list);
     }
-    // Colonnes de la liste: clic droit sur un en-tête (le nom reste toujours)
+    // Columns of the list: right click on a header (the name is always there)
     function openColumnsMenu(p) {
         const list = [{ id: "", label: Fili.tr("Name"), checked: true, enabled: false }];
         files.allColumns.forEach(c => list.push({ id: "col:" + c.key, label: c.label, checked: files.enabledKeys.indexOf(c.key) >= 0 }));
         menu.open(p.x, p.y, list);
     }
-    // Menu d'un chemin (segment du fil d'Ariane ou lieu de la barre latérale)
+    // Menu of a path (breadcrumb segment or sidebar place)
     property string menuPath: ""
     function openPathMenu(path, x, y, crumb, removable, frequent) {
         menuPath = path;
@@ -810,7 +810,7 @@ ApplicationWindow {
         else if (crumb && !Fili.isFavorite(path))
             list.push({ id: "addfav", label: Fili.tr("Add to Favorites") });
         list.push({ id: "copypath", label: Fili.tr("Copy Full Path") });
-        // Le lieu « Corbeille » de la barre latérale: vider sans y entrer
+        // The "Trash" place of the sidebar: empty it without entering it
         if (path === Fili.trashPath() && !crumb)
             list.push({ separator: true }, { id: "empty", label: Fili.tr("Empty Trash"), enabled: trashFull });
         menu.open(x, y, list);
@@ -884,7 +884,7 @@ ApplicationWindow {
     Shortcut { sequence: "Escape"; enabled: win.nearby && !win.picking && !win.typing; onActivated: win.nearby = false }
     Shortcut { sequence: "Ctrl+A"; enabled: win.picking && !win.typing && Fili.pickMultiple(); onActivated: files.selectAll() }
 
-    // Boutons précédent/suivant de la souris, partout dans la fenêtre
+    // Back/forward buttons of the mouse, everywhere in the window
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.BackButton | Qt.ForwardButton
@@ -896,7 +896,7 @@ ApplicationWindow {
         width: parent.width
         height: FiliTheme.toolbarHeight
         color: FiliTheme.background
-        // Boutons précédent/suivant réunis dans une capsule
+        // Back/forward buttons gathered in a capsule
         Rectangle {
             x: FiliTheme.margin
             anchors.verticalCenter: nav.verticalCenter
@@ -923,7 +923,7 @@ ApplicationWindow {
                 onClicked: win.show(folder.forward())
             }
         }
-        // Recherche floue (Ctrl+F) dans le dossier affiché et tous ses sous-dossiers, meilleurs résultats d'abord, Échap efface
+        // Fuzzy search (Ctrl+F) in the folder shown and all its subfolders, best results first, Esc clears
         Rectangle {
             id: search
             anchors { right: parent.right; rightMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
@@ -994,7 +994,7 @@ ApplicationWindow {
                 onClicked: win.askEmpty()
             }
         }
-        // Titre: nom du dossier affiché (le chemin complet est dans la barre d'état)
+        // Title: name of the folder shown (the full path is in the status bar)
         Text {
             anchors { left: nav.right; leftMargin: FiliTheme.space5; right: trashTools.visible ? trashTools.left : viewSwitch.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             text: win.title
@@ -1029,7 +1029,7 @@ ApplicationWindow {
         color: FiliTheme.border
     }
 
-    // Onglets (à partir de deux): nom du dossier, × au survol; clic du milieu ferme
+    // Tabs (from two): folder name, × on hover; middle click closes
     Rectangle {
         id: tabBar
         anchors { top: toolbarLine.bottom; left: sideLine.right; right: previewLine.left }
@@ -1052,15 +1052,15 @@ ApplicationWindow {
                     color: current ? FiliTheme.surfaceHover : tabArea.containsMouse || tabDrop.containsDrag ? FiliTheme.surface : "transparent"
                     border.width: tabDrop.containsDrag ? 1 : 0
                     border.color: FiliTheme.accentColor
-                    // Glisser l'onglet pour le déplacer: il suit le curseur, la place se décide au relâchement
+                    // Drag the tab to move it: it follows the cursor, the place is decided on release
                     property real dragDx: 0
                     property bool moving: false
                     property bool leaving: false
                     z: moving ? 10 : 0
                     opacity: leaving ? 0.45 : moving ? 0.85 : 1
                     transform: Translate { x: dragDx }
-                    // Fichiers déposés sur un onglet: ils vont dans son dossier. Le survol un instant l'affiche (la cible se
-                    // choisit alors dans la liste). Pas sur l'onglet affiché: ce serait son propre dossier.
+                    // Files dropped on a tab: they go into its folder. Hovering it for a moment shows it (the target is then
+                    // chosen in the list). Not on the tab shown: that would be its own folder.
                     DropArea {
                         id: tabDrop
                         anchors.fill: parent
@@ -1107,13 +1107,13 @@ ApplicationWindow {
                                 return;
                             moving = true;
                             wasDrag = true;
-                            // Reste dans la barre: du premier au dernier onglet
+                            // Stays in the bar: from the first to the last tab
                             const slot = parent.width + FiliTheme.space1;
                             dragDx = Math.max(-index * slot, Math.min((win.tabs.length - 1 - index) * slot, dx));
-                            // Loin de la barre: il deviendra une fenêtre (à demi transparent pour le dire)
+                            // Far from the bar: it will become a window (half transparent to say so)
                             leaving = outside(e);
                         }
-                        // Relâché loin de la barre d'onglets (au-dessus, sous la barre ou hors de la fenêtre): l'onglet devient une fenêtre
+                        // Released far from the tab bar (above, below the bar or outside the window): the tab becomes a window
                         function outside(e) {
                             const p = mapToItem(null, e.x, e.y);
                             return p.y < -24 || p.y > tabBar.y + tabBar.height + 48 || p.x < -24 || p.x > win.width + 24;
@@ -1160,7 +1160,7 @@ ApplicationWindow {
             }
         }
     }
-    // Résultats affichés à la place du dossier (recherche de l'assistant)
+    // Results shown in place of the folder (search from the assistant)
     Rectangle {
         id: resultsBar
         anchors { top: tabBar.bottom; left: sideLine.right; right: parent.right }
@@ -1222,7 +1222,7 @@ ApplicationWindow {
     }
     Preview {
         id: preview
-        // Largeur choisie (300 par défaut); la liste garde au moins 320 (en dessous de 160 le panneau disparaît)
+        // Chosen width (300 by default); the list keeps at least 320 (below 160 the panel disappears)
         readonly property real room: win.width - FiliTheme.sidebarWidth - 1 - 320
         visible: win.previewOn && !win.picking && room >= 160
         anchors { top: toolbarLine.bottom; bottom: pickbar.top; right: parent.right }
@@ -1232,7 +1232,7 @@ ApplicationWindow {
             return keys.length === 1 ? keys[0] : keys.length === 0 && files.currentIndex >= 0 ? folder.pathAt(files.currentIndex) : "";
         }
     }
-    // Bord gauche du panneau d'aperçu: le glisser l'élargit (vers la gauche) ou le rétrécit
+    // Left edge of the preview panel: dragging it widens (to the left) or narrows it
     MouseArea {
         id: previewGrip
         visible: preview.visible
@@ -1263,7 +1263,7 @@ ApplicationWindow {
         }
     }
 
-    // Mode sélecteur: nom (enregistrer), filtre, Annuler et validation
+    // Picker mode: name (save), filter, Cancel and confirmation
     Rectangle {
         id: pickbar
         anchors.bottom: statusbar.top
@@ -1328,10 +1328,10 @@ ApplicationWindow {
         }
     }
 
-    // Barre d'état: nombre d'éléments et espace libre, ou l'erreur de la dernière action
+    // Status bar: number of items and free space, or the error of the last action
     Rectangle {
         id: statusbar
-        // Au-dessus de la liste pendant la saisie d'un chemin: ses propositions débordent vers le haut
+        // Above the list while a path is typed: its suggestions overflow upwards
         z: pathBar.editing || tasksList.visible ? 150 : 0
         anchors.bottom: parent.bottom
         width: parent.width
@@ -1342,8 +1342,8 @@ ApplicationWindow {
             height: 1
             color: FiliTheme.border
         }
-        // Fil d'Ariane à gauche (clic: y aller, clic droit: menu), information sur la sélection à droite; une erreur,
-        // un message ou une opération en cours prennent toute la barre
+        // Breadcrumb on the left (click: go there, right click: menu), selection info on the right; an error,
+        // a message or an operation in progress take the whole bar
         readonly property bool message: folder.busy || folder.error !== "" || win.notice !== ""
         PathBar {
             id: pathBar
@@ -1392,12 +1392,12 @@ ApplicationWindow {
             font.pixelSize: FiliTheme.sizeSmall
             color: FiliTheme.danger
         }
-        // Opération en cours: nom, avancement, annulation
+        // Operation in progress: name, progress, cancel
         Row {
             anchors.centerIn: parent
             visible: folder.busy
             spacing: FiliTheme.space3
-            // Nom de l'opération en cours, avec le nombre de celles en attente; un clic ouvre la liste des tâches
+            // Name of the operation in progress, with the number of those waiting; a click opens the task list
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: folder.job + (win.tasks.length > 1 ? "  +" + (win.tasks.length - 1) : "")
@@ -1431,7 +1431,7 @@ ApplicationWindow {
                 onClicked: folder.cancel()
             }
         }
-        // Liste des tâches: la tâche en cours (avancement), puis la file; × retire ou arrête
+        // Task list: the task in progress (progress), then the queue; × removes or stops
         Rectangle {
             id: tasksList
             property bool shown: false
@@ -1494,14 +1494,14 @@ ApplicationWindow {
         }
     }
 
-    // Tâches en cours et en attente (copies, déplacements, archives): rafraîchies à chaque changement de l'opération
+    // Tasks in progress and waiting (copies, moves, archives): refreshed at every change of the operation
     property var tasks: []
     Connections {
         target: folder
         function onChanged() { win.tasks = JSON.parse(folder.tasks()); }
     }
-    // Confirmation (vider la corbeille, remplacer un fichier): Entrée valide, Échap annule
-    // « Sélectionner selon un motif… »: *.pdf, photo*, a?.txt (sans joker: le nom contient le texte)
+    // Confirmation (empty the trash, replace a file): Enter validates, Esc cancels
+    // "Select by pattern…": *.pdf, photo*, a?.txt (without wildcard: the name contains the text)
     Rectangle {
         id: matchBox
         function open() {
@@ -1572,8 +1572,8 @@ ApplicationWindow {
             }
         }
     }
-    // « Partager… »: envoie les fichiers sélectionnés à un appareil Bluetooth appairé ou à un pair LocalSend du réseau local
-    // (fili-share). Le script notifie la fin de l'envoi.
+    // "Share…": sends the selected files to a paired Bluetooth device or to a LocalSend peer of the local network
+    // (fili-share). The script notifies when the sending is done.
     Rectangle {
         id: shareBox
         property var paths: []
@@ -1724,8 +1724,8 @@ ApplicationWindow {
             }
         }
     }
-    // « Se connecter au serveur… » (Ctrl+K): lecteur réseau par gvfs (smb://, sftp://, davs://, ftp://, nfs://); le dossier monté s'ouvre
-    // à la réponse (Fili.mounted), une erreur s'affiche dans le message passager (Fili.volumeError)
+    // "Connect to Server…" (Ctrl+K): network drive through gvfs (smb://, sftp://, davs://, ftp://, nfs://); the mounted folder opens
+    // on the answer (Fili.mounted), an error is shown in the transient message (Fili.volumeError)
     Rectangle {
         id: connectBox
         property bool busy: false
@@ -1831,7 +1831,7 @@ ApplicationWindow {
             }
         }
     }
-    // Renommage en lot (F2 avec plusieurs éléments): remplacer du texte, numéroter, changer la casse; aperçu avant/après
+    // Bulk rename (F2 with several items): replace text, number, change case; before/after preview
     component BulkField: Rectangle {
         property alias text: input.text
         property string label
@@ -2028,7 +2028,7 @@ ApplicationWindow {
             }
         }
     }
-    // Un nom existe déjà dans la destination d'une copie ou d'un déplacement (Rust: signal conflict)
+    // A name already exists in the destination of a copy or a move (Rust: signal conflict)
     Connections {
         target: folder
         function onConflict(names, dest) {
@@ -2121,7 +2121,7 @@ ApplicationWindow {
             }
         }
     }
-    // Panneau de compression (menu « Compresser… »): nom, format, niveau, fichiers cachés. Les choix sont gardés pour la session.
+    // Compression panel ("Compress…" menu): name, format, level, hidden files. The choices are kept for the session.
     component ChoiceRow: Item {
         property var options: []
         property string current
@@ -2185,7 +2185,7 @@ ApplicationWindow {
             Keys.onEscapePressed: parent.cancelled()
         }
     }
-    // Mot de passe d'une archive à extraire (demandé quand fili-archive dit qu'elle est protégée)
+    // Password of an archive to extract (asked when fili-archive says it is protected)
     Rectangle {
         id: passwordBox
         property string paths: ""
@@ -2513,7 +2513,7 @@ ApplicationWindow {
         }
     }
 
-    // Informations (Ctrl+I): éléments sélectionnés, à défaut le dossier affiché; la taille des dossiers arrive après
+    // Information (Ctrl+I): selected items, else the folder shown; the size of folders comes later
     function showInfo() {
         const t = files.targets().filter(path => files.selected[path]);
         const list = t.length > 0 ? t : [folder.path];
@@ -2547,7 +2547,7 @@ ApplicationWindow {
     Rectangle {
         id: infoCard
         property var rows: []
-        // Droits modifiables (0..511) de l'élément seul affiché, -1 si on ne peut pas les changer
+        // Editable permissions (0..511) of the single item shown, -1 if they cannot be changed
         property int mode: -1
         property string path: ""
         function toggleBit(bit) {
@@ -2610,7 +2610,7 @@ ApplicationWindow {
                     }
                 }
             }
-            // Droits: trois lignes (propriétaire, groupe, autres) de trois cases lecture / écriture / exécution
+            // Permissions: three rows (owner, group, others) of three read / write / execute boxes
             Column {
                 id: permBox
                 visible: infoCard.mode >= 0
@@ -2671,7 +2671,7 @@ ApplicationWindow {
         }
     }
 
-    // À propos de Casier (nom affiché de fili-file): icône, nom, alias, version et le reste de la fiche
+    // About Casier (display name of fili-file): icon, name, alias, version and the rest of the card
     function showAbout() {
         aboutCard.rows = JSON.parse(Fili.aboutRows());
         aboutCard.visible = true;
@@ -2709,7 +2709,7 @@ ApplicationWindow {
                 id: aboutColumn
                 anchors { left: parent.left; right: parent.right; top: parent.top; margins: FiliTheme.space5 }
                 spacing: FiliTheme.space3
-                // Dossier du thème par défaut (clair ou sombre selon le thème) portant le logo de Filigrane
+                // Folder of the default theme (light or dark depending on the theme) carrying the Filigrane logo
                 Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 96

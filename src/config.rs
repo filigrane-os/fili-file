@@ -1,6 +1,6 @@
-// Réglages de fili-file: ~/.config/filigrane/fili-file.toml (clés plates `clé = valeur`, sans dépendance).
-// Les défauts vivent ici; le fichier est facultatif. L'état changé à la main (vue, colonnes) reste dans
-// ~/.local/state/filigrane/ et passe devant la config.
+// Settings of fili-file: ~/.config/filigrane/fili-file.toml (flat keys `key = value`, no dependency).
+// The defaults live here; the file is optional. State changed by hand (view, columns) stays in
+// ~/.local/state/filigrane/ and takes precedence over the config.
 use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
@@ -66,7 +66,7 @@ pub fn parse(text: &str) -> Config {
     c
 }
 
-// Coupe au premier « # » hors guillemets (les couleurs « "#1c222b" » en contiennent)
+// Cuts at the first "#" outside quotes (colors such as "#1c222b" contain one)
 fn strip_comment(line: &str) -> &str {
     let mut quoted = false;
     for (i, ch) in line.char_indices() {
@@ -79,9 +79,9 @@ fn strip_comment(line: &str) -> &str {
     line
 }
 
-// ---- Thème --------------------------------------------------------------------------------------------------
-// Les défauts sont dans theme.toml (embarqué); ~/.config/filigrane/fili-file.toml les surcharge clé par clé.
-// Ordre de recherche d'une clé: [theme.<mode>] de l'utilisateur, son [theme], [theme.<mode>] des défauts, leur [theme].
+// ---- Theme -------------------------------------------------------------------------------------------------
+// The defaults are in theme.toml (embedded); ~/.config/filigrane/fili-file.toml overrides them key by key.
+// Lookup order of a key: the user's [theme.<mode>], their [theme], the defaults' [theme.<mode>], their [theme].
 
 #[derive(Clone, Debug, PartialEq)]
 enum Val {
@@ -98,7 +98,7 @@ enum Kind {
     Str,
 }
 
-// (clé TOML, type): toutes valent dans [theme] et dans chaque mode
+// (TOML key, type): all of them apply in [theme] and in each mode
 const KEYS: &[(&str, Kind)] = &[
     ("background", Kind::Color),
     ("background_deep", Kind::Color),
@@ -112,7 +112,7 @@ const KEYS: &[(&str, Kind)] = &[
     ("warning", Kind::Color),
     ("danger", Kind::Color),
     ("success", Kind::Color),
-    ("accent", Kind::Color),        // facultatif: sans valeur, l'accent suit fili-theme
+    ("accent", Kind::Color),        // optional: without a value, the accent follows fili-theme
     ("accent_bright", Kind::Color), // facultatif
     ("font", Kind::Str),
     ("mono", Kind::Str),
@@ -193,7 +193,7 @@ fn json_str(s: &str) -> String {
     o
 }
 
-// Teintes d'accentuation: celles de l'utilisateur (4 couleurs valides) remplacent celles des défauts, par nom
+// Accent tones: the user's (4 valid colors) replace the defaults', by name
 fn accents_from(layers: &[&Sections]) -> BTreeMap<String, Vec<String>> {
     let mut accents = BTreeMap::new();
     for sections in layers {
@@ -208,7 +208,7 @@ fn accents_from(layers: &[&Sections]) -> BTreeMap<String, Vec<String>> {
     accents
 }
 
-// Teinte [sombre, sombre vif, clair, clair vif] d'un nom d'accent (lue une fois), `default` si le nom est inconnu
+// Tone [dark, dark bright, light, light bright] of an accent name (read once), `default` if the name is unknown
 pub fn accent_tone(name: &str) -> Vec<String> {
     static TONES: std::sync::OnceLock<BTreeMap<String, Vec<String>>> = std::sync::OnceLock::new();
     let tones = TONES.get_or_init(|| {
@@ -218,13 +218,13 @@ pub fn accent_tone(name: &str) -> Vec<String> {
     tones.get(name).or_else(|| tones.get("default")).cloned().unwrap_or_default()
 }
 
-// Thème fusionné en JSON: {"dark": {clé: valeur}, "light": {...}, "accents": {nom: [4 couleurs]}}
+// Merged theme as JSON: {"dark": {key: value}, "light": {...}, "accents": {name: [4 colors]}}
 #[cfg(test)]
 pub fn theme_json_from(user: &str) -> String {
     theme_json_layers("", user)
 }
 
-// `global`: ~/.config/filigrane/theme.toml (commun à Filigrane); `user`: fili-file.toml, qui passe devant
+// `global`: ~/.config/filigrane/theme.toml (shared by Filigrane); `user`: fili-file.toml, which takes precedence
 pub fn theme_json_layers(global: &str, user: &str) -> String {
     let defaults = parse_sections(DEFAULT_THEME);
     let global = parse_sections(global);
@@ -314,8 +314,8 @@ mod tests {
     #[test]
     fn global_theme_sits_between_app_and_defaults() {
         let j = theme_json_layers("[theme]\nradius_control = 8\nsize = 15\n[theme.dark]\nbackground = \"#000000\"\n", "[theme]\nsize = 14\n");
-        assert_eq!(val(&j, "dark", "size").as_deref(), Some("14")); // l'app passe devant le global
-        assert_eq!(val(&j, "dark", "radius_control").as_deref(), Some("8")); // le global passe devant les défauts
+        assert_eq!(val(&j, "dark", "size").as_deref(), Some("14")); // the app's takes precedence over the global one
+        assert_eq!(val(&j, "dark", "radius_control").as_deref(), Some("8")); // the global one takes precedence over the defaults
         assert_eq!(val(&j, "dark", "background").as_deref(), Some("#000000"));
         assert_eq!(val(&j, "light", "background").as_deref(), Some("#f3f1ec"));
     }
@@ -327,7 +327,7 @@ mod tests {
         assert_eq!(val(&d, "light", "background").as_deref(), Some("#f3f1ec"));
         assert_eq!(val(&d, "dark", "radius_control").as_deref(), Some("6"));
         assert_eq!(val(&d, "dark", "accent"), None);
-        // [theme] vaut pour les deux modes, un mode passe devant; valeurs invalides ignorées; # dans les guillemets
+        // [theme] applies to both modes, a mode takes precedence; invalid values ignored; # inside quotes
         let u = theme_json_from("[theme]\nradius_control = 9\nsize = big\ntext = \"#fff\" # c\n[theme.light]\nradius_control = 3\nbackground = \"nope\"\naccent = \"#336699\"\n[theme.accents]\nsauge = [\"#111111\", \"#222222\", \"#333333\", \"#444444\"]\nbad = [\"#111\"]\n");
         assert_eq!(val(&u, "dark", "radius_control").as_deref(), Some("9"));
         assert_eq!(val(&u, "light", "radius_control").as_deref(), Some("3"));

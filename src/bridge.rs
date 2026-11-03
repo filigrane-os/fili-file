@@ -1,6 +1,6 @@
-// Objets exposés au QML (module Fili.Files): FolderModel, la liste du dossier affiché (navigation, historique, tri,
-// ouverture, mise à jour en direct par inotify, opérations: copier/couper/coller en arrière-plan, corbeille,
-// renommage, annulation); Fili, l'environnement (thème suivi en direct, traductions, lieux de la barre latérale).
+// Objects exposed to QML (module Fili.Files): FolderModel, the list of the folder shown (navigation, history, sort,
+// opening, live update by inotify, operations: copy/cut/paste in the background, trash,
+// rename, undo); Fili, the environment (live theme, translations, places of the sidebar).
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++Qt" {
@@ -33,12 +33,12 @@ pub mod qobject {
         #[qproperty(QString, status, READ, NOTIFY = changed)]
         #[qproperty(QString, error, READ, NOTIFY = changed)]
         #[qproperty(QString, filter, READ, NOTIFY = changed)]
-        // Titre des résultats affichés à la place du contenu du dossier (vide: dossier normal)
+        // Title of the results shown in place of the folder content (empty: normal folder)
         #[qproperty(QString, results, READ, NOTIFY = changed)]
-        // Dossier à montrer dans le fil d'Ariane et le titre: le dossier commun des résultats, sinon le dossier affiché
+        // Folder to show in the breadcrumb and the title: the common folder of the results, else the folder shown
         #[qproperty(QString, shown, READ, NOTIFY = changed)]
         #[qproperty(bool, busy, READ, NOTIFY = changed)]
-        // Avancement de l'opération en cours (0 à 1), -1 tant que le total n'est pas connu
+        // Progress of the operation in progress (0 to 1), -1 while the total is not known
         #[qproperty(f64, progress, READ, NOTIFY = changed)]
         #[qproperty(QString, job, READ, NOTIFY = changed)]
         #[qproperty(bool, in_trash, cxx_name = "inTrash", READ, NOTIFY = changed)]
@@ -48,31 +48,31 @@ pub mod qobject {
 
         #[qsignal]
         fn changed(self: Pin<&mut FolderModel>);
-        // Le contenu du dossier a changé sur le disque (ou après une opération): la vue remet sa sélection en place
+        // The folder content changed on disk (or after an operation): the view puts its selection back in place
         #[qsignal]
         fn reloaded(self: Pin<&mut FolderModel>);
-        // Un nom existe déjà dans la destination: la vue demande quoi faire (resolveConflict); names = un nom par ligne
+        // A name already exists in the destination: the view asks what to do (resolveConflict); names = one name per line
         #[qsignal]
         fn conflict(self: Pin<&mut FolderModel>, names: &QString, dest: &QString);
 
-        // L'index récursif du dossier est prêt: la recherche couvre tous les niveaux
+        // The recursive index of the folder is ready: the search covers all levels
         #[qsignal]
         #[cxx_name = "indexReady"]
         fn index_ready(self: Pin<&mut FolderModel>);
-        // Miniature de ce fichier prête (génération en arrière-plan)
+        // Thumbnail of this file ready (generated in the background)
         #[qsignal]
         #[cxx_name = "thumbReady"]
         fn thumb_ready(self: Pin<&mut FolderModel>, path: &QString);
 
-        // Les déplacements rendent la ligne à sélectionner ensuite (-1: rien n'a changé)
+        // Moves return the row to select next (-1: nothing changed)
         #[qinvokable]
         fn go(self: Pin<&mut FolderModel>, path: &QString) -> i32;
-        // Affiche une liste de fichiers (chemins séparés par des retours à la ligne) à la place du dossier, sous un titre
+        // Shows a list of files (paths separated by line breaks) in place of the folder, under a title
         #[qinvokable]
         #[cxx_name = "showResults"]
         fn show_results(self: Pin<&mut FolderModel>, title: &QString, paths: &QString);
-        // Revient au contenu du dossier
-        // Lieu « Réseau »: serveurs et partages connectés (gvfs, NFS, CIFS, sshfs), sous leur nom lisible
+        // Goes back to the folder content
+        // "Network" place: connected servers and shares (gvfs, NFS, CIFS, sshfs), under their readable name
         #[qinvokable]
         #[cxx_name = "showNetwork"]
         fn show_network(self: Pin<&mut FolderModel>, title: &QString);
@@ -95,7 +95,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "toggleHidden"]
         fn toggle_hidden(self: Pin<&mut FolderModel>, row: i32) -> i32;
-        // Ne garder que les noms qui contiennent ce texte (vide: tout)
+        // Keep only the names that contain this text (empty: everything)
         #[qinvokable]
         #[cxx_name = "setPickFilter"]
         fn set_pick_filter(self: Pin<&mut FolderModel>, index: i32);
@@ -109,31 +109,31 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "pathAt"]
         fn path_at(self: &FolderModel, row: i32) -> QString;
-        // Ligne portant ce nom (-1: absent)
+        // Row carrying this name (-1: absent)
         #[qinvokable]
         #[cxx_name = "rowOf"]
         fn find_name(self: &FolderModel, name: &QString) -> i32;
         #[qinvokable]
         fn has(self: &FolderModel, path: &QString) -> bool;
-        // Efface le message d'erreur (une commande de ctl lit ensuite si elle a échoué)
+        // Clears the error message (a ctl command then reads whether it failed)
         #[qinvokable]
         #[cxx_name = "clearError"]
         fn clear_error(self: Pin<&mut FolderModel>);
-        // Chemins (un par ligne) des lignes affichées dont le nom correspond au motif (* et ?), ou qui ont le même type
-        // que les chemins donnés
+        // Paths (one per line) of the rows shown whose name matches the pattern (* and ?), or that have the same type
+        // as the given paths
         #[qinvokable]
         fn matching(self: &FolderModel, pattern: &QString) -> QString;
         #[qinvokable]
         #[cxx_name = "sameKind"]
         fn same_kind(self: &FolderModel, paths: &QString) -> QString;
-        // Description de la sélection pour la barre d'état (un élément: nom et taille ou contenu)
+        // Description of the selection for the status bar (one item: name and size or content)
         #[qinvokable]
         fn describe(self: &FolderModel, paths: &QString) -> QString;
         #[qinvokable]
         #[cxx_name = "pathIsDir"]
         fn path_is_dir(self: &FolderModel, path: &QString) -> bool;
-        // Opérations: les chemins sont séparés par des retours à la ligne; les rendus sont la ligne à sélectionner
-        // ensuite (-1: aucune). Les erreurs vont dans la barre d'état (error).
+        // Operations: paths are separated by line breaks; the return values are the row to select
+        // next (-1: none). Errors go to the status bar (error).
         #[qinvokable]
         fn uris(self: &FolderModel, paths: &QString) -> QString;
         #[qinvokable]
@@ -142,11 +142,11 @@ pub mod qobject {
         fn cut(self: Pin<&mut FolderModel>, paths: &QString);
         #[qinvokable]
         fn paste(self: Pin<&mut FolderModel>);
-        // Relit le presse-papiers système (des fichiers y sont-ils?) pour canPaste
+        // Reads the system clipboard again (are there files in it?) for canPaste
         #[qinvokable]
         #[cxx_name = "refreshPaste"]
         fn refresh_paste(self: Pin<&mut FolderModel>);
-        // Réponse à `conflict`: "replace" (l'ancien va à la corbeille), "both" (suffixe « copie »), "skip", "cancel"
+        // Answer to `conflict`: "replace" (the old one goes to the trash), "both" ("copy" suffix), "skip", "cancel"
         #[qinvokable]
         #[cxx_name = "resolveConflict"]
         fn resolve_conflict(self: Pin<&mut FolderModel>, choice: &QString);
@@ -168,53 +168,53 @@ pub mod qobject {
         fn new_folder(self: Pin<&mut FolderModel>) -> i32;
         #[qinvokable]
         fn undo(self: Pin<&mut FolderModel>);
-        // Applications pour ouvrir ce fichier, en JSON: [{id, name}] (la préférée d'abord)
+        // Applications to open this file, as JSON: [{id, name}] (the preferred one first)
         #[qinvokable]
         #[cxx_name = "openWithList"]
         fn open_with_list(self: &FolderModel, path: &QString) -> QString;
         #[qinvokable]
         #[cxx_name = "openWith"]
         fn open_with(self: &FolderModel, id: &QString, path: &QString);
-        // Tous les chemins sont des archives que extract sait ouvrir
+        // All the paths are archives that extract can open
         #[qinvokable]
         #[cxx_name = "allArchives"]
         fn all_archives(self: &FolderModel, paths: &QString) -> bool;
         #[qinvokable]
         fn extract(self: Pin<&mut FolderModel>, paths: &QString, password: &QString);
-        // Une archive demande un mot de passe (ou le mot de passe donné est faux): la vue le demande, puis rappelle extract avec ces archives
+        // An archive asks for a password (or the given password is wrong): the view asks for it, then calls extract again with these archives
         #[qsignal]
         #[cxx_name = "passwordNeeded"]
         fn password_needed(self: Pin<&mut FolderModel>, paths: &QString, wrong: bool);
-        // Nom proposé par le panneau de compression (sans extension)
+        // Name proposed by the compression panel (without extension)
         #[qinvokable]
         #[cxx_name = "archiveName"]
         fn archive_name(self: &FolderModel, paths: &QString) -> QString;
-        // Compresse avec les choix du panneau: nom (sans extension), format, niveau (fast|normal|best), sans fichiers cachés
+        // Compresses with the choices of the panel: name (without extension), format, level (fast|normal|best), without hidden files
         #[qinvokable]
         fn compress(self: Pin<&mut FolderModel>, paths: &QString, name: &QString, format: &QString, level: &QString, skip_hidden: bool, password: &QString);
         #[qinvokable]
         fn cancel(self: Pin<&mut FolderModel>);
-        // Renommage en lot (modes replace, number, case; voir ops::bulk_name). L'aperçu rend du JSON
-        // [{from, to, ok, same}] dans l'ordre d'affichage (ok = nom valide et libre); l'application renomme ce qui change
+        // Bulk rename (modes replace, number, case; see ops::bulk_name). The preview returns JSON
+        // [{from, to, ok, same}] in display order (ok = valid and free name); the application renames what changes
         #[qinvokable]
         #[cxx_name = "bulkPreview"]
         fn bulk_preview(self: &FolderModel, paths: &QString, mode: &QString, a: &QString, b: &QString, start: i32) -> QString;
         #[qinvokable]
         #[cxx_name = "bulkApply"]
         fn bulk_apply(self: Pin<&mut FolderModel>, paths: &QString, mode: &QString, a: &QString, b: &QString, start: i32) -> bool;
-        // Tâches en cours et en attente (JSON [{label, progress}], progress -2 = en attente) et annulation de l'une d'elles
+        // Tasks in progress and waiting (JSON [{label, progress}], progress -2 = waiting) and cancelling one of them
         #[qinvokable]
         fn tasks(self: &FolderModel) -> QString;
         #[qinvokable]
         #[cxx_name = "cancelTask"]
         fn cancel_task(self: Pin<&mut FolderModel>, index: i32);
-        // Copie dans le dossier même (nom « copie »)
+        // Copy in the same folder (name "copy")
         #[qinvokable]
         fn duplicate(self: Pin<&mut FolderModel>, paths: &QString);
         // Terminal in that folder, else in the folder shown ($TERMINAL, xdg-terminal-exec or the first known terminal)
         #[qinvokable]
         fn terminal(self: &FolderModel, path: &QString);
-        // Infos d'un ou plusieurs éléments, en JSON: [[libellé, valeur]]; la taille des dossiers suit par infoSize
+        // Info on one or several items, as JSON: [[label, value]]; the size of folders follows through infoSize
         #[qinvokable]
         fn info(self: &FolderModel, paths: &QString) -> QString;
         #[qinvokable]
@@ -223,18 +223,18 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "infoSize"]
         fn info_size(self: Pin<&mut FolderModel>, text: &QString);
-        // Empreinte SHA-256 d'un fichier, calculée à part (sha256sum), rendue par infoHash
+        // SHA-256 digest of a file, computed separately (sha256sum), returned through infoHash
         #[qinvokable]
         #[cxx_name = "startInfoHash"]
         fn start_info_hash(self: Pin<&mut FolderModel>, path: &QString);
         #[qsignal]
         #[cxx_name = "infoHash"]
         fn info_hash(self: Pin<&mut FolderModel>, text: &QString);
-        // Droits (rwx, 0..511) d'un fichier ou dossier qui nous appartient, -1 sinon (lien, autre propriétaire)
+        // Permissions (rwx, 0..511) of a file or folder we own, -1 otherwise (link, other owner)
         #[qinvokable]
         #[cxx_name = "permMode"]
         fn perm_mode(self: &FolderModel, path: &QString) -> i32;
-        // Change les droits (annulable); rend le texte « rwxr-xr-x (755) », vide en cas d'échec
+        // Changes the permissions (undoable); returns the text "rwxr-xr-x (755)", empty on failure
         #[qinvokable]
         #[cxx_name = "setPerm"]
         fn set_perm(self: Pin<&mut FolderModel>, path: &QString, mode: i32) -> QString;
@@ -288,24 +288,24 @@ pub mod qobject {
         #[cxx_name = "themeChanged"]
         fn theme_changed(self: Pin<&mut Fili>);
 
-        // Les volumes ou les montages ont changé: la barre latérale relit ses lieux
+        // Volumes or mounts changed: the sidebar reads its places again
         #[qsignal]
         #[cxx_name = "placesChanged"]
         fn places_changed(self: Pin<&mut Fili>);
-        // Commande de l'assistant (fili-file ctl): numéro (à rendre à reply), verbe, argument, corps
+        // Command from the assistant (fili-file ctl): number (to give back to reply), verb, argument, body
         #[qsignal]
         fn command(self: Pin<&mut Fili>, id: i32, verb: &QString, arg: &QString, body: &QString);
-        // Volume monté à la demande de mount_volume (chemin) ou erreur (texte)
+        // Volume mounted at the request of mount_volume (path) or error (text)
         #[qsignal]
         fn mounted(self: Pin<&mut Fili>, path: &QString);
         #[qsignal]
         #[cxx_name = "volumeError"]
         fn volume_error(self: Pin<&mut Fili>, message: &QString);
-        // Thème fusionné (défauts de theme.toml + ~/.config/filigrane/fili-file.toml), en JSON: voir config::theme_json_from
+        // Merged theme (defaults of theme.toml + ~/.config/filigrane/fili-file.toml), as JSON: see config::theme_json_from
         #[qinvokable]
         #[cxx_name = "themeJson"]
         fn theme_json(self: &Fili) -> QString;
-        // Mode sélecteur de fichiers (portail FileChooser): "" hors de ce mode, sinon "open" ou "save"
+        // File picker mode (FileChooser portal): "" outside this mode, else "open" or "save"
         #[qinvokable]
         #[cxx_name = "pickKind"]
         fn pick_kind(self: &Fili) -> QString;
@@ -328,32 +328,32 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "pickDirectory"]
         fn pick_directory(self: &Fili) -> bool;
-        // Noms des filtres, en JSON: ["Images", "Tous les fichiers"]
+        // Names of the filters, as JSON: ["Images", "All files"]
         #[qinvokable]
         #[cxx_name = "pickFilters"]
         fn pick_filters(self: &Fili) -> QString;
         #[qinvokable]
         #[cxx_name = "pickFilter"]
         fn pick_filter(self: &Fili) -> i32;
-        // Écrit la sélection (un chemin par ligne) et quitte; pickCancel quitte sans rien écrire
+        // Writes the selection (one path per line) and quits; pickCancel quits without writing anything
         #[qinvokable]
         #[cxx_name = "pickFinish"]
         fn pick_finish(self: &Fili, paths: &QString, filter: i32);
-        // Colonnes affichées de la liste (clés séparées par des virgules), gardées dans l'état de l'utilisateur
+        // Columns shown in the list (keys separated by commas), kept in the user's state
         #[qinvokable]
         fn columns(self: &Fili) -> QString;
         #[qinvokable]
         #[cxx_name = "setColumns"]
         fn set_columns(self: &Fili, keys: &QString);
-        // Vue de la liste de fichiers: "list" ou "grid", gardée dans l'état de l'utilisateur
+        // View of the file list: "list" or "grid", kept in the user's state
         #[qinvokable]
         #[cxx_name = "viewMode"]
         fn view_mode(self: &Fili) -> QString;
         #[qinvokable]
         #[cxx_name = "setViewMode"]
         fn set_view_mode(self: &Fili, mode: &QString);
-        // Petit état d'interface gardé entre deux lancements (largeurs des colonnes « col.size », du panneau d'aperçu
-        // « preview »): valeur en texte, vide si absente
+        // Small interface state kept between two launches (widths of the columns "col.size", of the preview panel
+        // "preview"): value as text, empty when absent
         #[qinvokable]
         #[cxx_name = "uiState"]
         fn ui_state(self: &Fili, key: &QString) -> QString;
@@ -366,22 +366,22 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setPreviewShown"]
         fn set_preview_shown(self: &Fili, on: bool);
-        // Dossier des éléments de la Corbeille (le lieu « Corbeille » de la barre latérale)
+        // Folder of the items of the Trash (the "Trash" place of the sidebar)
         #[qinvokable]
         #[cxx_name = "trashPath"]
         fn trash_path(self: &Fili) -> QString;
-        // Nouvelle fenêtre de Casier sur ce dossier (onglet détaché)
+        // New Casier window on this folder (detached tab)
         #[qinvokable]
         #[cxx_name = "openWindow"]
         fn open_window(self: &Fili, path: &QString);
-        // Retire un dossier de la section « Récents » de la barre latérale
+        // Removes a folder from the "Recents" section of the sidebar
         #[qinvokable]
         #[cxx_name = "forgetVisit"]
         fn forget_visit(self: Pin<&mut Fili>, path: &QString);
         #[qinvokable]
         #[cxx_name = "pathExists"]
         fn path_exists(self: &Fili, path: &QString) -> bool;
-        // Aperçu d'un fichier: première ligne = genre (image, pdf, text, folder, none), reste = texte ou chemin de l'image
+        // Preview of a file: first line = kind (image, pdf, text, folder, none), rest = text or path of the image
         #[qinvokable]
         #[cxx_name = "previewInfo"]
         fn preview_info(self: &Fili, path: &QString) -> QString;
@@ -395,7 +395,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "removeFavorite"]
         fn remove_favorite(self: Pin<&mut Fili>, path: &QString);
-        // La corbeille contient quelque chose (icône pleine ou vide de la barre latérale)
+        // The trash contains something (full or empty icon of the sidebar)
         #[qinvokable]
         #[cxx_name = "trashFull"]
         fn trash_full(self: &Fili) -> bool;
@@ -405,7 +405,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "copyText"]
         fn copy_text(self: &Fili, text: &QString);
-        // Propositions de chemins pour ce que l'utilisateur tape dans le champ du chemin (JSON: [{name, path, dir}])
+        // Path suggestions for what the user types in the path field (JSON: [{name, path, dir}])
         #[qinvokable]
         #[cxx_name = "pathSuggest"]
         fn path_suggest(self: &Fili, text: &QString) -> QString;
@@ -415,8 +415,8 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "unmountVolume"]
         fn unmount_volume(self: Pin<&mut Fili>, dev: &QString);
-        // Partage (fili-share): protocoles et pairs en JSON par shareProtocolsReady / sharePeersReady (fil à part, la
-        // recherche LocalSend dure 2 s); shareSend envoie les fichiers (un chemin par ligne) en tâche détachée
+        // Sharing (fili-share): protocols and peers as JSON through shareProtocolsReady / sharePeersReady (separate thread, the
+        // LocalSend search takes 2 s); shareSend sends the files (one path per line) as a detached task
         #[qinvokable]
         #[cxx_name = "shareProtocols"]
         fn share_protocols(self: Pin<&mut Fili>);
@@ -432,12 +432,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "shareSend"]
         fn share_send(self: &Fili, proto: &QString, id: &QString, name: &QString, paths: &QString);
-        // Choisir les fichiers à envoyer à cet appareil (fili-share send ouvre le sélecteur de Casier)
+        // Choose the files to send to this device (fili-share send opens Casier's picker)
         #[qinvokable]
         #[cxx_name = "sharePick"]
         fn share_pick(self: &Fili, proto: &QString, id: &QString, name: &QString);
-        // Réception (fili-share receive-info / received): état des protocoles et fichiers reçus en JSON par
-        // receiveInfoReady(info, received); receiveSet active ou coupe un protocole puis renvoie l'état
+        // Reception (fili-share receive-info / received): state of the protocols and received files as JSON through
+        // receiveInfoReady(info, received); receiveSet turns a protocol on or off then returns the state
         #[qinvokable]
         #[cxx_name = "receiveInfo"]
         fn receive_info(self: Pin<&mut Fili>);
@@ -447,15 +447,15 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "receiveSet"]
         fn receive_set(self: Pin<&mut Fili>, proto: &QString, on: bool);
-        // Lecteur réseau (gvfs): adresse smb://, sftp://, davs://, ftp://, nfs://; réponse par mounted / volumeError
+        // Network drive (gvfs): address smb://, sftp://, davs://, ftp://, nfs://; answer through mounted / volumeError
         #[cxx_name = "connectServer"]
         fn connect_server(self: Pin<&mut Fili>, uri: &QString, user: &QString, password: &QString);
         #[qinvokable]
         fn tr(self: &Fili, text: &QString) -> QString;
-        // Icône de dossier à la couleur d'accentuation (autres icônes inchangées)
+        // Folder icon in the accent color (other icons unchanged)
         #[qinvokable]
         fn tint(self: &Fili, url: &QString, accent: &QString, light: bool) -> QString;
-        // Fiche « À propos de Casier »: lignes [[libellé, valeur]] en JSON, et dossier du thème par défaut (clair ou sombre)
+        // About Casier card: rows [[label, value]] as JSON, and the folder of the default theme (light or dark)
         #[qinvokable]
         #[cxx_name = "aboutRows"]
         fn about_rows(self: &Fili) -> QString;
@@ -465,22 +465,22 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "aboutLogo"]
         fn about_logo(self: &Fili, light: bool) -> QString;
-        // Lieux de la barre latérale, en JSON: [{section, name, path, icon}]
+        // Places of the sidebar, as JSON: [{section, name, path, icon}]
         #[qinvokable]
         fn places(self: &Fili) -> QString;
-        // Premier argument de la ligne de commande (dossier, fichier ou URL file://), sinon le dossier personnel
+        // First command-line argument (folder, file or file:// URL), else the home folder
         #[qinvokable]
         #[cxx_name = "startPath"]
         fn start_path(self: &Fili) -> QString;
         #[qinvokable]
         fn home(self: &Fili) -> QString;
-        // Lancé avec --info (FileManager1.ShowItemProperties): la fenêtre d'informations s'ouvre au démarrage
+        // Started with --info (FileManager1.ShowItemProperties): the information window opens at startup
         #[qinvokable]
         #[cxx_name = "startInfo"]
         fn start_info(self: &Fili) -> bool;
-        // Contexte pour l'assistant (fili-context): dossier affiché et sélection (chemins séparés par des retours à la ligne);
-        // un dossier vide retire le contexte (fermeture)
-        // Réponse (une ligne JSON) à la commande `id` de ctl
+        // Context for the assistant (fili-context): folder shown and selection (paths separated by line breaks);
+        // an empty folder removes the context (closing)
+        // Answer (a JSON line) to the command `id` of ctl
         #[qinvokable]
         fn reply(self: &Fili, id: i32, text: &QString);
         #[qinvokable]
@@ -533,7 +533,7 @@ fn home() -> String {
     env::var("HOME").unwrap_or_else(|_| "/".into())
 }
 
-// Dossiers personnels XDG (user-dirs.dirs, à défaut ~/Desktop, ~/Documents...) -> nom d'icône freedesktop
+// XDG personal folders (user-dirs.dirs, else ~/Desktop, ~/Documents...) -> freedesktop icon name
 fn xdg_dirs() -> Vec<(String, &'static str)> {
     let home = home();
     let config = env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
@@ -557,8 +557,8 @@ fn xdg_dirs() -> Vec<(String, &'static str)> {
     out
 }
 
-// Favoris par défaut, dans l'ordre du Finder: Applications, Bureau, Documents, Téléchargements, dossier personnel,
-// puis Images, Musique, Vidéos. (chemin, nom d'icône)
+// Default favorites, in the Finder's order: Applications, Desktop, Documents, Downloads, home folder,
+// then Pictures, Music, Videos. (path, icon name)
 fn default_favorites() -> Vec<(String, &'static str)> {
     let home = home();
     let xdg = xdg_dirs();
@@ -583,7 +583,7 @@ fn bookmarks_file() -> PathBuf {
     PathBuf::from(config).join("gtk-3.0/bookmarks")
 }
 
-// Favoris de l'utilisateur: signets GTK (partagés avec le sélecteur de fichiers), « file:///chemin libellé »
+// Favorites of the user: GTK bookmarks (shared with the file chooser), "file:///path label"
 fn bookmarks() -> Vec<(String, String)> {
     let text = std::fs::read_to_string(bookmarks_file()).unwrap_or_default();
     text.lines()
@@ -608,7 +608,7 @@ fn write_bookmarks(list: &[(String, String)]) -> std::io::Result<()> {
 
 use ops::decode as percent_decode;
 
-// Chemin absolu nettoyé (~, file://, ., ..), sans suivre les liens: le chemin affiché reste celui parcouru
+// Cleaned absolute path (~, file://, ., ..), without following links: the path shown stays the one walked
 fn normalize(p: &str, base: &str) -> PathBuf {
     let p = p.trim();
     let p = match p.strip_prefix("file://") {
@@ -651,13 +651,13 @@ fn json(s: &str) -> String {
     o
 }
 
-// Lance un programme détaché (ne meurt pas avec fili-file), ramassé par un fil pour ne pas laisser de zombie
+// Starts a detached program (does not die with fili-file), reaped by a thread so that no zombie is left
 fn spawn(program: &str, arg: &str, dir: &Path) {
     spawn_detached(Command::new(program).arg(arg).current_dir(dir));
 }
 
-// Lance une commande détachée (propre groupe de processus, flux fermés) et la fait ramasser par un fil. Un échec de
-// lancement (programme absent) est écrit sur la sortie d'erreur de fili-file plutôt que perdu.
+// Starts a detached command (own process group, closed streams) and has a thread reap it. A failure to
+// start (program missing) is written to the standard error of fili-file instead of being lost.
 fn spawn_detached(cmd: &mut Command) {
     let child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).process_group(0).spawn();
     match child {
@@ -668,7 +668,7 @@ fn spawn_detached(cmd: &mut Command) {
     }
 }
 
-// Miniatures déjà vues sur le disque: data() est appelée à chaque affichage d'une ligne, un stat par appel serait perdu
+// Thumbnails already seen on disk: data() is called each time a row is drawn, one stat per call would be wasted
 static THUMBS_SEEN: std::sync::Mutex<Option<HashSet<PathBuf>>> = std::sync::Mutex::new(None);
 
 fn thumb_known(t: &Path) -> bool {
@@ -688,7 +688,7 @@ fn thumb_exists(e: &fs::Entry) -> bool {
     thumb_known(&thumb_path(e))
 }
 
-// Miniature d'un PDF: première page par pdftoppm, gardée dans ~/.cache/filigrane/thumbs (nom = chemin, date, taille)
+// Thumbnail of a PDF: first page by pdftoppm, kept in ~/.cache/filigrane/thumbs (name = path, date, size)
 fn thumb_path(e: &fs::Entry) -> PathBuf {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -697,8 +697,8 @@ fn thumb_path(e: &fs::Entry) -> PathBuf {
     PathBuf::from(cache).join(format!("filigrane/thumbs/{:016x}.png", h.finish()))
 }
 
-// Aperçu du panneau latéral: "genre\ncontenu". Texte: 6 Kio au plus, seulement de l'UTF-8 sans octet nul.
-// PDF: première page en 480 px par pdftoppm, gardée dans le cache des miniatures.
+// Preview of the side panel: "kind\ncontent". Text: 6 KiB at most, only UTF-8 without a null byte.
+// PDF: first page at 480 px by pdftoppm, kept in the thumbnail cache.
 fn preview(path: &str) -> String {
     use std::io::Read;
     let p = Path::new(path);
@@ -757,7 +757,7 @@ fn preview(path: &str) -> String {
     let text = match String::from_utf8(buf) {
         Ok(t) => t,
         Err(e) => {
-            // Coupure au milieu d'un caractère à la fin: on garde le début valide
+            // Cut in the middle of a character at the end: the valid beginning is kept
             let n = e.utf8_error().valid_up_to();
             if e.utf8_error().error_len().is_some() || n + 4 < e.as_bytes().len() {
                 return "none\n".into();
@@ -769,13 +769,13 @@ fn preview(path: &str) -> String {
 }
 
 static THUMBING: AtomicBool = AtomicBool::new(false);
-// Relecture du dossier par inotify en cours / à refaire (voir live_reload)
+// Re-reading of the folder by inotify in progress / to redo (see live_reload)
 static RELOADING: AtomicBool = AtomicBool::new(false);
 static RELOAD_AGAIN: AtomicBool = AtomicBool::new(false);
-// Numéro de l'index en cours de construction; tout changement l'annule
+// Number of the index being built; any change cancels it
 static INDEX_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-// Nom sans extension d'archive reconnue (None: ce n'est pas une archive)
+// Name without the extension of a recognized archive (None: it is not an archive)
 fn archive_stem(name: &str) -> Option<String> {
     let lower = name.to_lowercase();
     for ext in [".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tgz", ".tar", ".zip", ".7z", ".rar", ".iso"] {
@@ -786,7 +786,7 @@ fn archive_stem(name: &str) -> Option<String> {
     None
 }
 
-// Sortie de `fili-share ARGS` (JSON); liste vide si le script manque ou échoue
+// Output of `fili-share ARGS` (JSON); empty list if the script is missing or fails
 fn share_run(args: &[&str]) -> String {
     match Command::new(bin("fili-share")).args(args).stdin(Stdio::null()).stderr(Stdio::null()).output() {
         Ok(o) if !o.stdout.is_empty() => String::from_utf8_lossy(&o.stdout).into_owned(),
@@ -812,7 +812,7 @@ pub struct FolderModelRust {
     filter: QString,
     results: QString,
     shown: QString,
-    // Filtre du sélecteur de fichiers (index dans pick::Pick::filters, -1: aucun)
+    // File chooser filter (index in pick::Pick::filters, -1: none)
     pick_filter: i32,
     busy: bool,
     progress: f64,
@@ -822,7 +822,7 @@ pub struct FolderModelRust {
     can_undo: bool,
     dir: String,
     all: Vec<fs::Entry>,
-    // Tout le contenu du dossier à tous les niveaux (recherche floue), construit à la première saisie
+    // The whole content of the folder at every level (fuzzy search), built on the first keystroke
     index: Option<Vec<fs::Entry>>,
     indexing: bool,
     rows: Vec<fs::Entry>,
@@ -834,28 +834,28 @@ pub struct FolderModelRust {
     undo: Vec<Undo>,
     cancel: Arc<AtomicBool>,
     watcher: Option<Watcher>,
-    // Copie ou déplacement en attente de la réponse à `conflict`
+    // Copy or move waiting for the answer to `conflict`
     pending: Option<(Vec<String>, String, Mode)>,
-    // Copies et déplacements en attente de la fin de l'opération en cours (file d'attente, dans l'ordre)
+    // Copies and moves waiting for the operation in progress to end (queue, in order)
     queue: Vec<(Vec<String>, String, Mode, Policy)>,
 }
 
-// Ce que Ctrl+Z défait (le plus récent en dernier, 20 au plus)
+// What Ctrl+Z undoes (the most recent last, 20 at most)
 enum Undo {
     // (ancien chemin, nouveau chemin)
     Rename(PathBuf, PathBuf),
     Trash(Vec<ops::Trashed>),
-    // Éléments créés (copies, nouveau dossier, éléments remis en place): défaire = les mettre à la corbeille
+    // Items created (copies, new folder, items put back): undoing = putting them in the trash
     Created(Vec<PathBuf>),
     // (origine, destination)
     Moved(Vec<(PathBuf, PathBuf)>),
     // (chemin, anciens droits)
     Mode(PathBuf, u32),
-    // Renommage en lot: (ancien chemin, nouveau chemin)
+    // Bulk rename: (old path, new path)
     Renames(Vec<(PathBuf, PathBuf)>),
 }
 
-// Que faire d'un nom déjà pris dans la destination
+// What to do with a name already taken in the destination
 #[derive(Clone, Copy, PartialEq)]
 enum Policy {
     Both,
@@ -867,7 +867,7 @@ enum Policy {
 enum Mode {
     Copy,
     Move,
-    // Déplacer sur le même volume, copier sinon (glisser-déposer)
+    // Move on the same volume, copy otherwise (drag and drop)
     Auto,
 }
 
@@ -882,7 +882,7 @@ fn paths_of(list: &QString) -> Vec<String> {
     list.to_string().split('\n').filter(|p| !p.is_empty()).map(String::from).collect()
 }
 
-// Presse-papiers Wayland (wl-clipboard). Les lectures sont courtes: wl-paste rend la main dès que la sélection est lue.
+// Wayland clipboard (wl-clipboard). Reads are short: wl-paste returns as soon as the selection has been read.
 fn clip_set(paths: &[String]) {
     if paths.is_empty() {
         return;
@@ -915,7 +915,7 @@ fn clip_has_files() -> bool {
     })
 }
 
-// Fichiers du presse-papiers et « couper » si l'application source le dit (GNOME, Thunar: x-special/gnome-copied-files)
+// Files of the clipboard and "cut" if the source application says so (GNOME, Thunar: x-special/gnome-copied-files)
 fn clip_get() -> Option<(Vec<String>, Option<bool>)> {
     let (text, gnome) = match clip_read("x-special/gnome-copied-files") {
         Some(t) => (t, true),
@@ -925,7 +925,7 @@ fn clip_get() -> Option<(Vec<String>, Option<bool>)> {
     (!parsed.0.is_empty()).then_some(parsed)
 }
 
-// gnome: première ligne « copy » ou « cut », puis une URI par ligne; sinon une URI par ligne (# = commentaire)
+// gnome: first line "copy" or "cut", then one URI per line; otherwise one URI per line (# = comment)
 fn parse_clip(text: &str, gnome: bool) -> (Vec<String>, Option<bool>) {
     let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#'));
     let mut cut = None;
@@ -943,12 +943,12 @@ fn job_label(items: &[String], mode: Mode) -> String {
     if mode == Mode::Copy { i18n::trf("Copying %1", &[&what]) } else { i18n::trf("Moving %1", &[&what]) }
 }
 
-// Chemins proposés pour un texte tapé: le dossier est la partie avant le dernier « / » (~ et .. compris), le reste est
-// cherché façon fzf dans les noms de ce dossier (les fichiers cachés seulement si le reste commence par un point).
-// Rend (nom, chemin complet, dossier?): meilleurs scores d'abord, dossiers avant fichiers à score égal.
+// Paths proposed for typed text: the folder is the part before the last "/" (~ and .. included), the rest is
+// searched fzf-style in the names of this folder (hidden files only if the rest starts with a dot).
+// Returns (name, full path, folder?): best scores first, folders before files with an equal score.
 fn suggest(text: &str, limit: usize) -> Vec<(String, String, bool)> {
     let t = text.trim_start();
-    // Sans « / »: dossiers déjà visités qui correspondent (comme zoxide), puis le contenu du dossier personnel
+    // Without "/": already visited folders that match (like zoxide), then the content of the home folder
     let mut jumps: Vec<(String, String, bool)> = Vec::new();
     if !t.contains('/') && !t.is_empty() && !t.starts_with('~') {
         let mut scored: Vec<(i64, String)> = visits::ranked().into_iter().filter_map(|v| fs::fuzzy(&v.path, t).map(|s| (s, v.path))).collect();
@@ -991,13 +991,13 @@ impl FolderModel {
         self.rows.iter().position(|e| e.name == name).map_or(0, |i| i as i32)
     }
 
-    // Liste courante filtrée (cachés) et triée, sans relire le disque
+    // Current list filtered (hidden) and sorted, without re-reading the disk
     fn filtered(&self) -> Vec<fs::Entry> {
         let (hidden, key, desc) = (self.show_hidden, fs::Key::from(self.sort_key), self.sort_desc);
         let needle = self.filter.to_string();
         if !needle.trim().is_empty() {
-            // Recherche floue sur le chemin relatif, dans tout le sous-arbre (à défaut d'index, le dossier seul);
-            // les résultats affichés de l'assistant restent la seule source dans leur mode. Meilleur score d'abord.
+            // Fuzzy search on the relative path, in the whole subtree (without an index, the folder alone);
+            // the results shown by the assistant stay the only source in their mode. Best score first.
             let source = match (&self.index, self.results.is_empty()) {
                 (Some(i), true) => i,
                 _ => &self.all,
@@ -1009,7 +1009,7 @@ impl FolderModel {
                 .filter_map(|e| fs::fuzzy(&e.name, &needle).map(|s| (s, e)))
                 .collect();
             scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| fs::natural(&a.1.name, &b.1.name)));
-            // Métadonnées lues seulement pour les meilleurs résultats (l'index n'en porte pas)
+            // Metadata read only for the best results (the index does not carry it)
             return scored
                 .into_iter()
                 .take(500)
@@ -1024,7 +1024,7 @@ impl FolderModel {
         rows
     }
 
-    // Sélecteur de fichiers: seuls les dossiers en mode « choisir un dossier », sinon les fichiers du filtre choisi
+    // File chooser: only folders in "choose a folder" mode, otherwise the files of the chosen filter
     fn picked(&self, e: &fs::Entry) -> bool {
         let Some(p) = pick::get() else { return true };
         if p.directory {
@@ -1056,7 +1056,7 @@ impl FolderModel {
         r.now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
     }
 
-    // Remplace la liste (nouveau dossier, tri, cachés): la vue repart de zéro
+    // Replaces the list (new folder, sort, hidden): the view starts again from zero
     fn rebuild(mut self: Pin<&mut Self>) {
         let rows = self.filtered();
         unsafe { self.as_mut().begin_reset_model() };
@@ -1065,7 +1065,7 @@ impl FolderModel {
         unsafe { self.as_mut().end_reset_model() };
     }
 
-    // Même dossier relu: seules les lignes ajoutées, retirées ou modifiées bougent, la vue garde sa position
+    // Same folder re-read: only the rows added, removed or modified move, the view keeps its position
     fn apply(mut self: Pin<&mut Self>) {
         type Key<'a> = (&'a str, u64, i64, bool);
         fn key(e: &fs::Entry) -> Key<'_> {
@@ -1090,7 +1090,7 @@ impl FolderModel {
                     unsafe { self.as_mut().end_remove_rows() };
                 }
             }
-            // Les lignes restantes sont dans l'ordre de new: insérer les manquantes à leur place
+            // The remaining rows are in the order of new: insert the missing ones in their place
             for (i, e) in new.iter().enumerate() {
                 if self.rows.get(i).is_none_or(|o| key(o) != key(e)) {
                     unsafe { self.as_mut().begin_insert_rows(&none, i as i32, i as i32) };
@@ -1104,7 +1104,7 @@ impl FolderModel {
         self.as_mut().queue_thumbs();
     }
 
-    // Génère en arrière-plan les miniatures PDF manquantes du dossier (40 au plus, une série à la fois)
+    // Generates in the background the missing PDF thumbnails of the folder (40 at most, one batch at a time)
     fn queue_thumbs(self: Pin<&mut Self>) {
         let todo: Vec<(String, PathBuf)> = self
             .rows
@@ -1139,8 +1139,8 @@ impl FolderModel {
         });
     }
 
-    // Construit en arrière-plan l'index de tous les niveaux sous le dossier affiché (300 000 éléments au plus); la
-    // recherche s'étend à mesure que les paquets arrivent
+    // Builds in the background the index of all levels under the folder shown (300,000 items at most); the
+    // search extends as the batches arrive
     fn start_index(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().index = None;
         self.as_mut().rust_mut().indexing = false;
@@ -1180,7 +1180,7 @@ impl FolderModel {
         });
     }
 
-    // Abandonne l'index (filtre vidé, autre dossier): le calcul en cours s'arrête
+    // Drops the index (filter cleared, other folder): the computation in progress stops
     fn drop_index(mut self: Pin<&mut Self>) {
         INDEX_GEN.fetch_add(1, Ordering::SeqCst);
         let mut r = self.as_mut().rust_mut();
@@ -1188,9 +1188,9 @@ impl FolderModel {
         r.indexing = false;
     }
 
-    // Relit le dossier affiché sur place; false si on ne peut plus le lire
+    // Re-reads the folder shown in place; false if it can no longer be read
     fn reload_rows(mut self: Pin<&mut Self>) -> bool {
-        // Résultats affichés: on ne relit pas le dossier, on relit chaque résultat et on retire ceux qui ont disparu
+        // Results shown: the folder is not re-read, each result is, and the ones that disappeared are removed
         if !self.results.is_empty() {
             let all: Vec<fs::Entry> = self
                 .all
@@ -1216,14 +1216,14 @@ impl FolderModel {
         }
     }
 
-    // Changement vu par inotify: relecture du dossier sur un fil (un gros dossier ne gèle pas la fenêtre), ou, si le
-    // dossier a disparu, le plus proche dossier qui existe. Une seule relecture à la fois: un changement qui arrive
-    // pendant ce temps en demande une autre dès la fin de la première.
+    // Change seen by inotify: re-reading of the folder on a thread (a big folder does not freeze the window), or, if the
+    // folder disappeared, the closest folder that exists. One re-read at a time: a change that arrives
+    // meanwhile asks for another one as soon as the first ends.
     fn live_reload(mut self: Pin<&mut Self>) {
         if self.dir.is_empty() {
             return;
         }
-        // Résultats affichés (assistant): relecture des seuls résultats, sur place
+        // Results shown (assistant): re-reading of the results only, in place
         if !self.results.is_empty() {
             self.as_mut().reload_rows();
             self.as_mut().reloaded();
@@ -1264,7 +1264,7 @@ impl FolderModel {
         });
     }
 
-    // Charge dir; select: nom à sélectionner. Échec: le dossier affiché ne change pas, l'erreur va dans la barre d'état
+    // Loads dir; select: name to select. Failure: the folder shown does not change, the error goes to the status bar
     fn load(mut self: Pin<&mut Self>, dir: &Path, select: Option<&str>) -> Result<i32, ()> {
         match fs::list(dir) {
             Ok(all) => {
@@ -1305,7 +1305,7 @@ impl FolderModel {
         self.as_mut().changed();
     }
 
-    // Va dans target en gardant l'historique; un fichier ouvre son dossier et le sélectionne
+    // Goes to target keeping the history; a file opens its folder and selects it
     fn navigate(mut self: Pin<&mut Self>, target: PathBuf, select: Option<String>) -> i32 {
         let (dir, select) = if !target.is_dir() && target.parent().is_some() && target.exists() {
             let name = target.file_name().map(|n| n.to_string_lossy().into_owned());
@@ -1340,7 +1340,7 @@ impl FolderModel {
             return;
         }
         let found: Vec<fs::Entry> = paths_of(paths).iter().take(2000).filter_map(|p| fs::entry(Path::new(p))).collect();
-        // Nom = chemin relatif au plus proche dossier commun (deux résultats peuvent porter le même nom)
+        // Name = path relative to the closest common folder (two results can carry the same name)
         let mut common: Vec<&str> = Vec::new();
         for (i, e) in found.iter().enumerate() {
             let parts: Vec<&str> = e.path.split('/').collect();
@@ -1406,7 +1406,7 @@ impl FolderModel {
         let base = if first { home() } else { self.dir.clone() };
         let target = normalize(&path.to_string(), &base);
         let row = self.as_mut().navigate(target, None);
-        // Premier dossier introuvable: le dossier personnel, l'erreur reste affichée
+        // First folder not found: the home folder, the error stays shown
         if row < 0 && first {
             let error = self.error.clone();
             let row = self.as_mut().navigate(PathBuf::from(home()), None);
@@ -1422,13 +1422,13 @@ impl FolderModel {
         if e.is_dir {
             return self.navigate(PathBuf::from(&e.path), None);
         }
-        // Une archive s'extrait ici (fili-archive), avec la demande de mot de passe de Casier si elle est protégée
+        // An archive is extracted here (fili-archive), with Casier's password prompt if it is protected
         if archive_stem(&e.name).is_some() && !self.in_trash {
             self.start_archive(vec![e.path.clone()], None, String::new());
             return -1;
         }
-        // Un fichier vide (0 octet) n'a pas de contenu à reconnaître: xdg-open le prend pour « application/x-zerosize » et
-        // n'ouvre rien. On l'ouvre avec l'application de son type d'après le nom (sans extension connue: du texte).
+        // An empty file (0 bytes) has no content to recognize: xdg-open takes it for "application/x-zerosize" and
+        // opens nothing. It is opened with the application of its type according to the name (no known extension: text).
         if e.size == 0 {
             let mime = icons::mime_type(&e.name).unwrap_or_else(|| "text/plain".into());
             if let Some(app) = apps::for_mime(&mime).into_iter().next() && let Some((program, args)) = apps::command(&app, &e.path).split_first() {
@@ -1440,7 +1440,7 @@ impl FolderModel {
         -1
     }
 
-    // Dossier parent, le dossier quitté sélectionné (Finder)
+    // Parent folder, the folder left selected (Finder)
     pub fn up(self: Pin<&mut Self>) -> i32 {
         let here = PathBuf::from(&self.dir);
         let Some(parent) = here.parent() else { return -1 };
@@ -1448,7 +1448,7 @@ impl FolderModel {
         self.navigate(parent.to_path_buf(), name)
     }
 
-    // Retour et avance: le dossier quitté est sélectionné s'il est dans celui où l'on arrive
+    // Back and forward: the folder left is selected if it is in the one we arrive in
     fn jump(mut self: Pin<&mut Self>, forward: bool) -> i32 {
         let target = {
             let mut r = self.as_mut().rust_mut();
@@ -1472,7 +1472,7 @@ impl FolderModel {
                 row
             }
             Err(()) => {
-                // Dossier disparu: retiré de l'historique
+                // Folder gone: removed from the history
                 self.as_mut().update_history_flags();
                 -1
             }
@@ -1497,7 +1497,7 @@ impl FolderModel {
         self.as_mut().load(&dir, name.as_deref()).unwrap_or(-1)
     }
 
-    // Même colonne: ordre inversé; autre colonne: croissant
+    // Same column: reversed order; other column: ascending
     pub fn sort_by(mut self: Pin<&mut Self>, key: i32, row: i32) -> i32 {
         let name = self.selected_name(row);
         let mut r = self.as_mut().rust_mut();
@@ -1536,12 +1536,12 @@ impl FolderModel {
         self.as_mut().changed();
     }
 
-    // Aperçu rapide (~/.local/bin/quicklook): relancé sur le même fichier, il se referme
+    // Quick look (~/.local/bin/quicklook): started again on the same file, it closes
     pub fn quicklook(&self, path: &QString) {
         spawn(&bin("quicklook"), &path.to_string(), Path::new(&self.dir));
     }
 
-    // Saisie au clavier: première ligne dont le nom commence par prefix (sans casse ni accents)
+    // Keyboard input: first row whose name starts with prefix (ignoring case and accents)
     pub fn find(&self, prefix: &QString) -> i32 {
         let p = prefix.to_string();
         self.rows.iter().position(|e| fs::starts_with(&e.name, &p)).map_or(-1, |i| i as i32)
@@ -1624,7 +1624,7 @@ impl FolderModel {
         r.can_undo = true;
     }
 
-    // Après une opération synchrone: relire le dossier; rend la ligne portant name, sinon la plus proche de near
+    // After a synchronous operation: re-read the folder; returns the row carrying name, otherwise the closest to near
     fn settle(mut self: Pin<&mut Self>, name: Option<&str>, near: i32) -> i32 {
         self.as_mut().reload_rows();
         self.as_mut().changed();
@@ -1635,8 +1635,8 @@ impl FolderModel {
         }
     }
 
-    // Copier et couper posent aussi les fichiers dans le presse-papiers Wayland (text/uri-list): les autres
-    // applications peuvent les coller. Le « couper » n'existe que chez nous, tant que le presse-papiers n'a pas changé.
+    // Copy and cut also put the files in the Wayland clipboard (text/uri-list): other
+    // applications can paste them. "Cut" exists only here, as long as the clipboard has not changed.
     pub fn copy(mut self: Pin<&mut Self>, paths: &QString) {
         let list = paths_of(paths);
         clip_set(&list);
@@ -1670,7 +1670,7 @@ impl FolderModel {
         if self.in_trash {
             return self.fail(i18n::tr("Nothing can be pasted into the Trash").into());
         }
-        // Le presse-papiers système d'abord (copié ici ou dans une autre application), sinon la copie interne
+        // The system clipboard first (copied here or in another application), otherwise the internal copy
         let (items, cut) = match clip_get() {
             Some((items, cut)) => {
                 let ours = items == self.clipboard;
@@ -1689,8 +1689,8 @@ impl FolderModel {
         self.start_job(items, dir, mode);
     }
 
-    // Glisser-déposer: copie si demandé, sinon déplacement sur le même volume et copie sur un autre. Sur la
-    // corbeille: mise à la corbeille. Depuis la corbeille: copie.
+    // Drag and drop: copy if requested, otherwise move on the same volume and copy on another one. On the
+    // trash: move to the trash. From the trash: copy.
     pub fn drop_items(mut self: Pin<&mut Self>, urls: &QString, dest: &QString, copy: bool) {
         let items: Vec<String> =
             paths_of(&QString::from(&urls.to_string().replace('\r', ""))).iter().map(|u| normalize(u, "/").to_string_lossy().into_owned()).collect();
@@ -1707,9 +1707,9 @@ impl FolderModel {
         self.start_job(items, dest.to_string_lossy().into_owned(), mode);
     }
 
-    // Copie ou déplacement en arrière-plan: avancement dans la barre d'état, annulation (Échap) qui retire la copie
-    // en cours; ce qui est déjà fini reste (et Ctrl+Z le défait).
-    // Un nom déjà pris ailleurs que dans le dossier source: on demande (remplacer, garder les deux, ignorer).
+    // Copy or move in the background: progress in the status bar, cancel (Esc) which removes the copy
+    // in progress; what is already finished stays (and Ctrl+Z undoes it).
+    // A name already taken elsewhere than in the source folder: we ask (replace, keep both, skip).
     fn start_job(mut self: Pin<&mut Self>, items: Vec<String>, dest: String, mode: Mode) {
         if items.is_empty() {
             return;
@@ -1795,7 +1795,7 @@ impl FolderModel {
                     }
                     !cancel.load(Ordering::Relaxed)
                 };
-                // Nom déjà pris: ignorer, ou mettre l'ancien à la corbeille (Ctrl+Z le rend), sinon un nom libre
+                // Name already taken: skip, or put the old one in the trash (Ctrl+Z gives it back), otherwise a free name
                 let target = dest.join(src.file_name().unwrap_or_default());
                 let clash = target != src && ops::exists(&target);
                 if clash && policy == Policy::Skip {
@@ -1839,7 +1839,7 @@ impl FolderModel {
                     r.job = QString::default();
                     r.error = QString::from(&error.unwrap_or_default());
                 }
-                // Les remplacés d'abord: Ctrl+Z défait la copie, un second Ctrl+Z rend l'ancien
+                // The replaced ones first: Ctrl+Z undoes the copy, a second Ctrl+Z gives the old one back
                 if !replaced.is_empty() {
                     m.as_mut().push_undo(Undo::Trash(replaced));
                 }
@@ -1857,7 +1857,7 @@ impl FolderModel {
         });
     }
 
-    // La file d'attente avance: la copie ou le déplacement suivant démarre dès que le précédent est fini
+    // The queue advances: the next copy or move starts as soon as the previous one ends
     fn next_job(mut self: Pin<&mut Self>) {
         if self.busy || self.queue.is_empty() {
             return;
@@ -1866,9 +1866,9 @@ impl FolderModel {
         self.run_job(items, dest, mode, policy);
     }
 
-    // Tâches pour la fenêtre des tâches, en JSON: la tâche en cours d'abord, puis la file [{label, progress}]
-    // Nouveaux noms du lot (dans l'ordre d'affichage), avec leur validité: nom valide, pas de doublon dans le lot, pas
-    // d'élément existant hors du lot qui porte déjà ce nom
+    // Tasks for the task window, as JSON: the task in progress first, then the queue [{label, progress}]
+    // New names of the batch (in display order), with their validity: valid name, no duplicate in the batch, no
+    // existing item outside the batch that already carries this name
     fn bulk_plan(&self, paths: &QString, mode: &str, a: &str, b: &str, start: i32) -> Vec<(PathBuf, String, bool)> {
         let mut list = paths_of(paths);
         let order = |p: &String| self.rows.iter().position(|e| &e.path == p).unwrap_or(usize::MAX);
@@ -1938,7 +1938,7 @@ impl FolderModel {
         QString::from(&format!("[{}]", list.join(",")))
     }
 
-    // Annule la tâche i: la première arrête l'opération en cours, les autres sortent de la file
+    // Cancels task i: the first one stops the operation in progress, the others leave the queue
     pub fn cancel_task(mut self: Pin<&mut Self>, index: i32) {
         if self.busy && index == 0 {
             self.cancel.store(true, Ordering::Relaxed);
@@ -2055,7 +2055,7 @@ impl FolderModel {
         }
     }
 
-    // Taille totale (dossiers compris) calculée à part, rendue par le signal infoSize
+    // Total size (folders included) computed separately, returned by the signal infoSize
     pub fn start_info_size(self: Pin<&mut Self>, paths: &QString) {
         let list = paths_of(paths);
         let qt = self.qt_thread();
@@ -2113,7 +2113,7 @@ impl FolderModel {
             l @ ("fast" | "best") => l.to_string(),
             _ => "normal".into(),
         };
-        // Pas de séparateur de chemin dans le nom
+        // No path separator in the name
         let name = name.to_string().replace('/', "-").trim().to_string();
         let opts = ArchiveOpts { name, format, level, skip_hidden };
         // Seuls zip et 7z chiffrent
@@ -2121,8 +2121,8 @@ impl FolderModel {
         self.start_archive(paths_of(paths), Some(opts), password);
     }
 
-    // Compression ou extraction en arrière-plan par fili-archive (-q: pas de transaction ni de notification), annulable;
-    // le résultat se défait (corbeille). Un mot de passe passe par l'entrée standard du programme, jamais en argument.
+    // Compression or extraction in the background by fili-archive (-q: no transaction or notification), cancellable;
+    // the result can be undone (trash). A password goes through the standard input of the program, never as an argument.
     fn start_archive(mut self: Pin<&mut Self>, items: Vec<String>, opts: Option<ArchiveOpts>, password: String) {
         let compress = opts.is_some();
         if items.is_empty() {
@@ -2157,9 +2157,9 @@ impl FolderModel {
                 }
             };
             let (mut created, mut error): (Vec<PathBuf>, Option<String>) = (Vec::new(), None);
-            // Archives à rouvrir avec un mot de passe: (celles qui restent, mauvais mot de passe)
+            // Archives to reopen with a password: (the ones that remain, wrong password)
             let mut ask: Option<(Vec<String>, bool)> = None;
-            // Jobs: (arguments de fili-archive, nom pour les erreurs, archives restantes à partir de celle-ci)
+            // Jobs: (arguments of fili-archive, name for the errors, archives remaining from this one on)
             let mut jobs: Vec<(Vec<String>, String, Vec<String>)> = Vec::new();
             let base_args = |sub: &str| -> Vec<String> {
                 let mut a: Vec<String> = vec![sub.into(), "-q".into()];
@@ -2172,7 +2172,7 @@ impl FolderModel {
                 let name = if o.name.is_empty() || o.name.starts_with('.') { i18n::tr("Archive").to_string() } else { o.name.clone() };
                 let out = ops::unique(&dir, &format!("{name}.{}", o.format), "", false);
                 let mut args = base_args("pack");
-                // Pas de -f: avec -o, fili-archive déduit le format de l'extension (avec -f il ajouterait la sienne: x.zip.zip)
+                // No -f: with -o, fili-archive deduces the format from the extension (with -f it would add its own: x.zip.zip)
                 args.extend(["-l", &o.level].map(String::from));
                 if o.skip_hidden {
                     args.push("--no-hidden".into());
@@ -2213,7 +2213,7 @@ impl FolderModel {
                     if cancel.load(Ordering::Relaxed) {
                         let _ = child.kill();
                         let _ = child.wait();
-                        // le programme tué laisse son fichier ou dossier de travail caché (« .nom.PID.part… »)
+                        // the killed program leaves its hidden work file or folder (".name.PID.part...")
                         let marker = format!(".{}.part", child.id());
                         for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
                             let n = e.file_name().to_string_lossy().into_owned();
@@ -2239,7 +2239,7 @@ impl FolderModel {
                 match ok {
                     Some(true) => created.extend(out.lines().filter(|l| !l.is_empty()).map(PathBuf::from)),
                     Some(false) => {
-                        // « fili-archive: cannot extract “x”: la raison »
+                        // "fili-archive: cannot extract “x”: the reason"
                         let why = err.lines().last().map(|l| l.rsplit(": ").next().unwrap_or("").trim().to_string());
                         let why = why.filter(|w| !w.is_empty()).unwrap_or_else(|| i18n::tr("the tool reported an error").to_string());
                         if !compress && (why.contains("protected by a password") || why == "wrong password") {
@@ -2330,7 +2330,7 @@ impl FolderModel {
         self.as_mut().rust_mut().error = QString::default();
         let result = ops::empty_trash();
         {
-            // Plus rien à défaire dans la corbeille
+            // Nothing left to undo in the trash
             let mut r = self.as_mut().rust_mut();
             r.undo.retain(|u| !matches!(u, Undo::Trash(_)));
             r.can_undo = !r.undo.is_empty();
@@ -2354,7 +2354,7 @@ impl FolderModel {
                     self.as_mut().push_undo(Undo::Rename(PathBuf::from(&path), dst.clone()));
                 }
                 if !self.results.is_empty() {
-                    // Le résultat suit son nouveau nom (le dossier d'origine du chemin ne change pas)
+                    // The result follows its new name (the original folder of the path does not change)
                     let dst = dst.to_string_lossy().into_owned();
                     for e in self.as_mut().rust_mut().all.iter_mut().filter(|e| e.path == path) {
                         e.name = format!("{}{}", e.name.strip_suffix(&base(&path)).unwrap_or(""), name);
@@ -2491,7 +2491,7 @@ impl cxx_qt::Initialize for FolderModel {
         {
             let mut m = self.as_mut();
             let r = m.as_mut().rust_mut().get_mut();
-            // Fichiers cachés: le dernier choix de l'utilisateur (Ctrl+H) passe devant le réglage
+            // Hidden files: the user's last choice (Ctrl+H) takes precedence over the setting
             r.show_hidden = match ui_get(&std::fs::read_to_string(ui_file()).unwrap_or_default(), "hidden").as_str() {
                 "1" => true,
                 "0" => false,
@@ -2524,12 +2524,12 @@ fn ui_file() -> PathBuf {
     PathBuf::from(state).join("filigrane/fili-file-ui")
 }
 
-// Fichier d'état « clé=valeur » (une par ligne): lecture d'une clé
+// State file "key=value" (one per line): reading of a key
 fn ui_get(text: &str, key: &str) -> String {
     text.lines().find_map(|l| l.split_once('=').filter(|(k, _)| *k == key).map(|(_, v)| v.trim().to_string())).unwrap_or_default()
 }
 
-// Le même texte avec la clé posée (ou retirée si la valeur est vide); clés et valeurs sans saut de ligne ni « = » dans la clé
+// The same text with the key set (or removed if the value is empty); keys and values without a line break or "=" in the key
 fn ui_set(text: &str, key: &str, value: &str) -> String {
     let clean = |s: &str| s.replace(['\n', '\r'], " ");
     let (key, value) = (clean(key).replace('=', "-"), clean(value));
@@ -2541,7 +2541,7 @@ fn ui_set(text: &str, key: &str, value: &str) -> String {
     if lines.is_empty() { String::new() } else { lines.join("\n") + "\n" }
 }
 
-// Écrit une clé de l'état d'interface (vide: la retire)
+// Writes a key of the interface state (empty: removes it)
 fn ui_store(key: &str, value: &str) {
     let file = ui_file();
     let text = ui_set(&std::fs::read_to_string(&file).unwrap_or_default(), key, value);
@@ -2562,7 +2562,7 @@ impl qobject::Fili {
     }
 }
 
-// État de fili-theme (« light » ou « dark »), comme FiliTheme.qml du fili-shell
+// State of fili-theme ("light" or "dark"), like FiliTheme.qml of the fili-shell
 fn theme_file() -> PathBuf {
     let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
     PathBuf::from(state).join("filigrane/theme")
@@ -2576,7 +2576,7 @@ fn read_light() -> bool {
     }
 }
 
-// Couleur d'accentuation (nom), « default » par défaut
+// Accent color (name), "default" by default
 fn read_accent() -> String {
     std::fs::read_to_string(theme_file().with_file_name("accent")).map(|t| t.trim().to_string()).unwrap_or_else(|_| "default".into())
 }
@@ -2585,7 +2585,7 @@ impl cxx_qt::Initialize for Fili {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().light = read_light();
         self.as_mut().rust_mut().accent = QString::from(&read_accent());
-        // Commandes de l'assistant (pas dans le sélecteur de fichiers)
+        // Commands of the assistant (not in the file chooser)
         if pick::get().is_none() {
             let cmd = self.qt_thread();
             crate::context::serve(move |id, verb, arg, body| {
@@ -2594,13 +2594,13 @@ impl cxx_qt::Initialize for Fili {
                 });
             });
         }
-        // Montages: /proc/self/mountinfo signale chaque changement par POLLPRI
+        // Mounts: /proc/self/mountinfo signals each change with POLLPRI
         let mounts = self.qt_thread();
         std::thread::spawn(move || {
             use std::{io::{Read, Seek}, os::fd::AsRawFd};
             let Ok(mut file) = std::fs::File::open("/proc/self/mountinfo") else { return };
             let mut pfd = libc::pollfd { fd: file.as_raw_fd(), events: libc::POLLPRI, revents: 0 };
-            // Le changement est acquitté par une lecture complète du même descripteur
+            // The change is acknowledged by a full read of the same descriptor
             let mut table = String::new();
             let mut ack = |file: &mut std::fs::File| {
                 table.clear();
@@ -2612,7 +2612,7 @@ impl cxx_qt::Initialize for Fili {
                 if unsafe { libc::poll(&mut pfd, 1, -1) } < 0 {
                     return;
                 }
-                // Laisser les montages en rafale finir, puis relire la table (le changement est acquitté par la lecture)
+                // Let a burst of mounts finish, then read the table again (the change is acknowledged by the read)
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 ack(&mut file);
                 if mounts.queue(|mut f| f.as_mut().places_changed()).is_err() {
@@ -2620,7 +2620,7 @@ impl cxx_qt::Initialize for Fili {
                 }
             }
         });
-        // Branchement et débranchement d'appareils (téléphone MTP...): udev réécrit sa base /run/udev/data; inotify, sans réveil au repos
+        // Plugging and unplugging of devices (MTP phone...): udev rewrites its /run/udev/data database; inotify, no wake-up at rest
         let devices = self.qt_thread();
         std::thread::spawn(move || unsafe {
             let fd = libc::inotify_init1(libc::IN_CLOEXEC);
@@ -2633,7 +2633,7 @@ impl cxx_qt::Initialize for Fili {
                 return;
             }
             let mut buf = [0u8; 4096];
-            // Seuls comptent les appareils USB (c189:…) et les disques (b…): ni batterie ni clavier ne rafraîchissent la barre latérale
+            // Only USB devices (c189:…) and disks (b…) count: neither a battery nor a keyboard refreshes the sidebar
             let relevant = |buf: &[u8], n: usize| {
                 let (mut i, mut any) = (0, false);
                 while i + 16 <= n {
@@ -2650,7 +2650,7 @@ impl cxx_qt::Initialize for Fili {
                     return;
                 }
                 let mut hit = relevant(&buf, n as usize);
-                // Rafale d'événements (un branchement en écrit plusieurs): attendre le calme, puis relire les emplacements
+                // Burst of events (a plug-in writes several): wait for calm, then read the locations again
                 let mut pfd = libc::pollfd { fd, events: libc::POLLIN, revents: 0 };
                 while libc::poll(&mut pfd, 1, 600) > 0 {
                     let n = libc::read(fd, buf.as_mut_ptr().cast(), buf.len());
@@ -2713,7 +2713,7 @@ impl cxx_qt::Initialize for Fili {
 }
 
 impl Fili {
-    // Monte ou démonte en arrière-plan (udisksctl): le QML est prévenu par mounted / volumeError, puis placesChanged
+    // Mounts or unmounts in the background (udisksctl): the QML is told by mounted / volumeError, then placesChanged
     pub fn mount_volume(self: Pin<&mut Self>, dev: &QString) {
         let dev = dev.to_string();
         let qt = self.qt_thread();
@@ -2740,7 +2740,7 @@ impl Fili {
         });
     }
 
-    // `tag` identifie le demandeur (Partager…, À proximité et son tour de scan): la réponse le porte
+    // `tag` identifies the requester (Share…, Nearby and its scan round): the answer carries it
     pub fn share_peers(self: Pin<&mut Self>, proto: &QString, tag: &QString) {
         let (proto, tag) = (proto.to_string(), tag.to_string());
         let qt = self.qt_thread();
@@ -2853,7 +2853,7 @@ impl Fili {
         QString::from(&format!("[{}]", names.join(",")))
     }
 
-    // Le sélecteur s'ouvre sur « tous les fichiers » (-1), jamais sur le filtre demandé par l'application: il cacherait des fichiers
+    // The chooser opens on "all files" (-1), never on the filter requested by the application: it would hide files
     pub fn pick_filter(&self) -> i32 {
         -1
     }
@@ -2980,7 +2980,7 @@ impl Fili {
         QString::from(&format!("[{}]", list.join(",")))
     }
 
-    // Presse-papiers Wayland par wl-copy (qui reste en arrière-plan tant que le texte est la sélection)
+    // Wayland clipboard through wl-copy (which stays in the background as long as the text is the selection)
     pub fn copy_text(&self, text: &QString) {
         let text = text.to_string();
         let child = Command::new("wl-copy").arg("--").arg(text).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
@@ -3017,7 +3017,7 @@ impl Fili {
         let home = home();
         let (places, devices) = (i18n::tr("Favorites"), i18n::tr("Locations"));
         let name = |p: &str| Path::new(p).file_name().map_or(p.to_string(), |n| n.to_string_lossy().into_owned());
-        // (section, nom, chemin, nom d'icône, volume)
+        // (section, name, path, icon name, volume)
         let mut items: Vec<(&str, String, String, &str, String)> = Vec::new();
         let mut seen: Vec<String> = Vec::new();
         for (p, icon) in default_favorites() {
@@ -3025,7 +3025,7 @@ impl Fili {
             items.push((places, label, p.clone(), icon, String::new()));
             seen.push(p);
         }
-        // Favoris ajoutés par l'utilisateur (retirables)
+        // Favorites added by the user (removable)
         let mut removable: Vec<String> = Vec::new();
         for (p, label) in bookmarks() {
             if seen.contains(&p) || !Path::new(&p).is_dir() {
@@ -3037,31 +3037,31 @@ impl Fili {
             removable.push(p.clone());
             seen.push(p);
         }
-        // Dossiers souvent ouverts récemment (hors favoris, dossier personnel et racine), 5 au plus
+        // Folders often opened recently (outside favorites, home folder and root), 5 at most
         let frequent = i18n::tr("Recents");
         for v in visits::ranked().into_iter().filter(|v| v.path != home && v.path != "/" && !seen.contains(&v.path)).take(5) {
             items.push((frequent, name(&v.path), v.path.clone(), "folder", String::new()));
         }
-        // Partage de proximité (vue À proximité de la fenêtre, pas un dossier)
+        // Proximity sharing (the window's Nearby view, not a folder)
         if crate::tools::available("fili-share") {
             items.push((devices, i18n::tr("Nearby").to_string(), "nearby:".into(), "network-wireless", String::new()));
         }
-        // Serveurs et partages connectés (vue de résultats, pas un dossier)
+        // Connected servers and shares (results view, not a folder)
         items.push((devices, i18n::tr("Network").to_string(), "network:".into(), "network-workgroup", String::new()));
         items.push((devices, i18n::tr("Computer").to_string(), "/".into(), "computer", String::new()));
-        // Volumes amovibles: non montés, un clic les monte (path vide, dev renseigné)
+        // Removable volumes: not mounted, a click mounts them (path empty, dev set)
         for v in volumes::list() {
             items.push((devices, v.name, v.mount.unwrap_or_default(), "drive-removable-media", v.dev));
         }
-        // Téléphones et appareils photo MTP branchés: un clic les monte (gvfs)
+        // MTP phones and cameras plugged in: a click mounts them (gvfs)
         for v in volumes::mtp_devices() {
             items.push((devices, v.name, String::new(), "phone", v.dev));
         }
-        // Serveurs déjà utilisés, pas connectés: un clic les reconnecte, ✕ les oublie
+        // Servers already used, not connected: a click reconnects them, ✕ forgets them
         for v in volumes::saved_servers() {
             items.push((devices, v.name, String::new(), "folder-remote", v.dev));
         }
-        // Lecteurs réseau connectés (gvfs, NFS, CIFS, sshfs): éjectables comme les volumes
+        // Connected network drives (gvfs, NFS, CIFS, sshfs): ejectable like volumes
         for v in volumes::network() {
             items.push((devices, v.name, v.mount.unwrap_or_default(), "folder-remote", v.dev));
         }
@@ -3133,7 +3133,7 @@ mod tests {
         assert_eq!(ui_get(&t, "col.size"), "120");
         assert_eq!(ui_get(&t, "preview"), "340");
         assert_eq!(ui_get(&t, "col.kind"), "");
-        // Remplacer ne duplique pas; vide retire; un « = » ou un saut de ligne ne casse pas le format
+        // Replacing does not duplicate; empty removes; an "=" or a line break does not break the format
         let t = ui_set(&t, "col.size", "150");
         assert_eq!(t, "col.size=150\npreview=340\n");
         assert_eq!(ui_set(&t, "col.size", ""), "preview=340\n");
@@ -3161,7 +3161,7 @@ mod tests {
         assert_eq!(names(&format!("{base}/")), vec!["Documents/", "Downloads/", "notes.txt"]);
         assert_eq!(names(&format!("{base}/dow")), vec!["Downloads/"]);
         assert_eq!(names(&format!("{base}/dcs")), vec!["Documents/"]);
-        // Un point: les fichiers cachés entrent, et le nom qui commence par le point passe devant
+        // A dot: hidden files come in, and the name that starts with the dot comes first
         assert_eq!(names(&format!("{base}/."))[0], ".secret");
         assert!(!names(&format!("{base}/n")).contains(&".secret".to_string()));
         assert!(names(&format!("{base}/zzz")).is_empty());

@@ -1,7 +1,7 @@
-// Volumes amovibles (clé USB, carte SD, disque externe): lsblk pour les lister, udisksctl (udisks2, lancé à la demande
-// par D-Bus) pour monter et démonter. Lecteurs réseau: ceux de gvfs (`gio mount`, dossier $XDG_RUNTIME_DIR/gvfs; SMB,
-// SFTP, WebDAV, FTP, NFS...) et les montages système de type réseau (NFS, CIFS, sshfs) lus dans /proc/self/mounts.
-// Sans Qt: testé par cargo test (lsblk, noms des montages réseau, dialogue d'authentification de gio).
+// Removable volumes (USB stick, SD card, external disk): lsblk to list them, udisksctl (udisks2, started on demand
+// by D-Bus) to mount and unmount. Network drives: those of gvfs (`gio mount`, folder $XDG_RUNTIME_DIR/gvfs; SMB,
+// SFTP, WebDAV, FTP, NFS...) and the network-type system mounts (NFS, CIFS, sshfs) read from /proc/self/mounts.
+// Without Qt: tested by cargo test (lsblk, names of network mounts, authentication dialog of gio).
 use crate::i18n::{tr, trf};
 use std::{
     io::{Read, Write},
@@ -11,13 +11,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-// Préfixes de `dev` pour les lignes qui ne sont pas des disques: montage gvfs ou montage système réseau
+// Prefixes of `dev` for the rows that are not disks: gvfs mount or network system mount
 pub const GVFS: &str = "gvfs:";
 pub const NET: &str = "net:";
-// Appareil MTP (téléphone, appareil photo) branché mais pas encore monté: « mtp:/dev/bus/usb/BUS/DEV » (l'adresse à monter,
-// mtp://FABRICANT_MODELE_SERIE/, est demandée à gio au moment du clic)
+// MTP device (phone, camera) plugged in but not mounted yet: "mtp:/dev/bus/usb/BUS/DEV" (the address to mount,
+// mtp://VENDOR_MODEL_SERIAL/, is asked from gio at the time of the click)
 pub const MTP: &str = "mtp:";
-// Serveur déjà utilisé mais pas connecté en ce moment: « srv:smb://nas/docs »; un clic le reconnecte
+// Server already used but not connected at the moment: "srv:smb://nas/docs"; a click reconnects it
 pub const SRV: &str = "srv:";
 
 #[derive(Debug, PartialEq)]
@@ -27,7 +27,7 @@ pub struct Volume {
     pub mount: Option<String>,
 }
 
-// « CLE="valeur" CLE2="..." » (lsblk -P); les caractères spéciaux d'une valeur sont écrits \xNN
+// "KEY="value" KEY2="..."" (lsblk -P); special characters of a value are written \xNN
 fn pairs(line: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut rest = line.trim();
@@ -62,7 +62,7 @@ pub fn parse(text: &str) -> Vec<Volume> {
         let f: std::collections::HashMap<String, String> = pairs(line).into_iter().collect();
         let get = |k: &str| f.get(k).map(String::as_str).unwrap_or("");
         let fstype = get("FSTYPE");
-        // Amovible: USB (HOTPLUG), lecteur de cartes (RM), carte SD du lecteur intégré (mmcblk), jamais le système
+        // Removable: USB (HOTPLUG), card reader (RM), SD card of the built-in reader (mmcblk), never the system
         let mount_here = get("MOUNTPOINT");
         let removable = get("HOTPLUG") == "1" || get("RM") == "1" || get("PATH").starts_with("/dev/mmcblk");
         let system = mount_here == "/" || mount_here.starts_with("/boot") || mount_here.starts_with("/efi") || mount_here == "[SWAP]";
@@ -96,19 +96,19 @@ fn udisks(action: &str, dev: &str) -> Result<String, String> {
     if o.status.success() {
         Ok(String::from_utf8_lossy(&o.stdout).into_owned())
     } else {
-        // « Error mounting /dev/sdb1: GDBus.Error:...: message »
+        // "Error mounting /dev/sdb1: GDBus.Error:...: message"
         let err = String::from_utf8_lossy(&o.stderr);
         Err(err.trim().rsplit(": ").next().unwrap_or("").to_string())
     }
 }
 
-// Monte dev et rend son point de montage
+// Mounts dev and returns its mount point
 pub fn mount(dev: &str) -> Result<String, String> {
     if let Some(uri) = dev.strip_prefix(MTP) {
         return mount_mtp(uri);
     }
     if let Some(uri) = dev.strip_prefix(SRV) {
-        // Sans identifiant: gvfs reprend le mot de passe gardé dans le trousseau, s'il y en a un
+        // Without credentials: gvfs reuses the password kept in the keyring, if there is one
         return connect(uri, "", "");
     }
     let out = udisks("mount", dev)?;
@@ -135,8 +135,8 @@ pub fn unmount(dev: &str) -> Result<(), String> {
     udisks("unmount", dev).map(|_| ())
 }
 
-// Appareils MTP branchés (marqués ID_MTP_DEVICE=1 par la règle udev de libmtp) et pas encore montés. Lus dans la base udev
-// (/run/udev/data/c189:N, N = 128 × (bus − 1) + (appareil − 1)): ni processus ni gvfs lancé tant qu'on ne clique pas.
+// MTP devices plugged in (marked ID_MTP_DEVICE=1 by the udev rule of libmtp) and not mounted yet. Read from the udev database
+// (/run/udev/data/c189:N, N = 128 × (bus − 1) + (device − 1)): no process and no gvfs started until we click.
 pub fn mtp_from_udev(file: &str, text: &str) -> Option<Volume> {
     let minor: u32 = file.strip_prefix("c189:")?.parse().ok()?;
     let get = |k: &str| text.lines().find_map(|l| l.strip_prefix(&format!("E:{k}="))).map(str::to_string);
@@ -148,7 +148,7 @@ pub fn mtp_from_udev(file: &str, text: &str) -> Option<Volume> {
     Some(Volume { dev: format!("{MTP}/dev/bus/usb/{:03}/{:03}", minor / 128 + 1, minor % 128 + 1), name, mount: None })
 }
 
-// Appareils MTP branchés d'après la base udev, avec leur numéro de série
+// MTP devices plugged in according to the udev database, with their serial number
 fn mtp_detected() -> Vec<(Volume, String)> {
     let Ok(dir) = std::fs::read_dir("/run/udev/data") else { return Vec::new() };
     let mut out: Vec<(Volume, String)> = dir
@@ -164,9 +164,9 @@ fn mtp_detected() -> Vec<(Volume, String)> {
     out
 }
 
-// Appareils éjectés par l'utilisateur: absents de la barre latérale jusqu'à ce qu'on les débranche et les rebranche.
-// Une entrée disparaît dès que l'appareil n'est plus branché.
-// Gardés dans $XDG_RUNTIME_DIR (effacé à la déconnexion), donc communs à toutes les fenêtres de Casier.
+// Devices ejected by the user: absent from the sidebar until they are unplugged and plugged in again.
+// An entry disappears as soon as the device is no longer plugged in.
+// Kept in $XDG_RUNTIME_DIR (erased at logout), so shared by all Casier windows.
 fn ejected_file() -> std::path::PathBuf {
     std::path::PathBuf::from(std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".into())).join("fili-file-ejected")
 }
@@ -179,8 +179,8 @@ fn write_ejected(list: &[String]) {
     let _ = std::fs::write(ejected_file(), list.join("\n"));
 }
 
-// L'éjection d'un montage gvfs « mtp:host=FABRICANT_MODELE_SERIE »: cache l'appareil qui porte ce numéro de série
-// (à défaut de le reconnaître, tous ceux qui sont branchés)
+// Ejecting a gvfs mount "mtp:host=VENDOR_MODEL_SERIAL": hides the device that carries this serial number
+// (failing to recognize it, all the ones that are plugged in)
 fn mtp_ejected(mount_path: &str) {
     let Some(host) = mount_path.rsplit('/').next().filter(|n| n.starts_with("mtp:")) else { return };
     let all = mtp_detected();
@@ -205,14 +205,14 @@ pub fn mtp_devices() -> Vec<Volume> {
     if ejected.len() != before {
         write_ejected(&ejected);
     }
-    // Déjà monté (entrée « mtp:host=… » de gvfs): la barre latérale montre celui-là
+    // Already mounted (gvfs "mtp:host=…" entry): the sidebar shows that one
     if std::fs::read_dir(gvfs_dir()).is_ok_and(|d| d.flatten().any(|e| e.file_name().to_string_lossy().starts_with("mtp:"))) {
         return Vec::new();
     }
     all.into_iter().map(|(v, _)| v).filter(|v| !ejected.contains(&v.dev)).collect()
 }
 
-// Adresse à monter d'un appareil: « Volume(0): … unix-device: '/dev/bus/usb/004/011' … activation_root=mtp://X/ » (gio mount -li)
+// Address to mount for a device: "Volume(0): … unix-device: '/dev/bus/usb/004/011' … activation_root=mtp://X/" (gio mount -li)
 pub fn mtp_root(listing: &str, device: &str) -> Option<String> {
     let mut found = false;
     for line in listing.lines() {
@@ -263,12 +263,12 @@ fn gvfs_dir() -> String {
     format!("{}/gvfs", std::env::var("XDG_RUNTIME_DIR").unwrap_or_default())
 }
 
-// Nom lisible d'un dossier gvfs: « smb-share:server=nas,share=docs » -> « docs sur nas », « sftp:host=nas,user=ana » -> « nas (sftp) »
+// Readable name of a gvfs folder: "smb-share:server=nas,share=docs" -> "docs on nas", "sftp:host=nas,user=ana" -> "nas (sftp)"
 pub fn gvfs_name(entry: &str) -> String {
     let (scheme, rest) = entry.split_once(':').unwrap_or((entry, ""));
     let get = |k: &str| rest.split(',').find_map(|kv| kv.strip_prefix(&format!("{k}=")).map(str::to_string));
     let host = get("server").or_else(|| get("host")).unwrap_or_default();
-    // Téléphone: « SAMSUNG_Android_RF8N… » -> « SAMSUNG Android RF8N… »
+    // Phone: "SAMSUNG_Android_RF8N…" -> "SAMSUNG Android RF8N…"
     if scheme == "mtp" && !host.is_empty() {
         return host.replace('_', " ");
     }
@@ -279,7 +279,7 @@ pub fn gvfs_name(entry: &str) -> String {
     }
 }
 
-// Montages gvfs en cours (chemin FUSE) et montages système réseau, pour la barre latérale
+// Gvfs mounts in progress (FUSE path) and network system mounts, for the sidebar
 pub fn network() -> Vec<Volume> {
     let mut out = Vec::new();
     if let Ok(dir) = std::fs::read_dir(gvfs_dir()) {
@@ -296,7 +296,7 @@ pub fn network() -> Vec<Volume> {
     out
 }
 
-// NFS, CIFS et sshfs montés par le système (fstab, mount): « source point type options ... »
+// NFS, CIFS and sshfs mounted by the system (fstab, mount): "source point type options ..."
 pub fn system_network(mounts: &str) -> Vec<Volume> {
     let mut out = Vec::new();
     for line in mounts.lines() {
@@ -312,8 +312,8 @@ pub fn system_network(mounts: &str) -> Vec<Volume> {
     out
 }
 
-// Réponse à une question de `gio mount` (« User [ana]: », « Domain [WORKGROUP]: », « Password: », « Anonymous? (y/n) »);
-// rien si le texte n'est pas une question en attente
+// Answer to a question of `gio mount` ("User [ana]:", "Domain [WORKGROUP]:", "Password:", "Anonymous? (y/n)");
+// nothing if the text is not a pending question
 pub fn answer(prompt: &str, user: &str, password: &str) -> Option<String> {
     let line = prompt.rsplit('\n').next().unwrap_or("");
     if !line.ends_with(": ") && !line.ends_with("(y/n) ") && !line.ends_with("(y/n)? ") {
@@ -331,8 +331,8 @@ pub fn answer(prompt: &str, user: &str, password: &str) -> Option<String> {
     })
 }
 
-// Lance `cmd` (gio mount ...) et répond à ses questions avec l'identifiant et le mot de passe donnés; erreur au bout de 60 s.
-// Rend la sortie d'erreur en cas d'échec.
+// Runs `cmd` (gio mount ...) and answers its questions with the given user and password; error after 60 s.
+// Returns the error output on failure.
 pub fn run_mount(cmd: &mut Command, user: &str, password: &str) -> Result<(), String> {
     let mut child = cmd
         .stdin(Stdio::piped())
@@ -380,16 +380,16 @@ pub fn run_mount(cmd: &mut Command, user: &str, password: &str) -> Result<(), St
         return Ok(());
     }
     let msg = err.join().unwrap_or_default();
-    // « Error mounting location: Location is already mounted » compte comme réussi
+    // "Error mounting location: Location is already mounted" counts as a success
     if msg.contains("already mounted") {
         return Ok(());
     }
     Err(msg.trim().rsplit(": ").next().unwrap_or("").to_string())
 }
 
-// ---- serveurs mémorisés ---------------------------------------------------------------------------------
-// ~/.local/state/filigrane/fili-file-servers: une adresse par ligne, la plus récente en premier, 10 au plus. Jamais de mot de passe
-// (gvfs garde le sien dans le trousseau de session).
+// ---- remembered servers ---------------------------------------------------------------------------------
+// ~/.local/state/filigrane/fili-file-servers: one address per line, the most recent first, 10 at most. Never a password
+// (gvfs keeps its own in the session keyring).
 fn servers_file() -> std::path::PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
     let state = std::env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{home}/.local/state"));
@@ -408,7 +408,7 @@ fn write_servers(list: &[String]) {
     let _ = std::fs::write(f, list.join("\n") + "\n");
 }
 
-// « smb://ana:secret@nas/docs » -> « smb://ana@nas/docs »
+// "smb://ana:secret@nas/docs" -> "smb://ana@nas/docs"
 pub fn without_password(uri: &str) -> String {
     let Some((scheme, rest)) = uri.split_once("://") else { return uri.to_string() };
     let (auth, tail) = rest.split_once('/').map_or((rest, None), |(a, t)| (a, Some(t)));
@@ -437,7 +437,7 @@ pub fn forget_server(uri: &str) {
     write_servers(&list);
 }
 
-// Serveurs mémorisés qui ne sont pas connectés (un montage gvfs parle du même hôte, et du même partage pour SMB)
+// Remembered servers that are not connected (a gvfs mount talks about the same host, and the same share for SMB)
 pub fn saved_servers() -> Vec<Volume> {
     let mounted: Vec<String> = std::fs::read_dir(gvfs_dir())
         .map(|d| d.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect())
@@ -465,8 +465,8 @@ pub fn saved_servers() -> Vec<Volume> {
         .collect()
 }
 
-// Se connecte à un serveur (smb://hôte/partage, sftp://hôte, davs://..., ftp://..., nfs://...) avec gvfs et rend le
-// dossier FUSE du montage. Un identifiant saisi est placé dans l'adresse; sans adresse complète: erreur.
+// Connects to a server (smb://host/share, sftp://host, davs://..., ftp://..., nfs://...) with gvfs and returns the
+// FUSE folder of the mount. A typed user name is put in the address; without a full address: error.
 pub fn connect(uri: &str, user: &str, password: &str) -> Result<String, String> {
     let uri = uri.trim();
     let Some((scheme, rest)) = uri.split_once("://").filter(|(s, r)| !s.is_empty() && !r.is_empty()) else {
@@ -485,7 +485,7 @@ pub fn connect(uri: &str, user: &str, password: &str) -> Result<String, String> 
     };
     run_mount(&mut cmd, user, password)?;
     remember_server(&full);
-    // Le nouveau dossier gvfs; sinon celui qui parle du même hôte (déjà monté)
+    // The new gvfs folder; otherwise the one that talks about the same host (already mounted)
     let now = network();
     let host = rest.split('/').next().unwrap_or("").rsplit('@').next().unwrap_or("").to_string();
     now.iter()
@@ -575,7 +575,7 @@ mod tests {
 
     #[test]
     fn mount_dialogue() {
-        // Faux `gio mount`: pose les questions dans l'ordre, refuse un mauvais mot de passe
+        // Fake `gio mount`: asks the questions in order, refuses a wrong password
         let script = r#"printf 'User [x]: '; read u; printf 'Domain [W]: '; read d; printf 'Password: '; read p
             [ "$u:$p" = "bob:pw" ] || { echo 'gio: Error mounting location: Access denied' >&2; exit 2; }"#;
         let mut ok = Command::new("sh");

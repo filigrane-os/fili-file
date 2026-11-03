@@ -1,5 +1,5 @@
-// Opérations sur les fichiers: copie, déplacement, renommage, nouveau dossier, corbeille freedesktop. Sans Qt: testé
-// par cargo test. Jamais d'écrasement: un nom pris reçoit un suffixe (« nom copie », « nom copie 2 »).
+// File operations: copy, move, rename, new folder, freedesktop trash. Without Qt: tested
+// by cargo test. Never overwrites: a taken name gets a suffix ("name copy", "name copy 2").
 use crate::i18n::tr;
 use std::{
     fs,
@@ -23,7 +23,7 @@ pub fn exists(p: &Path) -> bool {
     fs::symlink_metadata(p).is_ok()
 }
 
-// Premier nom libre dans dir: « stem suffix.ext », « stem suffix 2.ext »... (une extension de dossier n'en est pas une)
+// First free name in dir: "stem suffix.ext", "stem suffix 2.ext"... (an extension of a folder is not one)
 pub fn unique(dir: &Path, name: &str, suffix: &str, is_dir: bool) -> PathBuf {
     let first = dir.join(name);
     if !exists(&first) {
@@ -70,7 +70,7 @@ fn copy_file(src: &Path, dst: &Path, progress: Progress) -> io::Result<()> {
     fs::set_permissions(dst, fs::Permissions::from_mode(from.metadata()?.permissions().mode()))
 }
 
-// Copie récursive de src vers dst (dst n'existe pas). Les liens symboliques sont recopiés tels quels.
+// Recursive copy of src to dst (dst does not exist). Symbolic links are copied as they are.
 pub fn copy_tree(src: &Path, dst: &Path, progress: Progress) -> io::Result<()> {
     let m = fs::symlink_metadata(src)?;
     if m.file_type().is_symlink() {
@@ -85,7 +85,7 @@ pub fn copy_tree(src: &Path, dst: &Path, progress: Progress) -> io::Result<()> {
     } else if m.is_file() {
         copy_file(src, dst, progress)
     } else {
-        // Tubes, sockets, périphériques: ignorés
+        // Pipes, sockets, devices: ignored
         Ok(())
     }
 }
@@ -94,13 +94,13 @@ pub fn remove_tree(p: &Path) -> io::Result<()> {
     if fs::symlink_metadata(p)?.is_dir() { fs::remove_dir_all(p) } else { fs::remove_file(p) }
 }
 
-// Copie sous un nom libre de dir; la copie interrompue ou en échec est retirée
+// Copy under a free name of dir; an interrupted or failed copy is removed
 pub fn copy_into(src: &Path, dir: &Path, progress: Progress) -> io::Result<PathBuf> {
     let name = src.file_name().ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?.to_string_lossy();
     copy_to(src, unique(dir, &name, tr("copy"), src.is_dir()), progress)
 }
 
-// Copie vers dst (chemin précis, déjà libre ou vidé par l'appelant)
+// Copy to dst (exact path, already free or emptied by the caller)
 pub fn copy_to(src: &Path, dst: PathBuf, progress: Progress) -> io::Result<PathBuf> {
     if let Err(e) = copy_tree(src, &dst, progress) {
         let _ = remove_tree(&dst);
@@ -109,13 +109,13 @@ pub fn copy_to(src: &Path, dst: PathBuf, progress: Progress) -> io::Result<PathB
     Ok(dst)
 }
 
-// Déplace src dans dir (nom libre): renommage, ou copie puis suppression d'un autre volume
+// Moves src into dir (free name): rename, or copy then delete from another volume
 pub fn move_into(src: &Path, dir: &Path, progress: Progress) -> io::Result<PathBuf> {
     let name = src.file_name().ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?.to_string_lossy();
     move_to(src, unique(dir, &name, tr("copy"), src.is_dir()), progress)
 }
 
-// Déplace vers dst (chemin précis, déjà libre ou vidé par l'appelant)
+// Moves to dst (exact path, already free or emptied by the caller)
 pub fn move_to(src: &Path, dst: PathBuf, progress: Progress) -> io::Result<PathBuf> {
     match fs::rename(src, &dst) {
         Ok(()) => Ok(dst),
@@ -139,8 +139,8 @@ pub fn valid_name(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\0'])
 }
 
-// Renomme plusieurs éléments d'un coup, même quand les noms s'échangent (a -> b et b -> a): tout passe d'abord par un
-// nom provisoire, puis chacun prend son nom final. En cas d'échec, ce qui a bougé est remis (au mieux) et l'erreur rendue.
+// Renames several items at once, even when the names swap (a -> b and b -> a): everything first goes through a
+// temporary name, then each one takes its final name. On failure, what moved is put back (best effort) and the error returned.
 pub fn rename_many(pairs: &[(PathBuf, PathBuf)]) -> io::Result<()> {
     let mut stage: Vec<(PathBuf, PathBuf, PathBuf)> = Vec::new();
     for (i, (old, new)) in pairs.iter().enumerate() {
@@ -156,7 +156,7 @@ pub fn rename_many(pairs: &[(PathBuf, PathBuf)]) -> io::Result<()> {
     for k in 0..stage.len() {
         let (_, new, tmp) = &stage[k];
         if exists(new) || fs::rename(tmp, new).is_err() {
-            // Remet tout: les finis (new -> old) puis les provisoires (tmp -> old)
+            // Puts everything back: the finished ones (new -> old) then the temporary ones (tmp -> old)
             for (o, n, _) in stage[..k].iter().rev() {
                 let _ = fs::rename(n, o);
             }
@@ -169,10 +169,10 @@ pub fn rename_many(pairs: &[(PathBuf, PathBuf)]) -> io::Result<()> {
     Ok(())
 }
 
-// Nouveau nom d'un élément pour le renommage en lot. L'extension d'un fichier est gardée.
-//  mode "replace": remplace a par b dans le nom (sans l'extension)
-//  mode "number": a = modèle avec {name} (nom d'origine) et {n} (numéro, commence à start, rempli de zéros sur b chiffres)
-//  mode "case": a = "lower", "upper" ou "title" (première lettre de chaque mot)
+// New name of an item for the bulk rename. The extension of a file is kept.
+// mode "replace": replaces a with b in the name (without the extension)
+// mode "number": a = template with {name} (original name) and {n} (number, starts at start, zero-padded to b digits)
+// mode "case": a = "lower", "upper" or "title" (first letter of each word)
 pub fn bulk_name(name: &str, is_dir: bool, mode: &str, a: &str, b: &str, index: usize, start: i64) -> String {
     let (stem, ext) = match name.rfind('.') {
         Some(i) if i > 0 && !is_dir => (&name[..i], &name[i..]),
@@ -214,7 +214,7 @@ pub fn bulk_name(name: &str, is_dir: bool, mode: &str, a: &str, b: &str, index: 
     format!("{new_stem}{ext}")
 }
 
-// Renomme src en new_name dans son dossier; un nom pris est refusé (AlreadyExists)
+// Renames src to new_name in its folder; a taken name is refused (AlreadyExists)
 pub fn rename(src: &Path, new_name: &str) -> io::Result<PathBuf> {
     if !valid_name(new_name) {
         return Err(io::Error::from(io::ErrorKind::InvalidInput));
@@ -236,7 +236,7 @@ pub fn new_folder(dir: &Path) -> io::Result<PathBuf> {
     Ok(p)
 }
 
-// --- Corbeille (spécification freedesktop.org Trash 1.0) ---
+// --- Trash (freedesktop.org Trash 1.0 specification) ---
 
 pub struct Trashed {
     pub trashed: PathBuf,
@@ -250,7 +250,7 @@ fn data_home() -> PathBuf {
     std::env::var("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|_| home().join(".local/share"))
 }
 
-// Corbeille personnelle: dossier de base (files/ et info/)
+// Personal trash: base folder (files/ and info/)
 pub fn home_trash() -> PathBuf {
     data_home().join("Trash")
 }
@@ -264,7 +264,7 @@ pub fn ensure_trash(base: &Path) -> io::Result<()> {
     fs::create_dir_all(base.join("info"))
 }
 
-// Points de montage d'après /proc/self/mountinfo (5e champ; les espaces et caractères spéciaux y sont en octal: \040)
+// Mount points from /proc/self/mountinfo (5th field; spaces and special characters are in octal there: \040)
 fn mount_points(mountinfo: &str) -> Vec<PathBuf> {
     let unescape = |s: &str| {
         let b = s.as_bytes();
@@ -288,8 +288,8 @@ fn mount_points(mountinfo: &str) -> Vec<PathBuf> {
     mountinfo.lines().filter_map(|l| l.split(' ').nth(4)).map(unescape).collect()
 }
 
-// Corbeilles de l'utilisateur sur ces volumes ($volume/.Trash-UID, ou $volume/.Trash/UID quand .Trash existe), sauf celle
-// du volume du dossier personnel (dev): ne rend que celles qui existent
+// Trashes of the user on these volumes ($volume/.Trash-UID, or $volume/.Trash/UID when .Trash exists), except the one
+// of the volume of the home folder (dev): returns only the ones that exist
 fn volume_trashes_in(points: &[PathBuf], uid: u32, home_dev: Option<u64>) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = Vec::new();
     for mp in points {
@@ -305,19 +305,19 @@ fn volume_trashes_in(points: &[PathBuf], uid: u32, home_dev: Option<u64>) -> Vec
     found
 }
 
-// Corbeilles des autres volumes montés (clé USB, disque, /tmp...)
+// Trashes of the other mounted volumes (USB stick, disk, /tmp...)
 pub fn volume_trashes() -> Vec<PathBuf> {
-    // Les tests ne touchent jamais aux corbeilles réelles de la machine (vider la corbeille viderait celle d'une clé)
+    // Tests never touch the real trashes of the machine (emptying the trash would empty the one of a stick)
     if cfg!(test) {
         return Vec::new();
     }
-    // FILI_MOUNTINFO remplace /proc/self/mountinfo (le banc de tests, pour ne jamais vider les vraies corbeilles)
+    // FILI_MOUNTINFO replaces /proc/self/mountinfo (the test bench, to never empty the real trashes)
     let mounts = fs::read_to_string(std::env::var_os("FILI_MOUNTINFO").unwrap_or_else(|| "/proc/self/mountinfo".into())).unwrap_or_default();
     let home_dev = fs::metadata(home_trash()).or_else(|_| fs::metadata(data_home())).map(|m| m.dev()).ok();
     volume_trashes_in(&mount_points(&mounts), unsafe { libc::getuid() }, home_dev)
 }
 
-// La corbeille de l'utilisateur puis celles des autres volumes: ce que la vue Corbeille regroupe
+// The trash of the user then those of the other volumes: what the Trash view gathers
 pub fn all_trashes() -> Vec<PathBuf> {
     let mut v = vec![home_trash()];
     v.extend(volume_trashes());
@@ -328,7 +328,7 @@ pub fn trash_is_empty() -> bool {
     all_trashes().iter().all(|b| fs::read_dir(b.join("files")).is_ok_and(|mut d| d.next().is_none()))
 }
 
-// Racine du volume qui contient p (premier ancêtre dont le parent est sur un autre volume)
+// Root of the volume that contains p (first ancestor whose parent is on another volume)
 fn topdir(p: &Path) -> PathBuf {
     let Ok(dev) = fs::metadata(p).map(|m| m.dev()) else { return PathBuf::from("/") };
     let mut top = p.to_path_buf();
@@ -341,8 +341,8 @@ fn topdir(p: &Path) -> PathBuf {
     top
 }
 
-// Corbeille qui reçoit p: celle de l'utilisateur si p est sur le volume du dossier personnel, sinon .Trash-UID
-// à la racine du volume. Le second rendu est la base des chemins de .trashinfo (None: chemins absolus).
+// Trash that receives p: the user's if p is on the volume of the home folder, otherwise .Trash-UID
+// at the root of the volume. The second return value is the base of the .trashinfo paths (None: absolute paths).
 fn trash_for(p: &Path) -> io::Result<(PathBuf, Option<PathBuf>)> {
     let home_trash = home_trash();
     fs::create_dir_all(&home_trash)?;
@@ -401,14 +401,14 @@ fn now_iso() -> String {
     )
 }
 
-// Met p à la corbeille (renommage: instantané, annulable)
+// Puts p in the trash (rename: instant, undoable)
 pub fn trash(p: &Path) -> io::Result<Trashed> {
     let p = if p.is_absolute() { p.to_path_buf() } else { std::env::current_dir()?.join(p) };
     fs::symlink_metadata(&p)?;
     let (base, top) = trash_for(&p)?;
     ensure_trash(&base)?;
     let name = p.file_name().ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?.to_string_lossy();
-    // Réserver le nom par son .trashinfo (création exclusive), comme le demande la spécification
+    // Reserve the name through its .trashinfo (exclusive creation), as the specification requires
     let mut n = 0;
     let (trashed, info) = loop {
         let candidate = if n == 0 { name.to_string() } else { format!("{name}.{n}") };
@@ -442,7 +442,7 @@ fn info_of(trashed: &Path) -> Option<PathBuf> {
     Some(files.parent()?.join("info").join(format!("{name}.trashinfo")))
 }
 
-// Emplacement d'origine d'un élément de la corbeille, d'après son .trashinfo
+// Original location of an item of the trash, from its .trashinfo
 pub fn original_of(trashed: &Path) -> Option<PathBuf> {
     let text = fs::read_to_string(info_of(trashed)?).ok()?;
     let value = text.lines().find_map(|l| l.strip_prefix("Path="))?;
@@ -450,12 +450,12 @@ pub fn original_of(trashed: &Path) -> Option<PathBuf> {
     if path.is_absolute() {
         return Some(path);
     }
-    // Chemin relatif à la racine du volume (corbeille .Trash-UID)
+    // Path relative to the root of the volume (.Trash-UID trash)
     let base = trashed.parent()?.parent()?.parent()?;
     Some(base.join(path))
 }
 
-// Remet un élément à sa place (sous un nom libre si elle est prise); le dossier d'origine est recréé si besoin
+// Puts an item back in its place (under a free name if it is taken); the original folder is recreated if needed
 pub fn restore(trashed: &Path) -> io::Result<PathBuf> {
     let original = original_of(trashed).ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
     let dir = original.parent().unwrap_or(Path::new("/"));
@@ -489,13 +489,13 @@ mod tests {
     fn mount_points_and_volume_trashes() {
         let info = "22 1 8:2 / / rw - ext4 /dev/sda2 rw\n40 22 0:30 / /run/media/u/MA\\040CLE rw - vfat /dev/sdb1 rw\n41 22 0:31 / /tmp rw - tmpfs tmpfs rw\n";
         assert_eq!(mount_points(info), vec![PathBuf::from("/"), PathBuf::from("/run/media/u/MA CLE"), PathBuf::from("/tmp")]);
-        // Un volume avec sa corbeille .Trash-UID est trouvé (ici un dossier de test); celui sans corbeille, non
+        // A volume with its .Trash-UID trash is found (here a test folder); the one without a trash is not
         let vol = tmp("voltrash");
         let other = tmp("voltrash-empty");
         fs::create_dir_all(vol.join(".Trash-1234/files")).unwrap();
         assert_eq!(volume_trashes_in(&[vol.clone(), other.clone()], 1234, None), vec![vol.join(".Trash-1234")]);
         assert_eq!(volume_trashes_in(&[vol.clone()], 99, None), Vec::<PathBuf>::new());
-        // Le volume du dossier personnel est exclu (sa corbeille est celle de l'utilisateur)
+        // The volume of the home folder is excluded (its trash is the user's)
         let dev = fs::metadata(&vol).unwrap().dev();
         assert_eq!(volume_trashes_in(&[vol.clone()], 1234, Some(dev)), Vec::<PathBuf>::new());
     }
@@ -521,7 +521,7 @@ mod tests {
         assert_eq!(unique(&d, "a.txt", "copy", false), d.join("a copy.txt"));
         fs::write(d.join("a copy.txt"), "x").unwrap();
         assert_eq!(unique(&d, "a.txt", "copy", false), d.join("a copy 2.txt"));
-        // Un dossier à point dans le nom: pas d'extension
+        // A folder with a dot in the name: no extension
         assert_eq!(unique(&d, "v1.2", "copy", true), d.join("v1.2 copy"));
         fs::remove_dir_all(&d).unwrap();
     }
@@ -529,13 +529,13 @@ mod tests {
     #[test]
     fn bulk_names() {
         assert_eq!(bulk_name("IMG_001.jpg", false, "replace", "IMG", "Vacances", 0, 1), "Vacances_001.jpg");
-        // L'extension n'est jamais touchée
+        // The extension is never touched
         assert_eq!(bulk_name("a.jpg.jpg", false, "replace", "jpg", "png", 0, 1), "a.png.jpg");
         assert_eq!(bulk_name("photo.jpg", false, "number", "Photo {n}", "3", 4, 8), "Photo 012.jpg");
         assert_eq!(bulk_name("photo.jpg", false, "number", "{name}-{n}", "", 0, 1), "photo-1.jpg");
         assert_eq!(bulk_name("MON FICHIER.TXT", false, "case", "lower", "", 0, 1), "mon fichier.TXT");
         assert_eq!(bulk_name("mon fichier-de_test.txt", false, "case", "title", "", 0, 1), "Mon Fichier-De_Test.txt");
-        // Un dossier à point dans le nom n'a pas d'extension; un fichier caché garde son point de tête
+        // A folder with a dot in the name has no extension; a hidden file keeps its leading dot
         assert_eq!(bulk_name("v1.2", true, "replace", "1", "9", 0, 1), "v9.2");
         assert_eq!(bulk_name(".bashrc", false, "case", "upper", "", 0, 1), ".BASHRC");
     }
@@ -547,7 +547,7 @@ mod tests {
         fs::write(d.join("b"), "B").unwrap();
         rename_many(&[(d.join("a"), d.join("b")), (d.join("b"), d.join("a"))]).unwrap();
         assert_eq!((fs::read_to_string(d.join("a")).unwrap(), fs::read_to_string(d.join("b")).unwrap()), ("B".into(), "A".into()));
-        // Cible déjà prise par un élément hors du lot: rien ne bouge
+        // Target already taken by an item outside the batch: nothing moves
         fs::write(d.join("c"), "C").unwrap();
         assert!(rename_many(&[(d.join("a"), d.join("c"))]).is_err());
         assert_eq!(fs::read_to_string(d.join("a")).unwrap(), "B");
@@ -562,7 +562,7 @@ mod tests {
         fs::create_dir_all(d.join("a")).unwrap();
         fs::create_dir_all(d.join("b")).unwrap();
         fs::write(d.join("a/f.txt"), "new").unwrap();
-        // Le nom a été libéré par l'appelant (l'ancien est parti à la corbeille: voir trash_and_restore)
+        // The name was freed by the caller (the old one went to the trash: see trash_and_restore)
         let target = d.join("b/f.txt");
         let dst = copy_to(&d.join("a/f.txt"), target.clone(), &mut all).unwrap();
         assert_eq!((dst, fs::read_to_string(&target).unwrap()), (target, "new".into()));
@@ -633,11 +633,11 @@ mod tests {
         assert!(!exists(&work.join("é a.txt")));
         let info = fs::read_to_string(data.join("Trash/info/é a.txt.trashinfo")).unwrap();
         assert!(info.starts_with("[Trash Info]\nPath=") && info.contains("%C3%A9%20a.txt") && info.contains("DeletionDate="));
-        // Même nom une seconde fois
+        // Same name a second time
         fs::write(work.join("é a.txt"), "2").unwrap();
         let t2 = trash(&work.join("é a.txt")).unwrap();
         assert_eq!(t2.trashed, data.join("Trash/files/é a.txt.1"));
-        // Retour: le nom est repris, le second prend un suffixe
+        // Return: the name is taken again, the second one gets a suffix
         assert_eq!(restore(&t.trashed).unwrap(), work.join("é a.txt"));
         assert_eq!(restore(&t2.trashed).unwrap(), work.join("é a restored.txt"));
         assert!(trash_is_empty());
