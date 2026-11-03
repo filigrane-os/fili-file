@@ -1019,6 +1019,7 @@ ApplicationWindow {
         width: FiliTheme.sidebarWidth
         current: win.nearby && !win.picking ? "nearby:" : win.networkView ? "network:" : folder.shown
         onOpen: p => win.open(p)
+        onConnectTo: address => connectBox.open(address)
         onDropped: (urls, dest, copy) => folder.dropItems(urls, dest, copy)
         onContext: (path, removable, frequent, x, y) => win.openPathMenu(path, x, y, false, removable, frequent)
     }
@@ -1729,9 +1730,9 @@ ApplicationWindow {
     Rectangle {
         id: connectBox
         property bool busy: false
-        function open() {
+        function open(address) {
             busy = false;
-            serverField.text = "";
+            serverField.text = address || "";
             userField.text = "";
             passField.text = "";
             visible = true;
@@ -1746,7 +1747,7 @@ ApplicationWindow {
         visible: false
         z: 200
         color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
-        onVisibleChanged: if (visible) serverField.field.forceActiveFocus(); else files.focusList()
+        onVisibleChanged: if (visible) (serverField.text !== "" ? userField : serverField).field.forceActiveFocus(); else files.focusList()
         Connections {
             target: Fili
             function onMounted() { connectBox.busy = false; connectBox.visible = false; }

@@ -9,6 +9,8 @@ Rectangle {
     id: side
     property string current
     signal open(string path)
+    // A server found on the network was clicked: Connect to Server opens with its address
+    signal connectTo(string address)
     signal dropped(string urls, string dest, bool copy)
     // Right click on a place: its data and the position in the window
     signal context(string path, bool removable, bool frequent, real x, real y)
@@ -163,7 +165,9 @@ Rectangle {
                     }
                     Fili.keyNav = false;
                     list.currentIndex = row.index;
-                    if (row.path === "")
+                    if (row.dev.startsWith("find:"))
+                        side.connectTo(row.dev.slice(5));
+                    else if (row.path === "")
                         Fili.mountVolume(row.dev);
                     else
                         side.open(row.path);
@@ -174,7 +178,9 @@ Rectangle {
             Fili.keyNav = true;
             if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Space) && currentIndex >= 0) {
                 const p = places.get(currentIndex);
-                if (p.path === "")
+                if (p.dev.startsWith("find:"))
+                    side.connectTo(p.dev.slice(5));
+                else if (p.path === "")
                     Fili.mountVolume(p.dev);
                 else
                     side.open(p.path);

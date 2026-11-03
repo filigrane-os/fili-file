@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+
+- Servers on the local network are discovered: those that announce `_smb._tcp` or `_sftp-ssh._tcp` (multicast DNS: NAS
+  boxes, Macs, Linux machines running Samba or SSH) appear in the sidebar under Locations. A click opens Connect to Server
+  with the address already filled in, so only the user name and the password are left to type. The scan runs when the
+  window opens and every two minutes, without any extra daemon (avahi is not needed). Windows PCs usually do not announce
+  themselves this way: Connect to Server still reaches them.
+
 ## 1.1.0
 
 - Compress and extract no longer need the Filigrane `fili-archive` tool: Casier has its own archive code

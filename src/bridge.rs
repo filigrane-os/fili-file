@@ -496,7 +496,7 @@ pub mod qobject {
     impl cxx_qt::Threading for FolderModel {}
 }
 
-use crate::{apps, fs, i18n, icons, ops, pick, visits, volumes, watch::Watcher};
+use crate::{apps, discover, fs, i18n, icons, ops, pick, visits, volumes, watch::Watcher};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
@@ -2688,6 +2688,17 @@ impl cxx_qt::Initialize for Fili {
                 });
             });
         }
+        // Servers announced on the network (mDNS): a scan at start and every two minutes while the window lives, the
+        // sidebar is told when the list changes. Not in the file chooser, which has no use for them.
+        if pick::get().is_none() {
+            let found = self.qt_thread();
+            std::thread::spawn(move || loop {
+                if discover::refresh() && found.queue(|mut f| f.as_mut().places_changed()).is_err() {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(120));
+            });
+        }
         // Follow the state directory (inotify, thread blocked on read: no wake-up while nothing changes)
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -3072,8 +3083,17 @@ impl Fili {
             items.push((devices, v.name, String::new(), "phone", v.dev));
         }
         // Servers already used, not connected: a click reconnects them, ✕ forgets them
-        for v in volumes::saved_servers() {
-            items.push((devices, v.name, String::new(), "folder-remote", v.dev));
+        let saved = volumes::saved_servers();
+        for v in &saved {
+            items.push((devices, v.name.clone(), String::new(), "folder-remote", v.dev.clone()));
+        }
+        // Servers announced on the network (mDNS) that are not already listed: a click opens Connect to Server with the address
+        let known: Vec<String> = saved.iter().map(|v| v.dev.clone()).chain(volumes::network().into_iter().map(|v| v.dev)).collect();
+        for s in discover::cached() {
+            let host = s.uri.split_once("://").map_or("", |(_, r)| r).trim_end_matches('/');
+            if !known.iter().any(|k| k.contains(host)) {
+                items.push((devices, s.name, String::new(), "network-server", format!("find:{}", s.uri)));
+            }
         }
         // Connected network drives (gvfs, NFS, CIFS, sshfs): ejectable like volumes
         for v in volumes::network() {

@@ -97,7 +97,9 @@ Accents, in dark and light:
 - Copy, cut, paste, drag and drop, bulk rename, undo, trash (including the trash of other volumes)
 - Quick look (Space), preview panel, thumbnails for images and PDF, file info with SHA-256
 - Compress and extract (zip, 7z, tar.gz/xz/zst, with passwords), built in: Casier drives `tar`, `zip` and `7z`
-- Volumes, USB drives, MTP phones and network places (SMB, SFTP) through udisks and gvfs
+- Volumes, USB drives, MTP phones and network places (SMB, SFTP) through udisks and gvfs; the servers announced on
+  the local network (NAS boxes, Macs, Linux machines with Samba or SSH) are listed in the sidebar by themselves, one click
+  opens Connect to Server with their address filled in (multicast DNS, no daemon needed)
 - File chooser portal backend (`org.freedesktop.impl.portal.FileChooser`) so browsers use it for "Open" and "Save as"
 - Controllable from a terminal or an assistant: `fili-file ctl actions`, `fili-file ctl state`, `fili-file ctl action NAME`
 - Any freedesktop icon theme, light and dark mode that follows the desktop, fully themable colors and fonts

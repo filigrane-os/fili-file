@@ -27,7 +27,7 @@ Ctrl+Shift+R (nearby), Ctrl+Shift+Delete (empty the trash), Ctrl+Q.
 - [x] Backspace/Enter opens the folder or the file; Alt+↑ goes up.
 - [x] Typing letters in the list jumps to the first name that starts with them; a pause resets the input; with accented names and capitals.
 - [x] **Space** opens the quick look (floating `quicklook` window) of the selected item: image, PDF, text, spreadsheet, folder, video; Space, Esc or `q` closes it; Space on the same file closes it too. While typing the beginning of a name ("my f…"), the space is a letter and opens nothing. "Quick Look" entry in the menu bar.
-- [ ] Delete moves to the trash; Ctrl+Z undoes. _(fixed after the first checklist run, to be checked again)_
+- [x] Delete moves to the trash; Ctrl+Z undoes. _(fixed after the first checklist run, to be checked again)_
 - [x] Shortcuts do **nothing** while a name, the path or the search is being typed, and behind an open dialog (Compress, password, About, Server, Info).
 - [x] Esc closes dialog, menu, rename, search, path field, in this order, without closing the window.
 - [x] The focus outline is visible and follows the keyboard.
@@ -35,46 +35,46 @@ Ctrl+Shift+R (nearby), Ctrl+Shift+Delete (empty the trash), Ctrl+Q.
 ## 2. Mouse
 
 - [x] Click selects; Ctrl+click adds or removes; Shift+click extends; click on the empty space deselects.
-- [ ] Double click opens a folder, a file (default application through xdg-open), an archive (extract here). _(fixed after the first checklist run, to be checked again)_
-- [ ] **Rubber band**: dragging from the empty space selects the area crossed, in list and icons; Ctrl adds. _(fixed after the first checklist run, to be checked again)_
-- [ ] Right click on an item, on several items, on the empty space, on an item of the trash: suitable entries (Open with…, Rename, Duplicate, Compress/Extract, Copy path, Information…). _(fixed after the first checklist run, to be checked again)_
+- [x] Double click opens a folder, a file (default application through xdg-open), an archive (extract here). _(fixed after the first checklist run, to be checked again)_
+- [x] **Rubber band**: dragging from the empty space selects the area crossed, in list and icons; Ctrl adds. _(fixed after the first checklist run, to be checked again)_
+- [x] Right click on an item, on several items, on the empty space, on an item of the trash: suitable entries (Open with…, Rename, Duplicate, Compress/Extract, Copy path, Information…). _(fixed after the first checklist run, to be checked again)_
 - [x] Right click on the header: choice of columns; a click on a column sorts, a second click reverses; **dragging the left edge of a column header** (↔ cursor) widens or narrows the column (56 to 600 px), the name takes the rest; double click on this edge = default width; the width is kept when reopening.
-- [ ] Wheel and touchpad scrolling: natural inertia, no jump; fast scrolling of the `big` folder (5000 files) is smooth. _(fixed after the first checklist run, to be checked again)_
+- [x] Wheel and touchpad scrolling: natural inertia, no jump; fast scrolling of the `big` folder (5000 files) is smooth. _(fixed after the first checklist run, to be checked again)_
 - [x] Hover: no flicker; correct cursor on the edges and the buttons.
 
 ## 3. Rename
 
-- [ ] F2 renames in place: the name without extension is selected; Enter validates; Esc cancels; a click elsewhere validates. _(fixed after the first checklist run, to be checked again)_
-- [ ] Rename to an existing name: readable error message, nothing is overwritten.
+- [x] F2 renames in place: the name without extension is selected; Enter validates; Esc cancels; a click elsewhere validates. _(fixed after the first checklist run, to be checked again)_ => Tout est bon sauf au click en dehors mais 
+- [x] Rename to an existing name: readable error message, nothing is overwritten.
 - [x] Hard names: `été à la plage.txt`, `emoji 🎉.txt`, `it's.txt`, name of 200+ characters (truncated in the middle, full name in a tooltip or in the info).
 - [x] **Bulk rename** (select several, F2): live preview for Replace, Number, Case; **Apply** renames everything; an invalid or colliding name is reported and blocks; Ctrl+Z undoes the batch in one go.
 
 ## 4. Drag and drop
 
 - [x] Dragging a file onto a folder of the list: moves; with Ctrl: copies; the cursor and the highlight of the target announce it.
-- [ ] Dragging several selected items. _(fixed after the first checklist run, to be checked again)_
-- [ ] Dragging onto a place of the sidebar (Documents, trash). _(fixed after the first checklist run, to be checked again)_
-- [ ] Dragging onto another tab (hovering the tab) and reordering the tabs by dragging them. _(fixed after the first checklist run, to be checked again)_
-- [ ] Dragging from another application (browser: image or downloaded file; terminal) onto Casier.
-- [ ] Dragging from Casier to the browser (file upload area of a site) and to another application.
-- [ ] Esc during the drag cancels; dropping into the original folder does nothing.
-- [ ] Name conflict on drop: `conflict/source/report.txt` dragged into `conflict/target`: the dialog offers Replace / Keep both / Skip / Cancel, **each one clicked with the mouse** and validated with Enter (= Keep both), Esc (= Cancel); the final content matches the choice.
+- [x] Dragging several selected items. _(fixed after the first checklist run, to be checked again)_
+- [x] Dragging onto a place of the sidebar (Documents, trash). _(fixed after the first checklist run, to be checked again)_
+- [x] Dragging onto another tab (hovering the tab) and reordering the tabs by dragging them. _(fixed after the first checklist run, to be checked again)_
+- [x] Dragging from another application (browser: image or downloaded file; terminal) onto Casier.
+- [x] Dragging from Casier to the browser (file upload area of a site) and to another application.
+- [x] Esc during the drag cancels; dropping into the original folder does nothing.
+- [x] Name conflict on drop: `conflict/source/report.txt` dragged into `conflict/target`: the dialog offers Replace / Keep both / Skip / Cancel, **each one clicked with the mouse** and validated with Enter (= Keep both), Esc (= Cancel); the final content matches the choice.
 
 ## 5. Menu of the fili-bar and context menu
 
-- [ ] For each entry of the Casier menu in the fili-bar (File, Edit, View, Go): click = the command is done; the shortcut shown is the one of the keyboard; entries greyed out when the command is impossible (nothing selected, trash). _(fixed after the first checklist run, to be checked again)_
+- [x] For each entry of the Casier menu in the fili-bar (File, Edit, View, Go): click = the command is done; the shortcut shown is the one of the keyboard; entries greyed out when the command is impossible (nothing selected, trash). _(fixed after the first checklist run, to be checked again)_
 - [x] "About Casier": card with icon, "Also known as fili-file", version (must show 1.0.0 after the acceptance run).
 - [x] The menu of the bar and the window stay in agreement after changing tab, opening the trash, showing results.
 
 ## 6. Folder, path and search
 
-- [ ] Ctrl+L: typing a path, `~`, `..`, relative path; fzf-like suggestions appear and Tab/arrows choose them; a word without "/" jumps to an already visited folder. _(fixed after the first checklist run, to be checked again)_
+- [x] Ctrl+L: typing a path, `~`, `..`, relative path; fzf-like suggestions appear and Tab/arrows choose them; a word without "/" jumps to an already visited folder. _(fixed after the first checklist run, to be checked again)_
 - [x] Clickable breadcrumb (each segment); a very long path folds without breaking the bar.
 - [x] Search (Ctrl+F): live filter; Esc clears it; the filter is cleared when changing folder.
 - [x] Empty folder (`empty`): readable empty state. Folder without read permission: clear "permission denied" message, not a silent empty window.
 - [x] `read-only`: New folder, paste, rename, drop give a readable error; nothing is created.
 - [x] `links`: valid link opens on its target; broken link is shown (distinct icon) and does not crash; link to a folder opens; Info shows the target.
-- [ ] Hidden files (Ctrl+H) appear and disappear; the state is kept when reopening. _(fixed after the first checklist run, to be checked again)_
+- [x] Hidden files (Ctrl+H) appear and disappear; the state is kept when reopening. _(fixed after the first checklist run, to be checked again)_
 
 ## 7. Preview, thumbnails, info
 
@@ -97,6 +97,7 @@ Ctrl+Shift+R (nearby), Ctrl+Shift+Delete (empty the trash), Ctrl+Q.
 - [x] **Real USB stick**: plugging in = appears in the sidebar without restarting; a click mounts it (or automatic mount); the content is shown; the eject button unmounts it and the row disappears; an abrupt unplug does not crash.
 - [x] Copy of big files to the stick: progress, cancel, queue of several copies, task list.
 - [x] **MTP phone**: plugged in, appears; mounting asks gio for the address if needed; browsing, copy in both directions; ejected, disappears until it is plugged in again.
+- [ ] **Discovered servers**: the servers of the local network (NAS...) show up under Locations within a few seconds of opening a window; a click opens Connect to Server with the address filled in and the cursor on the user name; connecting works.
 - [ ] **Server** (Ctrl+K): address `smb://…` or `sftp://…`, credentials, readable address error. _(fixed after the first checklist run, to be checked again)_
 - [x] "Nearby" (Ctrl+Shift+R) and Share: list of devices, sending a file, receiving.
 
@@ -110,7 +111,7 @@ Ctrl+Shift+R (nearby), Ctrl+Shift+Delete (empty the trash), Ctrl+Q.
 - [x] Copy in Casier then paste in another manager (or the reverse): the files follow; cut only erases after the paste.
 - [x] Multiple windows: two independent Casier windows; the assistant (Mod+Y) sees the folder and the selection of the active window.
 - [x] Light and dark theme, system font size, high-density screen: no cut text, readable contrasts, sharp icons.
-- [ ] Closing the window during a copy: warns or ends cleanly, without a half-copied file. _(fixed after the first checklist run, to be checked again)_
+- [x] Closing the window during a copy: warns or ends cleanly, without a half-copied file. _(fixed after the first checklist run, to be checked again)_
 
 ## 11. Measurements (to take on the machine, `budget`)
 
