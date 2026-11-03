@@ -176,6 +176,52 @@ mod tests {
         }
     }
 
+    // A function the QML calls on Fili or folder but that is not exposed (#[qinvokable]) is a run-time TypeError that no
+    // other test sees: the button just does nothing
+    #[test]
+    fn every_function_called_by_the_qml_is_exposed() {
+        let bridge = read("src/bridge.rs");
+        let lines: Vec<&str> = bridge.lines().map(str::trim).collect();
+        // name used from QML -> exposed or not, for every `fn` declared in the bridge's extern block
+        let mut exposed: HashMap<String, bool> = HashMap::new();
+        for (i, l) in lines.iter().enumerate() {
+            // Declarations of the extern block end with ";" (the functions of the impl blocks end with "{")
+            let Some(rest) = l.strip_prefix("fn ").filter(|_| l.ends_with(';')) else { continue };
+            let rust = rest.split('(').next().unwrap_or("");
+            let mut attrs = Vec::new();
+            let mut j = i;
+            while j > 0 && lines[j - 1].starts_with("#[") {
+                j -= 1;
+                attrs.push(lines[j]);
+            }
+            let cxx = attrs.iter().find_map(|a| a.strip_prefix("#[cxx_name = \"").and_then(|r| r.strip_suffix("\"]")));
+            let camel = {
+                let mut out = String::new();
+                let mut up = false;
+                for c in rust.chars() {
+                    if c == '_' { up = true } else if up { out.extend(c.to_uppercase()); up = false } else { out.push(c) }
+                }
+                out
+            };
+            let ok = attrs.iter().any(|a| *a == "#[qinvokable]" || a.starts_with("#[qsignal"));
+            exposed.insert(cxx.map(String::from).unwrap_or(camel), ok);
+        }
+        for entry in fs::read_dir(format!("{}/qml", env!("CARGO_MANIFEST_DIR"))).unwrap() {
+            let path = entry.unwrap().path();
+            let text = fs::read_to_string(&path).unwrap();
+            for obj in ["Fili.", "folder."] {
+                for (i, _) in text.match_indices(obj) {
+                    let name: String = text[i + obj.len()..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                    if text[i + obj.len() + name.len()..].starts_with('(') {
+                        if let Some(false) = exposed.get(&name) {
+                            panic!("{}: {obj}{name}() is called but not exposed to QML (missing #[qinvokable])", path.display());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // A singleton that is not registered in build.rs is "not defined" at run time, which no other test would notice
     #[test]
     fn every_qml_singleton_is_registered() {

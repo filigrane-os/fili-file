@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3
+
+- Fixed: Connect to Server (Ctrl+K, and a server clicked in the sidebar) did nothing: the button showed "Connecting…"
+  forever because `connectServer` was never exposed to the interface. It has not worked since it was added. A new test
+  makes the build fail when the QML calls a function that is not exposed.
+
 ## 1.2.2
 
 - Connecting to a server writes a journal, `~/.cache/fili-file/connect.log`: the questions gio asked, which kind of answer

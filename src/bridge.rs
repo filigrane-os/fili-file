@@ -448,6 +448,7 @@ pub mod qobject {
         #[cxx_name = "receiveSet"]
         fn receive_set(self: Pin<&mut Fili>, proto: &QString, on: bool);
         // Network drive (gvfs): address smb://, sftp://, davs://, ftp://, nfs://; answer through mounted / volumeError
+        #[qinvokable]
         #[cxx_name = "connectServer"]
         fn connect_server(self: Pin<&mut Fili>, uri: &QString, user: &QString, password: &QString);
         #[qinvokable]
