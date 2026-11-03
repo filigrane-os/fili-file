@@ -11,6 +11,10 @@ import Fili.Files
 
 ApplicationWindow {
     id: win
+    // Fonts embedded in the binary (fonts/, licenses/): same look on every distribution
+    FontLoader { id: fontText; source: "qrc:/qt/qml/Fili/Files/fonts/Jost-Variable.ttf" }
+    FontLoader { id: fontMono; source: "qrc:/qt/qml/Fili/Files/fonts/JetBrainsMono-Variable.ttf" }
+    FontLoader { id: fontIcons; source: "qrc:/qt/qml/Fili/Files/fonts/FiliIcons.ttf" }
     width: 900
     height: 560
     minimumWidth: 520
