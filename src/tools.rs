@@ -40,6 +40,12 @@ pub fn available(name: &str) -> bool {
     find(name).is_some()
 }
 
+// Whether archives can be made and opened: the optional fili-archive tool, or the programs Casier's own archive code
+// (archive.rs) drives: tar, 7z or zip
+pub fn archive_available() -> bool {
+    available("fili-archive") || available("tar") || available("7z") || available("zip")
+}
+
 // Program to run for a terminal window: $TERMINAL, xdg-terminal-exec, then the first known terminal that is installed
 pub fn terminal() -> Option<PathBuf> {
     let from_env = std::env::var("TERMINAL").ok().filter(|t| !t.is_empty()).and_then(|t| find(&t));

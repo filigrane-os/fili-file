@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+
+- Compress and extract no longer need the Filigrane `fili-archive` tool: Casier has its own archive code
+  (`fili-file archive pack|unpack`) that drives `tar`, `zip` and `7z`. `fili-archive` is still used when it is installed.
+- Light mode: a theme can ship `<name>-light.svg` next to an icon, used instead of it on a light background. The pale file
+  icon of the Filigrane theme was nearly invisible on a light background.
+
 ## 1.0.1
 
 - Fixed: dragging an item onto a folder inside Casier copied it instead of moving it. Ctrl now asks for a copy; a drag from

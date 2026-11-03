@@ -97,6 +97,11 @@ def have(tool):
     return shutil.which(tool, path=os.environ.get("PATH", "")) is not None
 
 
+def have_archive():
+    """Whether archives can be made: fili-archive, or tar/7z/zip for Casier's own archive code."""
+    return any(have(t) for t in ("fili-archive", "tar", "7z", "zip"))
+
+
 class Skip(Exception):
     """The scenario cannot run here (reported as "ok # SKIP" with the reason)."""
 
@@ -544,8 +549,8 @@ def _():
 
 @test("compress (zip, 7z, tar.gz) then extract")
 def _():
-    if not have("fili-archive"):
-        raise Skip("fili-archive is not installed")
+    if not all(have(t) for t in ("tar", "zip", "7z")):
+        raise Skip("tar, zip and 7z are needed (Casier's own archive code drives them when fili-archive is missing)")
     d = make("arc", {"a.txt": "alpha"})
     app.ok("goto", str(d))
     app.ok("select", stdin=f"{d}/a.txt\n")
@@ -570,8 +575,8 @@ def _():
     app.ok("goto", str(d))
     app.ok("select", stdin=f"{d}/a.txt\n")
     for action, name in (("select-matching", "match"), ("compress", "compress"), ("info", "info"), ("about", "about")):
-        if action == "compress" and not have("fili-archive"):
-            continue  # the command is switched off without its program (see the "optional tools" scenario)
+        if action == "compress" and not have_archive():
+            continue  # switched off when nothing can make archives (see the "optional tools" scenario)
         app.ok("action", action)
         app.wait(lambda name=name: app.state()["dialog"] == name, 3, f"dialog {name}")
         app.fails("action", "copy", containing="disabled")
@@ -609,23 +614,24 @@ def _():
         app.wait(lambda name=name: log.exists() and log.read_text().strip().splitlines()[-1] == str(d / name), 4, f"{name} opened by the editor of its type")
 
 
-@test("optional tools missing: compress, extract, share and nearby switch off, the rest keeps working")
+@test("optional tools missing: share and nearby switch off, archives fall back on tar/7z/zip, the rest keeps working")
 def _():
     # The helpers are looked up in PATH and ~/.local/bin (HOME is a test directory): a PATH of the system directories only
     # shows the application without them. Skipped when they are installed system-wide.
-    if any(Path(d, tool).exists() for d in ("/usr/bin", "/bin", "/usr/local/bin") for tool in ("fili-archive", "fili-share")):
-        raise Skip("fili-archive or fili-share installed in a system directory")
+    if any(Path(d, "fili-share").exists() for d in ("/usr/bin", "/bin", "/usr/local/bin")):
+        raise Skip("fili-share installed in a system directory")
     bare = App(env={"PATH": f"{T}/bin:/usr/bin:/bin"}, name="bare")
     try:
         d = make("bare", {"a.txt": "x"})
         bare.ok("goto", str(d))
         bare.ok("select", stdin=f"{d}/a.txt\n")
         acts = {a["name"]: a for a in bare.ok("actions")["actions"]}
-        for n in ("compress", "extract", "share", "nearby"):
+        for n in ("share", "nearby"):
             eq(acts[n]["enabled"], False, f"{n} enabled without its program")
+        if have_archive():
+            eq(acts["compress"]["enabled"], True, "compress works through the built-in archive code")
         for n in ("copy", "rename", "trash", "new-folder"):
             eq(acts[n]["enabled"], True, f"{n} enabled")
-        bare.fails("action", "compress", containing="disabled")
     finally:
         bare.proc.terminate()
         bare.proc.wait(timeout=10)
@@ -639,7 +645,7 @@ def _():
     disabled = lambda: set(json.loads(ctx.read_text())["disabled"])
     # What targets selected items
     needs = {"copy", "cut", "trash", "rename", "duplicate", "open", "quick-look", "copy-path", "copy-name", "select-same-kind"}
-    if have("fili-archive"):
+    if have_archive():
         needs.add("compress")
     app.ok("goto", str(e))
     app.wait(lambda: needs <= disabled(), 4, "selection commands greyed out in an empty folder")

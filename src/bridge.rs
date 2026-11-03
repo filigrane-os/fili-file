@@ -794,6 +794,17 @@ fn share_run(args: &[&str]) -> String {
     }
 }
 
+// The program that compresses and extracts: the optional fili-archive tool when installed, otherwise Casier itself
+// (`fili-file archive ...`, same arguments and output, see archive.rs)
+fn archive_command() -> Command {
+    if crate::tools::available("fili-archive") {
+        return Command::new(bin("fili-archive"));
+    }
+    let mut c = Command::new(std::env::current_exe().unwrap_or_else(|_| "fili-file".into()));
+    c.arg("archive");
+    c
+}
+
 // Program to run: its full path when found (PATH, then ~/.local/bin), else the bare name
 fn bin(name: &str) -> String {
     crate::tools::find(name).map_or_else(|| name.to_string(), |p| p.to_string_lossy().into_owned())
@@ -2192,7 +2203,7 @@ impl FolderModel {
                 }
             }
             for (args, name, remaining) in jobs {
-                let child = Command::new(bin("fili-archive"))
+                let child = archive_command()
                     .args(&args)
                     .current_dir(&dir)
                     .stdin(if password.is_empty() { Stdio::null() } else { Stdio::piped() })
@@ -2825,7 +2836,10 @@ impl Fili {
     }
 
     pub fn has_tool(&self, name: &QString) -> bool {
-        crate::tools::available(&name.to_string())
+        match name.to_string().as_str() {
+            "fili-archive" => crate::tools::archive_available(),
+            other => crate::tools::available(other),
+        }
     }
 
     pub fn pick_title(&self) -> QString {

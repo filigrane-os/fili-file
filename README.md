@@ -96,7 +96,7 @@ Accents, in dark and light:
 - List and icon views, tabs (drag a tab out to detach it), live updates of the folder shown (inotify)
 - Copy, cut, paste, drag and drop, bulk rename, undo, trash (including the trash of other volumes)
 - Quick look (Space), preview panel, thumbnails for images and PDF, file info with SHA-256
-- Compress and extract (zip, 7z, tar.gz/xz/zst, with passwords) when `fili-archive` is installed
+- Compress and extract (zip, 7z, tar.gz/xz/zst, with passwords), built in: Casier drives `tar`, `zip` and `7z`
 - Volumes, USB drives, MTP phones and network places (SMB, SFTP) through udisks and gvfs
 - File chooser portal backend (`org.freedesktop.impl.portal.FileChooser`) so browsers use it for "Open" and "Save as"
 - Controllable from a terminal or an assistant: `fili-file ctl actions`, `fili-file ctl state`, `fili-file ctl action NAME`
@@ -123,7 +123,7 @@ elsewhere. A linker such as `mold` or `lld` makes linking much faster.
 Only the Void names were checked against a package repository; the others are the usual ones and may differ slightly.
 
 Optional programs: `poppler` / `poppler-utils` (`pdftoppm`, PDF thumbnails), `udisks2` (mount and eject), `gvfs`
-(network places, phones), `fili-archive` (compress and extract), `fili-share` (Nearby and Share), `quicklook` (the Space preview window). A feature whose
+(network places, phones), `tar`, `zip` and `7z` (compress and extract; the `fili-archive` tool is used instead when installed), `fili-share` (Nearby and Share), `quicklook` (the Space preview window). A feature whose
 program is missing is switched off; nothing else depends on them.
 
 The fonts (Jost, JetBrains Mono, Fili Icons) are inside the binary: no font to install.

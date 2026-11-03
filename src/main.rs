@@ -2,6 +2,7 @@
 // interface in QML with the tokens of the fili-shell (qml/FiliTheme.qml). Usage: fili-file [folder | file | file://...]
 mod about;
 mod appearance;
+mod archive;
 mod apps;
 mod bridge;
 mod config;
@@ -24,6 +25,10 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 fn main() {
     // Command to an open instance (assistant): fili-file ctl goto|show ...
     let args: Vec<String> = std::env::args().collect();
+    // Compress and extract without the optional fili-archive tool (see archive.rs): fili-file archive pack|unpack ...
+    if args.get(1).is_some_and(|a| a == "archive") {
+        std::process::exit(archive::run_cli(&args[2..]));
+    }
     if args.get(1).is_some_and(|a| a == "ctl") {
         match context::ctl(&args[2..]) {
             Ok(answer) => println!("{answer}"),
