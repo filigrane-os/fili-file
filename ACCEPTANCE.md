@@ -1,19 +1,18 @@
 # Acceptance checklist of Casier (fili-file) before 1.0
 
 What cannot be automated: mouse, real keyboard, devices, other applications. The rest is guarded by
-`tests/fili-file/run.sh` (headless scenarios, see AGENTS.md) and `cargo test`: navigation, selections, tabs,
+`tests/run.sh` (headless scenarios) and `make test`: navigation, selections, tabs,
 copy/cut/paste, name conflicts, rename, trash, archives, dialogs. Do not redo them here.
 
 **Preparation** (once):
 
-1. `cd apps/fili-file && CARGO_TARGET_DIR=$HOME/.cache/filigrane-apps make`, then `./bootstrap.sh --apps`
-   (deploys without sudo).
-2. `tests/fili-file/acceptance-fixture.sh` creates `/tmp/casier-acceptance` (names with spaces, accents, emoji, a very long
+1. `make`, then `sudo make install` (on Filigrane: `./bootstrap.sh --apps` in the filigrane repository, no sudo).
+2. `tests/acceptance-fixture.sh` creates `/tmp/casier-acceptance` (names with spaces, accents, emoji, a very long
    name, 5000 files, broken links, archives including `protected.zip` with the password `secret`, image, PDF, read-only
    folder, two different `report.txt` in `conflict/source` and `conflict/target`). Open Casier on it:
    `fili-file /tmp/casier-acceptance` (or Mod+E then Ctrl+L).
 3. Tick as you go. For each failure: the line, what happened, what was expected (tell the assistant, who fixes it and
-   reruns `tests/fili-file/run.sh`).
+   reruns `tests/run.sh`).
 
 Shortcuts found in `qml/Main.qml`: Ctrl+C/X/V, Ctrl+D (duplicate), F2, Delete (trash), Ctrl+Z, Ctrl+A, Ctrl+Shift+I
 (invert), Ctrl+Shift+M (pattern), Ctrl+F or `/` (search), Ctrl+L (path), Ctrl+H (hidden), Ctrl+1/2 (list/icons),
@@ -129,6 +128,7 @@ The memory is 3 MB over the goal (V0: ≈ 30 MB). Breakdown measured on 2026-11-
 When everything is ticked (or the gaps accepted, noted here):
 
 - [ ] Known gaps accepted: …
-- [ ] `tests/fili-shell/run.sh` green.
+- [ ] `make check` green.
 - [x] `version = "1.0.0"` in `Cargo.toml`, shown in the "About" card.
-- [ ] Removal of Thunar from the Filigrane distribution (packages `thunar`, `thunar-volman`, `thunar-archive-plugin` of `packages/desktop.txt`, `.thunar` blocks of the GTK3 CSS, `accels.scm` block of `bootstrap.sh`, i18n string `Thunar: Space = quick look`, `references/resources.md`), then `budget diff`.
+
+Filigrane distribution only (tracked in the filigrane repository, not here): `tests/fili-shell/run.sh` green, removal of Thunar (packages `thunar`, `thunar-volman`, `thunar-archive-plugin` of `packages/desktop.txt`, `.thunar` blocks of the GTK3 CSS, `accels.scm` block of `bootstrap.sh`, i18n string `Thunar: Space = quick look`, `references/resources.md`), then `budget diff`.

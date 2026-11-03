@@ -1,0 +1,31 @@
+name: CI
+
+# Build in a Void container (the distribution Casier is developed on), unit tests and the headless scenarios of tests/.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .cache/cargo
+          key: cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-
+      - name: make check
+        run: |
+          docker run --rm -v "$PWD":/src -w /src -e CARGO_HOME=/src/.cache/cargo -e CARGO_TARGET_DIR=/src/.cache/target \
+            ghcr.io/void-linux/void-glibc-full:latest sh -exc '
+              xbps-install -Syu xbps || true
+              xbps-install -Syu
+              xbps-install -y bash cargo gcc make pkg-config python3 git qt6-base-devel qt6-declarative-devel qt6-svg-devel \
+                qt6-wayland shared-mime-info glib adwaita-icon-theme util-linux
+              make check'

@@ -16,7 +16,7 @@ TARGET_DIR ?= $(if $(CARGO_TARGET_DIR),$(CARGO_TARGET_DIR),target)
 QMAKE ?= $(firstword $(wildcard /usr/lib/qt6/bin/qmake6 /usr/lib64/qt6/bin/qmake6 /usr/lib/qt6/bin/qmake /usr/lib64/qt6/bin/qmake) $(shell command -v qmake6 qmake-qt6 2>/dev/null))
 export QMAKE
 
-.PHONY: all build test install uninstall
+.PHONY: all build test check install uninstall
 
 all: build
 
@@ -25,6 +25,11 @@ build:
 
 test:
 	$(CARGO) test --release --locked
+
+# Everything automated: unit tests, translation catalog, headless scenarios
+check: build test
+	python3 -I scripts/check-i18n.py
+	tests/run.sh
 
 install: build
 	install -Dm755 $(TARGET_DIR)/release/fili-file $(DESTDIR)$(BINDIR)/fili-file

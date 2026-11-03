@@ -93,10 +93,10 @@ org.freedesktop.impl.portal.FileChooser=filigrane
 
 ```
 make test                      # unit tests
-scripts/check-i18n.py          # the French catalog matches the texts of the code
+make check                     # unit tests, translation catalog, headless scenarios
 ```
 
-The `tests/` directory drives a headless instance (`QT_QPA_PLATFORM=offscreen`) through `fili-file ctl`, in a throwaway
+`tests/run.sh` drives a headless instance (`QT_QPA_PLATFORM=offscreen`) through `fili-file ctl`, in a throwaway
 `HOME`, and checks the result on the file system.
 
 ## License

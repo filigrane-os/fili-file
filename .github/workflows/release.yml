@@ -1,0 +1,29 @@
+name: Release
+
+# A tag vX.Y.Z publishes a GitHub release with the matching CHANGELOG.md section as notes. The tag must match the
+# version of Cargo.toml. Packages are built by the distributions (the Filigrane xbps repository pins a tag).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches Cargo.toml
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"; exit 1; }
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '$0 ~ "^## " v "$" {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "::error::no section for $version in CHANGELOG.md"; exit 1; }
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "Casier $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
