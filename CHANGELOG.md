@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Fixed: dragging an item onto a folder inside Casier copied it instead of moving it. Ctrl now asks for a copy; a drag from
+  another application keeps the action it proposes.
+
 ## 1.0.0
 
 First stable release.

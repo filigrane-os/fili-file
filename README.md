@@ -1,14 +1,75 @@
-# Casier (`fili-file`)
+<p align="center">
+  <img src="data/icons/hicolor/scalable/apps/fili-file.svg" alt="Casier logo" width="128">
+</p>
 
-A fast, keyboard-friendly file manager for Wayland desktops. Written in Rust, with a Qt Quick interface compiled into a
-single binary. Part of [Filigrane](https://github.com/filigrane-os/filigrane), but it does not need it: it runs on any
-Linux distribution with Qt 6 and a Wayland compositor.
+<h1 align="center">Casier</h1>
+
+<p align="center"><em>A fast, keyboard-first file manager for Wayland, small enough to forget it is running.</em></p>
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="Casier showing a Documents folder in dark mode" width="520">
+</p>
 
 The program is `fili-file`; **Casier** is the name you see. Both commands do the same thing:
 
 ```
 casier ~/Documents
 fili-file ~/Documents
+```
+
+Written in Rust, with a Qt Quick interface compiled into a single binary. It belongs to
+[Filigrane](https://github.com/filigrane-os/filigrane), a Void Linux + niri distribution, but it does not need it: it runs on any
+Linux distribution with Qt 6 and a Wayland compositor.
+
+## Why it exists
+
+Filigrane is an operating system that tries to be forgotten: the browser, the AI agents and the containers get the memory
+and the CPU, the system keeps out of the way. A file manager is the application you open all day, so it has to cost little,
+open at once and stay out of the way too. Casier was written to be that, and to do things the usual file managers were not
+built for: be driven by an assistant, send files to a nearby device in two clicks, and follow the look of the desktop
+without a toolkit's theming layers.
+
+## Philosophy
+
+- **Keyboard first.** Everything has a shortcut and nothing needs the mouse. Typing in the list jumps to the name; `/` or
+  `Ctrl+F` opens a fuzzy search over the folder and all its subfolders; `Ctrl+L` takes a path with fzf-style suggestions
+  and jumps to folders you already visited, like zoxide. Shortcuts stay quiet while you type a name. The mouse works the way
+  you expect too: drag and drop, rubber-band selection, tabs you can pull out into windows.
+- **Controlled by an AI assistant, or a script.** Every window answers on a local socket: `fili-file ctl state` says
+  where you are and what is selected, `fili-file ctl actions` lists every command with its shortcut and whether it is
+  available, `fili-file ctl action copy` runs it, `ctl goto`, `ctl select` and `ctl show` move and select. The assistant sees
+  the folder and the selection of the window you are looking at, and acts through the same commands as the menu, never by
+  faking key presses.
+- **Nearby.** Send files to a phone or another computer next to you the way AirDrop does: devices on the local network
+  (LocalSend) and paired Bluetooth devices appear as targets, you drop files on them, and the files you receive land in a
+  list. This part uses the optional `fili-share` program.
+- **Modern, not heavy.** A GPU-rendered Qt Quick interface with inertial scrolling, tabs, live updates (inotify), quick look
+  on Space, a preview panel, thumbnails, bulk rename and a task queue for copies, all in one native binary. No GTK, no
+  Electron, no browser engine.
+- **Themable down to the pixel.** Colors, fonts, sizes and radii are plain TOML, light and dark follow the desktop, and any
+  freedesktop icon theme works. The defaults are one coherent look; you change only the lines you care about.
+
+## Resources
+
+Casier is built to be cheap. Nothing stays resident when the last window is closed; the file chooser service for
+browsers starts on demand and exits after two minutes without a request. Measured on the author's machine
+(`scripts/measure.sh`, 6 seconds after opening, release build 1.0.x, Qt 6.11, niri):
+
+| | Proportional memory (PSS) | Private memory | Resident (RSS) |
+|---|---|---|---|
+| A folder with a few files | 72 MiB | 47 MiB | 156 MiB |
+| A folder with 5000 files | 85 MiB | 59 MiB | 169 MiB |
+
+The binary is 5.4 MiB, fonts included. The window shows in about a quarter of a second. The proportional figure counts the
+Qt libraries shared with other Qt applications only once; the private figure is what Casier alone costs.
+
+These numbers are a measurement of Casier, not a promise about other programs: a Qt Quick application carries its scene
+graph and its GPU driver, so Casier will not be the smallest process you can start. To compare it with the file manager
+you use today, run the same script on both, with the same folder, on your own machine:
+
+```
+scripts/measure.sh casier ~/Documents
+scripts/measure.sh thunar ~/Documents      # or nautilus, dolphin, pcmanfm...
 ```
 
 ## Features
@@ -43,7 +104,7 @@ elsewhere. A linker such as `mold` or `lld` makes linking much faster.
 Only the Void names were checked against a package repository; the others are the usual ones and may differ slightly.
 
 Optional programs: `poppler` / `poppler-utils` (`pdftoppm`, PDF thumbnails), `udisks2` (mount and eject), `gvfs`
-(network places, phones), `fili-archive` (compress and extract), `fili-share` (Nearby and Share). A feature whose
+(network places, phones), `fili-archive` (compress and extract), `fili-share` (Nearby and Share), `quicklook` (the Space preview window). A feature whose
 program is missing is switched off; nothing else depends on them.
 
 The fonts (Jost, JetBrains Mono, Fili Icons) are inside the binary: no font to install.
