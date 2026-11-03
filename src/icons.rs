@@ -227,6 +227,15 @@ pub fn file(e: &Entry) -> String {
 // Folder "folder-blue*" (two flat colors, #5294e2 in front and #4877b1 behind) recolored to the accent: copy in the
 // tint cache, named after the icon and the color. Any other icon is returned as it is.
 pub fn tint(url: &str, accent: &str, light: bool) -> String {
+    // A theme can ship a variant for the light mode next to an icon, "<name>-light.svg" (an icon drawn for a dark
+    // background would be nearly invisible on a light one)
+    if light {
+        if let Some(variant) = url.strip_prefix("file://").and_then(|p| p.strip_suffix(".svg")).filter(|p| !p.ends_with("-light")).map(|p| format!("{p}-light.svg")) {
+            if Path::new(&variant).exists() {
+                return format!("file://{variant}");
+            }
+        }
+    }
     // Symbolic file type icon: gray of the secondary text of the mode
     if let Some(path) = url.strip_prefix("file://").filter(|p| p.ends_with("-symbolic.svg")) {
         return recolored(path, if light { "#4f5e70" } else { "#a9b8c8" });
@@ -270,6 +279,21 @@ mod tests {
     #[test]
     fn recolor_replaces_hex_colors_only() {
         assert_eq!(recolor_svg("<path fill=\"#222222\" style=\"fill:#fff;stroke:none\" d=\"M1 1\"/> #zz", "#ffffff"), "<path fill=\"#ffffff\" style=\"fill:#ffffff;stroke:none\" d=\"M1 1\"/> #zz");
+    }
+
+    #[test]
+    fn light_mode_uses_the_light_variant_of_an_icon_when_the_theme_has_one() {
+        let dir = std::env::temp_dir().join(format!("fili-light-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("file.svg"), "<svg/>").unwrap();
+        fs::write(dir.join("file-light.svg"), "<svg/>").unwrap();
+        fs::write(dir.join("other.svg"), "<svg/>").unwrap();
+        let url = |n: &str| format!("file://{}/{n}", dir.display());
+        assert_eq!(tint(&url("file.svg"), "default", true), url("file-light.svg"));
+        assert_eq!(tint(&url("file.svg"), "default", false), url("file.svg"));
+        assert_eq!(tint(&url("other.svg"), "default", true), url("other.svg"));
+        assert_eq!(tint(&url("file-light.svg"), "default", true), url("file-light.svg"));
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
