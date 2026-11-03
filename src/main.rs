@@ -6,6 +6,7 @@ mod bridge;
 mod config;
 mod context;
 mod fs;
+mod icon_theme;
 #[allow(dead_code)]
 #[path = "../../bar-stats/src/i18n.rs"]
 mod i18n;

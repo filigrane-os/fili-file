@@ -12,12 +12,15 @@ pub struct Config {
     pub sort: i32,               // index de fs::Key
     pub sort_desc: bool,
     pub columns: Option<String>, // "size,modified"
-    pub start: Option<String>,   // dossier d'ouverture sans argument
+    pub start: Option<String>,   // folder opened when started without an argument
+    pub icon_theme: Option<String>, // freedesktop icon theme; default: the desktop's (see icon_theme.rs)
+    pub folder_icon: Option<String>, // icon name for every folder; default: the theme's X-Fili-FolderIcon, else "folder"
+    pub file_icon: Option<String>,   // icon name for every regular file; default: the theme's X-Fili-FileIcon, else by type
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { view: None, show_hidden: false, sort: 0, sort_desc: false, columns: None, start: None }
+        Config { view: None, show_hidden: false, sort: 0, sort_desc: false, columns: None, start: None, icon_theme: None, folder_icon: None, file_icon: None }
     }
 }
 
@@ -54,6 +57,9 @@ pub fn parse(text: &str) -> Config {
             "sort_desc" => c.sort_desc = v == "true",
             "columns" if !v.is_empty() => c.columns = Some(v.replace(' ', "")),
             "start" if !v.is_empty() => c.start = Some(v.into()),
+            "icon_theme" if !v.is_empty() => c.icon_theme = Some(v.into()),
+            "folder_icon" if !v.is_empty() => c.folder_icon = Some(v.into()),
+            "file_icon" if !v.is_empty() => c.file_icon = Some(v.into()),
             _ => {}
         }
     }
@@ -273,8 +279,21 @@ mod tests {
 
     #[test]
     fn parses_settings() {
-        let c = parse("# x\nview = \"grid\"\nshow_hidden = true # oui\nsort = \"date\"\nsort_desc = true\ncolumns = \"size, kind\"\nstart = \"~/Documents\"\nbad\nview2 = 1\n");
-        assert_eq!(c, Config { view: Some("grid".into()), show_hidden: true, sort: 2, sort_desc: true, columns: Some("size,kind".into()), start: Some("~/Documents".into()) });
+        let c = parse("# x\nview = \"grid\"\nshow_hidden = true # yes\nsort = \"date\"\nsort_desc = true\ncolumns = \"size, kind\"\nstart = \"~/Documents\"\nicon_theme = \"Papirus\"\nfolder_icon = \"folder-blue\"\nfile_icon = \"text-x-generic\"\nbad\nview2 = 1\n");
+        assert_eq!(
+            c,
+            Config {
+                view: Some("grid".into()),
+                show_hidden: true,
+                sort: 2,
+                sort_desc: true,
+                columns: Some("size,kind".into()),
+                start: Some("~/Documents".into()),
+                icon_theme: Some("Papirus".into()),
+                folder_icon: Some("folder-blue".into()),
+                file_icon: Some("text-x-generic".into()),
+            }
+        );
         assert_eq!(parse("view = \"x\"\nsort = \"zz\""), Config::default());
     }
 

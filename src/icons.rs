@@ -1,7 +1,7 @@
-// Icônes de Filigrane (thème « Filigrane-Icons » de scripts/icon-theme.sh: dossiers et glyphes de Nordic; le reste vient
-// d'Adwaita, en symboliques recolorés selon le mode): type MIME d'après l'extension (shared-mime-info: globs2,
-// generic-icons), puis nom d'icône freedesktop -> fichier. Tables lues une fois, fichiers trouvés gardés en mémoire.
-use crate::fs::Entry;
+// Icons of files and folders, from whatever freedesktop icon theme is in use (icon_theme.rs): MIME type from the
+// extension (shared-mime-info: globs2, generic-icons), then freedesktop icon name -> file. Tables are read once, the
+// files found are kept in memory.
+use crate::{fs::Entry, icon_theme};
 use std::{
     collections::HashMap,
     fs,
@@ -9,10 +9,10 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-const OWN_THEME: &str = "Filigrane-Icons";
-const THEMES: [&str; 2] = ["Adwaita", "hicolor"];
-const SIZES: [&str; 6] = ["22x22", "32x32", "24x24", "16x16", "48x48", "scalable"];
-const CONTEXTS: [&str; 4] = ["places", "mimetypes", "devices", "apps"];
+// Icons for the lists and the grid: scalable icons fit any size, fixed ones are scaled by Qt
+const ICON_SIZE: u32 = 48;
+// Sidebar glyphs
+const GLYPH_SIZE: u32 = 16;
 
 struct Mime {
     by_ext: HashMap<String, String>,
@@ -22,35 +22,38 @@ struct Mime {
 fn mime() -> &'static Mime {
     static M: OnceLock<Mime> = OnceLock::new();
     M.get_or_init(|| {
-        // globs2: « poids:type:motif », poids décroissants: le premier type d'une extension l'emporte
         let mut by_ext = HashMap::new();
-        for line in fs::read_to_string("/usr/share/mime/globs2").unwrap_or_default().lines() {
-            let mut f = line.splitn(3, ':');
-            let (Some(_), Some(t), Some(glob)) = (f.next(), f.next(), f.next()) else { continue };
-            let Some(ext) = glob.strip_prefix("*.") else { continue };
-            if !ext.contains(['*', '?', '[']) {
-                by_ext.entry(ext.to_lowercase()).or_insert_with(|| t.to_string());
+        let mut generic = HashMap::new();
+        // XDG_DATA_HOME first, then XDG_DATA_DIRS: the first definition wins
+        for dir in icon_theme::data_dirs() {
+            // globs2: "weight:type:pattern", by decreasing weight: the first type of an extension wins
+            for line in fs::read_to_string(dir.join("mime/globs2")).unwrap_or_default().lines() {
+                let mut f = line.splitn(3, ':');
+                let (Some(_), Some(t), Some(glob)) = (f.next(), f.next(), f.next()) else { continue };
+                let Some(ext) = glob.strip_prefix("*.") else { continue };
+                if !ext.contains(['*', '?', '[']) {
+                    by_ext.entry(ext.to_lowercase()).or_insert_with(|| t.to_string());
+                }
+            }
+            for line in fs::read_to_string(dir.join("mime/generic-icons")).unwrap_or_default().lines() {
+                if let Some((a, b)) = line.split_once(':') {
+                    generic.entry(a.to_string()).or_insert_with(|| b.to_string());
+                }
             }
         }
-        let generic = fs::read_to_string("/usr/share/mime/generic-icons")
-            .unwrap_or_default()
-            .lines()
-            .filter_map(|l| l.split_once(':').map(|(a, b)| (a.to_string(), b.to_string())))
-            .collect();
         Mime { by_ext, generic }
     })
 }
 
-// Fichier de l'icône, en URL file:// pour QML; "" si aucune des propositions n'existe
+fn lookup(name: &str, size: u32) -> Option<String> {
+    icon_theme::system().lookup(icon_theme::current(), name, size).map(|p| p.to_string_lossy().into_owned())
+}
+
+// File of the icon as a file:// URL for QML, trying the names in order; "" when none exists
 fn find(names: &[&str]) -> String {
     static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
     let mut cache = cache.lock().unwrap_or_else(|e| e.into_inner());
-    for name in names {
-        if let Some(p) = lookup_user(name) {
-            return format!("file://{p}");
-        }
-    }
     for name in names {
         if let Some(url) = cache.get(*name) {
             if !url.is_empty() {
@@ -58,7 +61,7 @@ fn find(names: &[&str]) -> String {
             }
             continue;
         }
-        let url = lookup(name).map(|p| format!("file://{p}")).unwrap_or_default();
+        let url = lookup(name, ICON_SIZE).map(|p| format!("file://{p}")).unwrap_or_default();
         cache.insert(name.to_string(), url.clone());
         if !url.is_empty() {
             return url;
@@ -67,69 +70,29 @@ fn find(names: &[&str]) -> String {
     String::new()
 }
 
-// Racine du thème Filigrane-Icons (~/.local/share/icons, à défaut /usr/share/icons), rangé par contexte puis taille
-// (<ctx>/<taille>/)
-fn own_root() -> Option<&'static str> {
-    static T: OnceLock<Option<String>> = OnceLock::new();
-    T.get_or_init(|| {
-        let home = std::env::var("HOME").unwrap_or_default();
-        [format!("{home}/.local/share/icons/{OWN_THEME}"), format!("/usr/share/icons/{OWN_THEME}")].into_iter().find(|r| Path::new(r).is_dir())
-    })
-    .as_deref()
+// Icon name set for every folder / every regular file: fili-file.toml first, then the hint of the theme
+// (X-Fili-FolderIcon, X-Fili-FileIcon, see icon_theme.rs)
+fn hint(configured: Option<String>, key: &str) -> Option<String> {
+    configured.or_else(|| icon_theme::system().key(icon_theme::current(), key))
 }
 
-// Icône du thème Filigrane, prioritaire pour toutes les propositions
-fn lookup_user(name: &str) -> Option<String> {
-    let root = own_root()?;
-    for ctx in CONTEXTS {
-        for size in ["scalable", "32", "24", "22", "16"] {
-            for ext in ["svg", "png"] {
-                let p = format!("{root}/{ctx}/{size}/{name}.{ext}");
-                if Path::new(&p).exists() {
-                    return Some(p);
-                }
-            }
-        }
-    }
-    None
+fn folder_name() -> Option<&'static str> {
+    static N: OnceLock<Option<String>> = OnceLock::new();
+    N.get_or_init(|| hint(crate::config::load().folder_icon, "X-Fili-FolderIcon")).as_deref()
 }
 
-// Symbolique « <nom>-symbolic.svg »: thème Filigrane puis Adwaita
-fn lookup_symbolic(name: &str) -> Option<String> {
-    let mut roots: Vec<String> = own_root().map(String::from).into_iter().collect();
-    roots.push("/usr/share/icons/Adwaita/symbolic".into());
-    for root in &roots {
-        let own = root.ends_with(OWN_THEME);
-        for ctx in ["places", "mimetypes", "devices", "status", "actions"] {
-            let p = if own { format!("{root}/{ctx}/symbolic/{name}-symbolic.svg") } else { format!("{root}/{ctx}/{name}-symbolic.svg") };
-            if Path::new(&p).exists() {
-                return Some(p);
-            }
-        }
-    }
-    None
+fn file_name() -> Option<&'static str> {
+    static N: OnceLock<Option<String>> = OnceLock::new();
+    N.get_or_init(|| hint(crate::config::load().file_icon, "X-Fili-FileIcon")).as_deref()
 }
 
-fn lookup(name: &str) -> Option<String> {
-    if let Some(p) = lookup_symbolic(name) {
-        return Some(p);
-    }
-    for theme in THEMES {
-        for size in SIZES {
-            for ctx in CONTEXTS {
-                for ext in ["svg", "png"] {
-                    let p = format!("/usr/share/icons/{theme}/{size}/{ctx}/{name}.{ext}");
-                    if Path::new(&p).exists() {
-                        return Some(p);
-                    }
-                }
-            }
-        }
-    }
-    None
+// Cache of the recolored copies of icons: $XDG_CACHE_HOME/fili-file/tint
+fn tint_dir() -> Option<String> {
+    let cache = std::env::var("XDG_CACHE_HOME").ok().filter(|v| !v.is_empty()).or_else(|| std::env::var("HOME").ok().map(|h| format!("{h}/.cache")))?;
+    Some(format!("{cache}/fili-file/tint"))
 }
 
-// Toutes les couleurs hexadécimales d'un SVG remplacées par `color`
+// All the hexadecimal colors of an SVG replaced by `color`
 fn recolor_svg(svg: &str, color: &str) -> String {
     let mut out = String::with_capacity(svg.len());
     let mut rest = svg;
@@ -148,11 +111,9 @@ fn recolor_svg(svg: &str, color: &str) -> String {
     out
 }
 
-// Copie recolorée d'un SVG dans ~/.cache/fili-file/tint, nommée d'après la couleur et le chemin; l'URL d'origine si la
-// copie échoue
+// Recolored copy of an SVG in the tint cache, named after the color and the path; the original URL if the copy fails
 fn recolored(path: &str, color: &str) -> String {
-    let Ok(home) = std::env::var("HOME") else { return format!("file://{path}") };
-    let dir = format!("{home}/.cache/fili-file/tint");
+    let Some(dir) = tint_dir() else { return format!("file://{path}") };
     let out = format!("{dir}/{}-{}", &color[1..], path.trim_start_matches('/').replace('/', "_"));
     if !Path::new(&out).exists() {
         let Ok(svg) = fs::read_to_string(path) else { return format!("file://{path}") };
@@ -163,31 +124,40 @@ fn recolored(path: &str, color: &str) -> String {
     format!("file://{out}")
 }
 
-// Glyphe de la barre latérale: symbolique du thème (dossier « folder » à défaut), en blanc pour que le QML le teinte
-// à l'accent par colorisation (qui garde la luminance: un glyphe noir resterait noir)
+// Sidebar glyph, in white so that the QML tints it to the accent by colorization (which keeps the luminance: a black
+// glyph would stay black). In order: the theme's filled glyphs (X-Fili-GlyphDir), its "<name>-symbolic" icons
+// ("folder" when the name has none), else the plain icon as it is.
 pub fn symbolic(name: &str) -> String {
     let base = if name == "user-trash-full" { "user-trash" } else { name };
-    // Glyphes pleins de 16 px du thème (places/16), plus lisibles que les symboliques à traits fins
-    let full = own_root().map(|r| format!("{r}/places/16/{name}.svg")).filter(|p| Path::new(p).exists());
-    let found = full
-        .or_else(|| lookup_symbolic(name)).or_else(|| lookup_symbolic(base)).or_else(|| lookup_symbolic("folder"));
-    found.map(|p| recolored(&p, "#ffffff")).unwrap_or_default()
+    let themes = icon_theme::system();
+    let theme = icon_theme::current();
+    let glyph = themes.key(theme, "X-Fili-GlyphDir").and_then(|dir| themes.in_dir(theme, &dir, name)).map(|p| p.to_string_lossy().into_owned());
+    let symbolic = glyph
+        .or_else(|| lookup(&format!("{name}-symbolic"), GLYPH_SIZE))
+        .or_else(|| lookup(&format!("{base}-symbolic"), GLYPH_SIZE))
+        .filter(|p| p.ends_with(".svg"));
+    if let Some(p) = symbolic {
+        return recolored(&p, "#ffffff");
+    }
+    lookup(name, GLYPH_SIZE).or_else(|| lookup(base, GLYPH_SIZE)).or_else(|| lookup("folder", GLYPH_SIZE)).map(|p| format!("file://{p}")).unwrap_or_default()
 }
 
-// Dossier « folder-blue » du thème (couleur d'accentuation, voir tint), le même pour tous: pas d'icône propre aux
-// dossiers Documents, Téléchargements, Images...
+// Folder icon, the same for every folder (no own icon for Documents, Downloads, Pictures...)
 pub fn folder() -> String {
-    find(&["folder-blue", "folder"])
+    match folder_name() {
+        Some(n) => find(&[n, "folder"]),
+        None => find(&["folder"]),
+    }
 }
 
-// Type MIME d'un fichier d'après son extension
+// MIME type of a file from its extension
 pub fn mime_type(name: &str) -> Option<String> {
     let ext = name.rsplit_once('.').filter(|(stem, _)| !stem.is_empty())?.1.to_lowercase();
     mime().by_ext.get(&ext).cloned()
 }
 
-// Type de fichier lisible (« Image PNG »): commentaire de shared-mime-info dans la langue de la session, à défaut le
-// type MIME, à défaut « FICHIER »; « Dossier » pour un dossier
+// Readable file type ("PNG image"): shared-mime-info comment in the session language, else the MIME type, else
+// "FILE"; "Folder" for a folder
 pub fn kind(name: &str, is_dir: bool) -> String {
     use crate::i18n::{tr, trf};
     if is_dir {
@@ -206,7 +176,7 @@ pub fn kind(name: &str, is_dir: bool) -> String {
 }
 
 fn mime_comment(t: &str) -> Option<String> {
-    let text = fs::read_to_string(format!("/usr/share/mime/{t}.xml")).ok()?;
+    let text = icon_theme::data_dirs().iter().find_map(|d| fs::read_to_string(d.join(format!("mime/{t}.xml"))).ok())?;
     let lang = std::env::var("FILI_LANG").or_else(|_| std::env::var("LANG")).unwrap_or_default();
     let lang = lang.get(..2).unwrap_or("en");
     let pick = |open: &str| -> Option<String> {
@@ -219,8 +189,8 @@ fn mime_comment(t: &str) -> Option<String> {
 
 const IMAGES: [&str; 8] = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
 
-// Miniature d'une image: le fichier lui-même, que Qt décode à la taille de l'icône (pas de cache ni de processus);
-// au-delà de 20 Mio l'icône du type
+// Thumbnail of an image: the file itself, which Qt decodes at the size of the icon (no cache, no process); above
+// 20 MiB the icon of its type
 pub fn is_image(e: &Entry) -> bool {
     e.size < 20 << 20 && e.name.rsplit_once('.').is_some_and(|(_, x)| IMAGES.contains(&x.to_lowercase().as_str()))
 }
@@ -242,29 +212,29 @@ pub fn file(e: &Entry) -> String {
     let t = ext.and_then(|x| m.by_ext.get(&x));
     let exact = t.map(|t| t.replace('/', "-"));
     let generic = t.and_then(|t| m.generic.get(t)).map(String::as_str);
-    let mut names: Vec<&str> = Vec::with_capacity(4);
+    let mut names: Vec<&str> = Vec::with_capacity(5);
+    // A theme (or fili-file.toml) may want the same icon for every file: it passes before the icon of the type
+    names.extend(file_name());
     names.extend(exact.as_deref());
     names.extend(generic);
     if e.exec {
         names.push("application-x-executable");
     }
-    // file.svg du thème Filigrane passe avant tout (même icône pour tous les fichiers); sans le thème, le symbolique
-    // Adwaita du type
-    names.extend(["file", "text-x-generic"]);
+    names.push("text-x-generic");
     find(&names)
 }
 
-// Dossier « folder-blue* » (deux aplats, #5294e2 devant et #4877b1 derrière) recoloré à l'accent: copie
-// dans ~/.cache/fili-file/tint, nommée d'après l'icône et la couleur. Toute autre icône est rendue telle quelle.
+// Folder "folder-blue*" (two flat colors, #5294e2 in front and #4877b1 behind) recolored to the accent: copy in the
+// tint cache, named after the icon and the color. Any other icon is returned as it is.
 pub fn tint(url: &str, accent: &str, light: bool) -> String {
-    // Icône de type de fichier symbolique (Adwaita): gris du texte secondaire du mode
+    // Symbolic file type icon: gray of the secondary text of the mode
     if let Some(path) = url.strip_prefix("file://").filter(|p| p.ends_with("-symbolic.svg")) {
         return recolored(path, if light { "#4f5e70" } else { "#a9b8c8" });
     }
     let Some(path) = url.strip_prefix("file://").filter(|p| p.contains("/folder-blue") && p.ends_with(".svg")) else {
         return url.to_string();
     };
-    // Thème qui fournit déjà ses dossiers « folder-accent-<accent>.svg » (scripts/icon-theme.sh): on les prend
+    // A theme that already provides its "folder-accent-<accent>.svg" folders (scripts/icon-theme.sh): use them
     if let Some(dir) = path.strip_suffix("/folder-blue.svg") {
         let kind = match (accent, light) {
             ("default", false) => "dark-default".to_string(),
@@ -276,13 +246,12 @@ pub fn tint(url: &str, accent: &str, light: bool) -> String {
             return format!("file://{own}");
         }
     }
-    // Teintes de [theme.accents] (theme.toml surchargé par la config de l'utilisateur)
+    // Tones of [theme.accents] (theme.toml overridden by the user's config)
     let tone = crate::config::accent_tone(accent);
     let Some(front) = tone.get(if light { 2 } else { 0 }) else { return url.to_string() };
     let rgb: Vec<u32> = (0..3).map(|i| u32::from_str_radix(&front[1 + 2 * i..3 + 2 * i], 16).unwrap_or(0)).collect();
     let back = format!("#{:02x}{:02x}{:02x}", rgb[0] * 85 / 100, rgb[1] * 85 / 100, rgb[2] * 85 / 100);
-    let Ok(home) = std::env::var("HOME") else { return url.to_string() };
-    let dir = format!("{home}/.cache/fili-file/tint");
+    let Some(dir) = tint_dir() else { return url.to_string() };
     let out = format!("{dir}/{}-{}.svg", &front[1..], path.trim_start_matches('/').replace('/', "_").trim_end_matches(".svg"));
     if !Path::new(&out).exists() {
         let Ok(svg) = fs::read_to_string(path) else { return url.to_string() };
