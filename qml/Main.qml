@@ -216,6 +216,8 @@ ApplicationWindow {
     Action { id: aInfo; text: Fili.tr("Get Info"); shortcut: "Ctrl+I"; enabled: win.canAct; onTriggered: win.showInfo() }
     Action { id: aTrash; text: Fili.tr("Move to Trash"); shortcut: "Delete"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: win.trashSelection() }
     Action { id: aTrashAlt; shortcut: "Ctrl+Backspace"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: win.trashSelection() }
+    // Claviers Mac (Cmd = Super/Meta, pas de touche Suppr): Cmd+Retour arrière met à la corbeille
+    Action { id: aTrashCmd; shortcut: "Meta+Backspace"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: win.trashSelection() }
     Action { id: aPutBack; text: Fili.tr("Put Back"); enabled: win.canAct && folder.inTrash && win.selCount > 0; onTriggered: win.putBack() }
     Action { id: aEmpty; text: Fili.tr("Empty Trash"); shortcut: "Ctrl+Shift+Delete"; enabled: !win.typing && folder.inTrash; onTriggered: win.askEmpty() }
     Action { id: aAbout; text: Fili.tr("About Casier"); onTriggered: win.showAbout() }
