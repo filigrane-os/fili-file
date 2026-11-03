@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Casier
+GenericName=Files
+GenericName[fr]=Fichiers
+Comment=Browse and open files
+Comment[fr]=Parcourir et ouvrir les fichiers
+Exec=fili-file %U
+Icon=fili-file
+Keywords=file;files;folder;explorer;finder;manager;browse;
+Keywords[fr]=fichier;fichiers;dossier;explorateur;gestionnaire;parcourir;
+Categories=System;FileManager;
+MimeType=inode/directory;
+Terminal=false
+StartupWMClass=fili-file

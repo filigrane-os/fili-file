@@ -2,6 +2,12 @@
 name = "fili-file"
 version = "1.0.0"
 edition = "2024"
+description = "Casier (fili-file): a fast file manager for Wayland desktops, written in Rust with a Qt Quick interface"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/filigrane-os/fili-file"
+readme = "README.md"
+keywords = ["file-manager", "wayland", "qt"]
+categories = ["gui"]
 
 [dependencies]
 cxx = "1.0.205"
