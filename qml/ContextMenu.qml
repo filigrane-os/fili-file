@@ -97,7 +97,7 @@ Item {
         width: menu.menuWidth
         height: col.height + 2 * FiliTheme.space1
         radius: FiliTheme.radiusControl + 2
-        color: FiliTheme.nuit2
+        color: FiliTheme.surface
         border.width: FiliTheme.borderWidth
         border.color: FiliTheme.border
         // Gouttière des coches (colonnes affichées...)
@@ -126,14 +126,14 @@ Item {
                         visible: !it.modelData.separator
                         anchors.fill: parent
                         radius: FiliTheme.radiusControl
-                        color: it.on && (p.cur === it.index) ? FiliTheme.nuit3 : "transparent"
+                        color: it.on && (p.cur === it.index) ? FiliTheme.surfaceHover : "transparent"
                         Text {
                             anchors { left: parent.left; leftMargin: FiliTheme.space2 + (p.gutter ? 18 : 0); right: hint.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                             text: it.modelData.label || ""
                             elide: Text.ElideRight
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.size
-                            color: it.on ? FiliTheme.brume : FiliTheme.ardoise
+                            color: it.on ? FiliTheme.text : FiliTheme.muted
                         }
                         Text {
                             visible: it.modelData.checked === true
@@ -141,7 +141,7 @@ Item {
                             text: "✓"
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.size
-                            color: it.on ? FiliTheme.voile : FiliTheme.ardoise
+                            color: it.on ? FiliTheme.accentColor : FiliTheme.muted
                         }
                         Text {
                             id: hint
@@ -149,7 +149,7 @@ Item {
                             text: it.modelData.children ? "›" : (it.modelData.hint || "")
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.sizeSmall
-                            color: FiliTheme.ardoise
+                            color: FiliTheme.muted
                         }
                         MouseArea {
                             anchors.fill: parent

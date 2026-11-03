@@ -7,7 +7,7 @@ Rectangle {
     id: pane
     // Chemin de l'élément sélectionné (vide: aucun ou plusieurs)
     property string path: ""
-    color: FiliTheme.nuit
+    color: FiliTheme.background
 
     property string kind: "none"
     property string body: ""
@@ -54,7 +54,7 @@ Rectangle {
             font.family: pane.kind === "text" ? FiliTheme.mono : FiliTheme.font
             font.pixelSize: pane.kind === "text" ? FiliTheme.sizeSmall : FiliTheme.sizeList
             lineHeight: 1.2
-            color: FiliTheme.brume
+            color: FiliTheme.text
         }
     }
     Text {
@@ -63,6 +63,6 @@ Rectangle {
         text: pane.kind === "folder" ? Fili.tr("Empty folder") : pane.path === "" ? Fili.tr("No preview") : Fili.tr("No preview available")
         font.family: FiliTheme.font
         font.pixelSize: FiliTheme.sizeList
-        color: FiliTheme.ardoise
+        color: FiliTheme.muted
     }
 }

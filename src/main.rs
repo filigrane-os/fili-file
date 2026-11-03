@@ -148,6 +148,28 @@ mod tests {
         assert!(common >= 25, "{common} shared tokens");
     }
 
+    // A misspelled token does not fail at run time: the item just stays transparent
+    #[test]
+    fn every_theme_token_used_in_qml_is_defined() {
+        let defined: Vec<String> = read("qml/FiliTheme.qml")
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("readonly property "))
+            .filter_map(|l| Some(l.split(':').next()?.split_whitespace().last()?.to_string()))
+            .chain(["alpha".to_string()])
+            .collect();
+        for entry in fs::read_dir(format!("{}/qml", env!("CARGO_MANIFEST_DIR"))).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().is_some_and(|n| n == "FiliTheme.qml") {
+                continue;
+            }
+            let text = fs::read_to_string(&path).unwrap();
+            for (i, _) in text.match_indices("FiliTheme.") {
+                let name: String = text[i + 10..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                assert!(defined.contains(&name), "{}: FiliTheme.{name} is not defined", path.display());
+            }
+        }
+    }
+
     #[test]
     fn shell_parity_kinetic_scroll() {
         let Some(shell_qml) = shell("KineticScroll.qml") else { return };

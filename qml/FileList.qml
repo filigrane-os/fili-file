@@ -34,7 +34,7 @@ Rectangle {
     // Clic droit (ou touche Menu): position dans cette vue; row = -1 hors des lignes
     signal context(real x, real y)
 
-    color: FiliTheme.nuit
+    color: FiliTheme.background
 
     // Lignes sélectionnées: chemin -> true. anchor: ligne de départ des sélections par plage.
     property var selected: ({})
@@ -91,9 +91,9 @@ Rectangle {
                     width: 200
                     height: 24
                     radius: FiliTheme.radiusControl
-                    color: FiliTheme.nuit3
+                    color: FiliTheme.surfaceHover
                     border.width: FiliTheme.borderWidth
-                    border.color: FiliTheme.voile
+                    border.color: FiliTheme.accentColor
                     Text {
                         anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
                         verticalAlignment: Text.AlignVCenter
@@ -101,7 +101,7 @@ Rectangle {
                         text: parent.modelData
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.sizeList
-                        color: FiliTheme.brume
+                        color: FiliTheme.text
                     }
                 }
             }
@@ -114,7 +114,7 @@ Rectangle {
             width: Math.max(20, countText.implicitWidth + 10)
             height: 20
             radius: 10
-            color: FiliTheme.voileVif
+            color: FiliTheme.accentBright
             Text {
                 id: countText
                 anchors.centerIn: parent
@@ -122,7 +122,7 @@ Rectangle {
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.sizeSmall
                 font.weight: FiliTheme.weightAccent
-                color: FiliTheme.nuitProfond
+                color: FiliTheme.backgroundDeep
             }
         }
     }
@@ -309,7 +309,7 @@ Rectangle {
                     text: col.modelData.label + (col.active ? (view.folder.sortDesc ? "  ↓" : "  ↑") : "")
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeSmall
-                    color: col.active ? FiliTheme.brume : FiliTheme.brume2
+                    color: col.active ? FiliTheme.text : FiliTheme.textSecondary
                 }
                 Rectangle {
                     visible: col.index > 0
@@ -534,10 +534,10 @@ Rectangle {
             topRightRadius: selAbove ? 0 : radius
             bottomLeftRadius: selBelow ? 0 : radius
             bottomRightRadius: selBelow ? 0 : radius
-            color: sel || drop.containsDrag ? FiliTheme.nuit3 : area.containsMouse ? FiliTheme.nuit2 : stripe ? FiliTheme.alpha(FiliTheme.nuit2, 0.55) : "transparent"
+            color: sel || drop.containsDrag ? FiliTheme.surfaceHover : area.containsMouse ? FiliTheme.surface : stripe ? FiliTheme.alpha(FiliTheme.surface, 0.55) : "transparent"
             border.width: drop.containsDrag ? 1 : current && view.active.activeFocus && Fili.keyNav ? 1 : 0
-            border.color: FiliTheme.voile
-            readonly property color ink: sel && view.windowActive ? FiliTheme.voile : row.hidden ? FiliTheme.brume2 : FiliTheme.brume
+            border.color: FiliTheme.accentColor
+            readonly property color ink: sel && view.windowActive ? FiliTheme.accentColor : row.hidden ? FiliTheme.textSecondary : FiliTheme.text
 
             function beginRename() {
                 input.text = row.path.split("/").pop();
@@ -630,9 +630,9 @@ Rectangle {
                 height: row.tile ? 22 : parent.height - 2
                 visible: row.editing
                 radius: FiliTheme.radiusControl
-                color: FiliTheme.nuit2
+                color: FiliTheme.surface
                 border.width: FiliTheme.borderWidth
-                border.color: FiliTheme.voile
+                border.color: FiliTheme.accentColor
                 TextInput {
                     id: input
                     anchors { fill: parent; leftMargin: 4; rightMargin: 4 }
@@ -640,9 +640,9 @@ Rectangle {
                     clip: true
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume
-                    selectionColor: FiliTheme.nuit4
-                    selectedTextColor: FiliTheme.brume
+                    color: FiliTheme.text
+                    selectionColor: FiliTheme.surfaceActive
+                    selectedTextColor: FiliTheme.text
                     function commit() {
                         if (view.renaming < 0 || view.renaming !== row.index)
                             return;
@@ -685,7 +685,7 @@ Rectangle {
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.sizeList
                         font.features: { "tnum": 1 }
-                        color: row.sel && view.windowActive ? FiliTheme.voile : FiliTheme.brume2
+                        color: row.sel && view.windowActive ? FiliTheme.accentColor : FiliTheme.textSecondary
                     }
                 }
             }
@@ -783,6 +783,6 @@ Rectangle {
         text: Fili.tr("Empty folder")
         font.family: FiliTheme.font
         font.pixelSize: FiliTheme.size
-        color: FiliTheme.brume2
+        color: FiliTheme.textSecondary
     }
 }

@@ -26,7 +26,7 @@ Item {
         width: grip.containsMouse || grip.drag.active ? 8 : 6
         height: bar.thumbHeight
         radius: width / 2
-        color: FiliTheme.alpha(FiliTheme.brume, grip.drag.active ? 0.55 : grip.containsMouse ? 0.45 : 0.3)
+        color: FiliTheme.alpha(FiliTheme.text, grip.drag.active ? 0.55 : grip.containsMouse ? 0.45 : 0.3)
         opacity: flick.moving || grip.containsMouse || grip.drag.active || hold.running ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 180 } }
         Behavior on width { NumberAnimation { duration: 100 } }

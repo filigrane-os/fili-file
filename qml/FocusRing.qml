@@ -11,6 +11,6 @@ Rectangle {
     radius: Math.max(0, (target.radius ?? FiliTheme.radiusControl) + gap)
     color: "transparent"
     border.width: FiliTheme.borderWidth
-    border.color: FiliTheme.voile
+    border.color: FiliTheme.accentColor
     visible: shown && Fili.keyNav
 }

@@ -11,7 +11,7 @@ Rectangle {
     width: 28
     height: 24
     radius: FiliTheme.radiusControl
-    color: area.pressed ? FiliTheme.nuit4 : area.containsMouse || b.on ? FiliTheme.nuit3 : "transparent"
+    color: area.pressed ? FiliTheme.surfaceActive : area.containsMouse || b.on ? FiliTheme.surfaceHover : "transparent"
 
     Rectangle {
         anchors.centerIn: parent
@@ -19,13 +19,13 @@ Rectangle {
         height: 12
         radius: 2
         color: "transparent"
-        border { width: 1.5; color: FiliTheme.brume }
+        border { width: 1.5; color: FiliTheme.text }
         Rectangle {
             x: parent.width - width - 1.5
             y: 1.5
             width: 4
             height: parent.height - 3
-            color: b.on ? FiliTheme.brume : FiliTheme.alpha(FiliTheme.brume, 0.45)
+            color: b.on ? FiliTheme.text : FiliTheme.alpha(FiliTheme.text, 0.45)
         }
     }
     MouseArea {

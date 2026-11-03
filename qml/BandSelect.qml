@@ -64,8 +64,8 @@ MouseArea {
         z: 1000
         visible: false
         radius: 2
-        color: FiliTheme.alpha(FiliTheme.voile, 0.15)
+        color: FiliTheme.alpha(FiliTheme.accentColor, 0.15)
         border.width: FiliTheme.borderWidth
-        border.color: FiliTheme.voile
+        border.color: FiliTheme.accentColor
     }
 }

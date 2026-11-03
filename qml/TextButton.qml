@@ -12,9 +12,9 @@ Rectangle {
     width: text.implicitWidth + 2 * FiliTheme.space3
     height: 22
     radius: FiliTheme.radiusControl
-    color: area.pressed ? FiliTheme.nuit4 : area.containsMouse ? FiliTheme.nuit3 : "transparent"
+    color: area.pressed ? FiliTheme.surfaceActive : area.containsMouse ? FiliTheme.surfaceHover : "transparent"
     border.width: primary ? 1 : 0
-    border.color: FiliTheme.voile
+    border.color: FiliTheme.accentColor
 
     Text {
         id: text
@@ -22,7 +22,7 @@ Rectangle {
         text: b.label
         font.family: FiliTheme.font
         font.pixelSize: FiliTheme.sizeList
-        color: b.primary ? FiliTheme.voile : FiliTheme.brume
+        color: b.primary ? FiliTheme.accentColor : FiliTheme.text
     }
     MouseArea {
         id: area

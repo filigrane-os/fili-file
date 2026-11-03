@@ -7,7 +7,7 @@ import Fili.Files
 
 Rectangle {
     id: view
-    color: FiliTheme.nuit
+    color: FiliTheme.background
     // Message passager de la fenêtre
     signal notice(string text)
     // Ouvrir un fichier reçu dans le dossier
@@ -128,7 +128,7 @@ Rectangle {
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.sizeTitle
                 font.weight: FiliTheme.weightAccent
-                color: FiliTheme.brume
+                color: FiliTheme.text
             }
             Text {
                 width: parent.width
@@ -136,7 +136,7 @@ Rectangle {
                 text: Fili.tr("Drop files on a device to send them, or click a device to choose the files. LocalSend finds devices on this network; Bluetooth uses paired devices.")
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.sizeList
-                color: FiliTheme.brume2
+                color: FiliTheme.textSecondary
             }
 
             // Appareils
@@ -156,16 +156,16 @@ Rectangle {
                             width: 64
                             height: 64
                             radius: 32
-                            color: drop.containsDrag || hit.containsMouse ? FiliTheme.nuit4 : FiliTheme.nuit3
+                            color: drop.containsDrag || hit.containsMouse ? FiliTheme.surfaceActive : FiliTheme.surfaceHover
                             border.width: drop.containsDrag ? 2 : 1
-                            border.color: drop.containsDrag ? FiliTheme.voile : FiliTheme.border
+                            border.color: drop.containsDrag ? FiliTheme.accentColor : FiliTheme.border
                             Text {
                                 anchors.centerIn: parent
                                 text: dev.modelData.name.charAt(0).toUpperCase()
                                 font.family: FiliTheme.font
                                 font.pixelSize: FiliTheme.sizeTitle + 6
                                 font.weight: FiliTheme.weightAccent
-                                color: FiliTheme.voile
+                                color: FiliTheme.accentColor
                             }
                         }
                         Text {
@@ -176,14 +176,14 @@ Rectangle {
                             text: dev.modelData.name
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.size
-                            color: FiliTheme.brume
+                            color: FiliTheme.text
                         }
                         Text {
                             anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
                             text: dev.modelData.label
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.sizeSmall
-                            color: FiliTheme.ardoise
+                            color: FiliTheme.muted
                         }
                         DropArea {
                             id: drop
@@ -212,10 +212,10 @@ Rectangle {
                       : Fili.tr("No device found. LocalSend must be open on the other device, or pair it in the Bluetooth panel.")
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.sizeList
-                color: FiliTheme.brume2
+                color: FiliTheme.textSecondary
             }
 
-            Rectangle { width: parent.width; height: 1; color: FiliTheme.nuit4 }
+            Rectangle { width: parent.width; height: 1; color: FiliTheme.surfaceActive }
 
             // Réception: qui peut nous trouver
             Text {
@@ -223,7 +223,7 @@ Rectangle {
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
                 font.weight: FiliTheme.weightAccent
-                color: FiliTheme.brume
+                color: FiliTheme.text
             }
             Text {
                 width: parent.width
@@ -232,7 +232,7 @@ Rectangle {
                                  : Fili.tr("Off: this computer is not visible to other devices.")
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.sizeList
-                color: FiliTheme.brume2
+                color: FiliTheme.textSecondary
             }
             Repeater {
                 model: view.protocols
@@ -241,14 +241,14 @@ Rectangle {
                     width: column.width
                     height: 30
                     radius: FiliTheme.radiusControl
-                    color: FiliTheme.nuit3
+                    color: FiliTheme.surfaceHover
                     opacity: modelData.available ? 1 : 0.5
                     Text {
                         anchors { left: parent.left; leftMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
                         text: modelData.label
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.size
-                        color: FiliTheme.brume
+                        color: FiliTheme.text
                     }
                     Text {
                         anchors { right: toggle.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
@@ -258,7 +258,7 @@ Rectangle {
                         text: modelData.available ? (modelData.on ? Fili.tr("On") : Fili.tr("Off")) : modelData.why
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.sizeList
-                        color: modelData.on ? FiliTheme.voile : FiliTheme.brume2
+                        color: modelData.on ? FiliTheme.accentColor : FiliTheme.textSecondary
                     }
                     TextButton {
                         id: toggle
@@ -276,7 +276,7 @@ Rectangle {
                 text: Fili.tr("Saved in %1").replace("%1", view.info.dest)
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.sizeList
-                color: FiliTheme.brume2
+                color: FiliTheme.textSecondary
             }
 
             // Reçus récemment
@@ -286,7 +286,7 @@ Rectangle {
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
                 font.weight: FiliTheme.weightAccent
-                color: FiliTheme.brume
+                color: FiliTheme.text
             }
             Repeater {
                 model: view.received.slice(0, 8)
@@ -295,14 +295,14 @@ Rectangle {
                     width: column.width
                     height: 26
                     radius: FiliTheme.radiusControl
-                    color: itemArea.containsMouse ? FiliTheme.nuit3 : "transparent"
+                    color: itemArea.containsMouse ? FiliTheme.surfaceHover : "transparent"
                     Text {
                         anchors { left: parent.left; leftMargin: FiliTheme.space2; right: from.left; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                         elide: Text.ElideMiddle
                         text: modelData.path.split("/").pop()
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.size
-                        color: FiliTheme.brume
+                        color: FiliTheme.text
                     }
                     Text {
                         id: from
@@ -310,7 +310,7 @@ Rectangle {
                         text: modelData.sender + " · " + view.when(modelData.time)
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.sizeList
-                        color: FiliTheme.brume2
+                        color: FiliTheme.textSecondary
                     }
                     MouseArea {
                         id: itemArea

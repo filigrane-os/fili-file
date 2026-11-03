@@ -20,7 +20,7 @@ ApplicationWindow {
     minimumWidth: 520
     minimumHeight: 300
     visible: true
-    color: FiliTheme.nuit
+    color: FiliTheme.background
     title: picking ? Fili.pickTitle() : win.searchLabel !== "" ? win.searchLabel : folder.shown === "/" ? "/" : folder.shown.split("/").pop()
 
     // Nom de la recherche en cours (saisie ou résultats de l'assistant), vide hors recherche
@@ -895,7 +895,7 @@ ApplicationWindow {
         id: toolbar
         width: parent.width
         height: FiliTheme.toolbarHeight
-        color: FiliTheme.nuit
+        color: FiliTheme.background
         // Boutons précédent/suivant réunis dans une capsule
         Rectangle {
             x: FiliTheme.margin
@@ -903,7 +903,7 @@ ApplicationWindow {
             width: nav.width + 2 * FiliTheme.space1 + 2
             height: 30
             radius: 8
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
         }
@@ -930,16 +930,16 @@ ApplicationWindow {
             width: 180
             height: 26
             radius: FiliTheme.radiusControl
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
-            border.color: searchInput.activeFocus ? FiliTheme.voile : FiliTheme.border
+            border.color: searchInput.activeFocus ? FiliTheme.accentColor : FiliTheme.border
             Text {
                 anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 visible: searchInput.text === ""
                 text: Fili.tr("Search")
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
-                color: FiliTheme.ardoise
+                color: FiliTheme.muted
             }
             TextInput {
                 id: searchInput
@@ -948,9 +948,9 @@ ApplicationWindow {
                 clip: true
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
-                color: FiliTheme.brume
-                selectionColor: FiliTheme.nuit4
-                selectedTextColor: FiliTheme.brume
+                color: FiliTheme.text
+                selectionColor: FiliTheme.surfaceActive
+                selectedTextColor: FiliTheme.text
                 onTextChanged: if (text !== folder.filter) folder.setFilter(text)
                 Keys.onEscapePressed: {
                     text = "";
@@ -1002,7 +1002,7 @@ ApplicationWindow {
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.size
             font.weight: FiliTheme.weightAccent
-            color: FiliTheme.brume
+            color: FiliTheme.text
         }
     }
     Rectangle {
@@ -1035,7 +1035,7 @@ ApplicationWindow {
         anchors { top: toolbarLine.bottom; left: sideLine.right; right: previewLine.left }
         height: visible ? 30 : 0
         visible: win.tabs.length > 1 && !win.picking
-        color: FiliTheme.nuit
+        color: FiliTheme.background
         Row {
             anchors { fill: parent; leftMargin: FiliTheme.space2; topMargin: FiliTheme.space1; bottomMargin: FiliTheme.space1 }
             spacing: FiliTheme.space1
@@ -1049,9 +1049,9 @@ ApplicationWindow {
                     width: Math.max(80, Math.min(180, (tabBar.width - 2 * FiliTheme.space2) / win.tabs.length - FiliTheme.space1))
                     height: parent.height
                     radius: FiliTheme.radiusControl
-                    color: current ? FiliTheme.nuit3 : tabArea.containsMouse || tabDrop.containsDrag ? FiliTheme.nuit2 : "transparent"
+                    color: current ? FiliTheme.surfaceHover : tabArea.containsMouse || tabDrop.containsDrag ? FiliTheme.surface : "transparent"
                     border.width: tabDrop.containsDrag ? 1 : 0
-                    border.color: FiliTheme.voile
+                    border.color: FiliTheme.accentColor
                     // Glisser l'onglet pour le déplacer: il suit le curseur, la place se décide au relâchement
                     property real dragDx: 0
                     property bool moving: false
@@ -1086,7 +1086,7 @@ ApplicationWindow {
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.sizeList
                         font.weight: current ? FiliTheme.weightAccent : Font.Normal
-                        color: current ? FiliTheme.brume : FiliTheme.brume2
+                        color: current ? FiliTheme.text : FiliTheme.textSecondary
                     }
                     MouseArea {
                         id: tabArea
@@ -1148,7 +1148,7 @@ ApplicationWindow {
                         anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                         text: "×"
                         font.pixelSize: 16
-                        color: xHit.containsMouse ? FiliTheme.cendre : FiliTheme.ardoise
+                        color: xHit.containsMouse ? FiliTheme.danger : FiliTheme.muted
                         MouseArea {
                             id: xHit
                             anchors { fill: parent; margins: -5 }
@@ -1166,14 +1166,14 @@ ApplicationWindow {
         anchors { top: tabBar.bottom; left: sideLine.right; right: parent.right }
         height: folder.results !== "" ? 28 : 0
         visible: folder.results !== ""
-        color: FiliTheme.nuit2
+        color: FiliTheme.surface
         Text {
             anchors { left: parent.left; leftMargin: FiliTheme.margin; right: closeResults.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             elide: Text.ElideRight
             text: win.networkView ? (files.active.count === 0 ? Fili.tr("No server connected. Connect to Server… (Ctrl+K) adds one.") : Fili.tr("Connected servers and shares")) : Fili.tr("Results") + ": " + folder.results
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeList
-            color: FiliTheme.brume
+            color: FiliTheme.text
         }
         TextButton {
             id: closeResults
@@ -1270,7 +1270,7 @@ ApplicationWindow {
         width: parent.width
         height: win.picking ? 48 : 0
         visible: win.picking
-        color: FiliTheme.nuit
+        color: FiliTheme.background
         Rectangle {
             width: parent.width
             height: 1
@@ -1282,9 +1282,9 @@ ApplicationWindow {
             width: 300
             height: 26
             radius: FiliTheme.radiusControl
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
-            border.color: nameInput.activeFocus ? FiliTheme.voile : FiliTheme.border
+            border.color: nameInput.activeFocus ? FiliTheme.accentColor : FiliTheme.border
             TextInput {
                 id: nameInput
                 anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
@@ -1292,9 +1292,9 @@ ApplicationWindow {
                 clip: true
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
-                color: FiliTheme.brume
-                selectionColor: FiliTheme.nuit4
-                selectedTextColor: FiliTheme.brume
+                color: FiliTheme.text
+                selectionColor: FiliTheme.surfaceActive
+                selectedTextColor: FiliTheme.text
                 onAccepted: win.pickAccept()
                 Keys.onEscapePressed: Fili.pickCancel()
                 Component.onCompleted: {
@@ -1336,7 +1336,7 @@ ApplicationWindow {
         anchors.bottom: parent.bottom
         width: parent.width
         height: FiliTheme.statusHeight
-        color: FiliTheme.nuit
+        color: FiliTheme.background
         Rectangle {
             width: parent.width
             height: 1
@@ -1368,7 +1368,7 @@ ApplicationWindow {
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeSmall
             font.bold: true
-            color: FiliTheme.brume
+            color: FiliTheme.text
         }
         Text {
             anchors { left: pathBar.right; leftMargin: FiliTheme.space3; right: parent.right; rightMargin: FiliTheme.margin; top: parent.top; topMargin: 1; bottom: parent.bottom }
@@ -1379,7 +1379,7 @@ ApplicationWindow {
             text: win.searchLabel !== "" ? folder.status : files.info || folder.status
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeSmall
-            color: FiliTheme.brume2
+            color: FiliTheme.textSecondary
         }
         Text {
             anchors { fill: parent; leftMargin: FiliTheme.space3; rightMargin: FiliTheme.space3 }
@@ -1390,7 +1390,7 @@ ApplicationWindow {
             text: folder.error || win.notice
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeSmall
-            color: FiliTheme.cendre
+            color: FiliTheme.danger
         }
         // Opération en cours: nom, avancement, annulation
         Row {
@@ -1403,7 +1403,7 @@ ApplicationWindow {
                 text: folder.job + (win.tasks.length > 1 ? "  +" + (win.tasks.length - 1) : "")
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.sizeSmall
-                color: taskHit.containsMouse ? FiliTheme.brume : FiliTheme.brume2
+                color: taskHit.containsMouse ? FiliTheme.text : FiliTheme.textSecondary
                 MouseArea {
                     id: taskHit
                     anchors { fill: parent; margins: -4 }
@@ -1417,12 +1417,12 @@ ApplicationWindow {
                 width: 140
                 height: 4
                 radius: 2
-                color: FiliTheme.nuit3
+                color: FiliTheme.surfaceHover
                 Rectangle {
                     width: parent.width * Math.max(0.05, folder.progress)
                     height: parent.height
                     radius: 2
-                    color: FiliTheme.voile
+                    color: FiliTheme.accentColor
                 }
             }
             TextButton {
@@ -1440,7 +1440,7 @@ ApplicationWindow {
             width: 360
             height: win.tasks.length * 30 + 2 * FiliTheme.space1
             radius: FiliTheme.radiusControl
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             Column {
@@ -1458,7 +1458,7 @@ ApplicationWindow {
                             elide: Text.ElideRight
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.sizeList
-                            color: modelData.progress === -2 ? FiliTheme.ardoise : FiliTheme.brume
+                            color: modelData.progress === -2 ? FiliTheme.muted : FiliTheme.text
                         }
                         Rectangle {
                             id: bar
@@ -1467,12 +1467,12 @@ ApplicationWindow {
                             width: 70
                             height: 4
                             radius: 2
-                            color: FiliTheme.nuit3
+                            color: FiliTheme.surfaceHover
                             Rectangle {
                                 width: parent.width * Math.max(0.05, modelData.progress)
                                 height: parent.height
                                 radius: 2
-                                color: FiliTheme.voile
+                                color: FiliTheme.accentColor
                             }
                         }
                         Text {
@@ -1480,7 +1480,7 @@ ApplicationWindow {
                             anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                             text: "×"
                             font.pixelSize: 18
-                            color: xArea.containsMouse ? FiliTheme.cendre : FiliTheme.ardoise
+                            color: xArea.containsMouse ? FiliTheme.danger : FiliTheme.muted
                             MouseArea {
                                 id: xArea
                                 anchors { fill: parent; margins: -6 }
@@ -1516,7 +1516,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         onVisibleChanged: if (visible) patternInput.forceActiveFocus(); else files.focusList()
         MouseArea {
             anchors.fill: parent
@@ -1527,7 +1527,7 @@ ApplicationWindow {
             width: 340
             height: matchCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             Column {
@@ -1540,15 +1540,15 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
+                    color: FiliTheme.text
                 }
                 Rectangle {
                     width: parent.width
                     height: 26
                     radius: FiliTheme.radiusControl
-                    color: FiliTheme.nuit
+                    color: FiliTheme.background
                     border.width: FiliTheme.borderWidth
-                    border.color: FiliTheme.voile
+                    border.color: FiliTheme.accentColor
                     TextInput {
                         id: patternInput
                         anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
@@ -1556,7 +1556,7 @@ ApplicationWindow {
                         clip: true
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.size
-                        color: FiliTheme.brume
+                        color: FiliTheme.text
                         onAccepted: matchBox.apply()
                         Keys.onEscapePressed: matchBox.visible = false
                     }
@@ -1567,7 +1567,7 @@ ApplicationWindow {
                     text: Fili.tr("* stands for any text, ? for one character: *.pdf, photo*, a?.txt")
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
             }
         }
@@ -1610,7 +1610,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         onVisibleChanged: if (!visible) files.focusList()
         Keys.onEscapePressed: visible = false
         Connections {
@@ -1642,7 +1642,7 @@ ApplicationWindow {
             width: 380
             height: shareCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             MouseArea { anchors.fill: parent }
@@ -1658,7 +1658,7 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
+                    color: FiliTheme.text
                 }
                 Row {
                     spacing: FiliTheme.space2
@@ -1680,7 +1680,7 @@ ApplicationWindow {
                     text: shareBox.current ? shareBox.current.why : ""
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
                 Text {
                     visible: shareBox.current !== null && shareBox.current.available && (shareBox.loading || shareBox.peers.length === 0)
@@ -1691,7 +1691,7 @@ ApplicationWindow {
                                                              : Fili.tr("No device found on this network. LocalSend must be open on the other device.")
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
                 Repeater {
                     model: shareBox.loading ? [] : shareBox.peers
@@ -1700,14 +1700,14 @@ ApplicationWindow {
                         width: shareCard.width
                         height: 26
                         radius: FiliTheme.radiusControl
-                        color: peerArea.containsMouse ? FiliTheme.nuit3 : "transparent"
+                        color: peerArea.containsMouse ? FiliTheme.surfaceHover : "transparent"
                         Text {
                             anchors { left: parent.left; leftMargin: FiliTheme.space2; right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                             text: modelData.name
                             elide: Text.ElideRight
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.size
-                            color: FiliTheme.brume
+                            color: FiliTheme.text
                         }
                         MouseArea {
                             id: peerArea
@@ -1745,7 +1745,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         onVisibleChanged: if (visible) serverField.field.forceActiveFocus(); else files.focusList()
         Connections {
             target: Fili
@@ -1765,16 +1765,16 @@ ApplicationWindow {
             width: parent ? parent.width : 100
             height: 26
             radius: FiliTheme.radiusControl
-            color: FiliTheme.nuit
+            color: FiliTheme.background
             border.width: FiliTheme.borderWidth
-            border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.border
+            border.color: input.activeFocus ? FiliTheme.accentColor : FiliTheme.border
             Text {
                 visible: input.text === ""
                 anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 text: parent.label
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
-                color: FiliTheme.ardoise
+                color: FiliTheme.muted
             }
             TextInput {
                 id: input
@@ -1784,7 +1784,7 @@ ApplicationWindow {
                 echoMode: parent.secret ? TextInput.Password : TextInput.Normal
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
-                color: FiliTheme.brume
+                color: FiliTheme.text
                 selectByMouse: true
                 onAccepted: connectBox.apply()
                 KeyNavigation.tab: parent.next ? parent.next.field : null
@@ -1796,7 +1796,7 @@ ApplicationWindow {
             width: 380
             height: connectCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             Column {
@@ -1809,7 +1809,7 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
+                    color: FiliTheme.text
                 }
                 ConnectField { id: serverField; label: Fili.tr("smb://server/share"); next: userField }
                 ConnectField { id: userField; label: Fili.tr("User (optional)"); next: passField }
@@ -1820,7 +1820,7 @@ ApplicationWindow {
                     text: connectBox.busy ? Fili.tr("Connecting…") : Fili.tr("smb://, sftp://, davs://, ftp://, nfs://. The connection stays in the sidebar until you eject it.")
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
                 Row {
                     spacing: FiliTheme.space2
@@ -1839,16 +1839,16 @@ ApplicationWindow {
         width: parent ? parent.width : 100
         height: 26
         radius: FiliTheme.radiusControl
-        color: FiliTheme.nuit
+        color: FiliTheme.background
         border.width: FiliTheme.borderWidth
-        border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.border
+        border.color: input.activeFocus ? FiliTheme.accentColor : FiliTheme.border
         Text {
             visible: input.text === ""
             anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
             text: parent.label
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.size
-            color: FiliTheme.ardoise
+            color: FiliTheme.muted
         }
         TextInput {
             id: input
@@ -1857,7 +1857,7 @@ ApplicationWindow {
             clip: true
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.size
-            color: FiliTheme.brume
+            color: FiliTheme.text
             selectByMouse: true
             onTextEdited: parent.edited()
             Keys.onEscapePressed: bulkBox.visible = false
@@ -1902,7 +1902,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         focus: visible
         onVisibleChanged: if (!visible) files.focusList()
         Keys.onEscapePressed: visible = false
@@ -1916,7 +1916,7 @@ ApplicationWindow {
             width: 460
             height: bulkCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             MouseArea { anchors.fill: parent }
@@ -1930,7 +1930,7 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
+                    color: FiliTheme.text
                 }
                 Row {
                     spacing: FiliTheme.space2
@@ -1967,7 +1967,7 @@ ApplicationWindow {
                     width: parent.width
                     height: Math.min(bulkBox.plan.length, 8) * 22 + 2 * FiliTheme.space1
                     radius: FiliTheme.radiusControl
-                    color: FiliTheme.nuit
+                    color: FiliTheme.background
                     border.width: FiliTheme.borderWidth
                     border.color: FiliTheme.border
                     ListView {
@@ -1985,14 +1985,14 @@ ApplicationWindow {
                                 elide: Text.ElideMiddle
                                 font.family: FiliTheme.font
                                 font.pixelSize: FiliTheme.sizeList
-                                color: FiliTheme.brume2
+                                color: FiliTheme.textSecondary
                             }
                             Text {
                                 id: arrow
                                 anchors { horizontalCenter: parent.horizontalCenter; verticalCenter: parent.verticalCenter }
                                 text: "→"
                                 font.pixelSize: FiliTheme.sizeList
-                                color: FiliTheme.ardoise
+                                color: FiliTheme.muted
                             }
                             Text {
                                 anchors { left: arrow.right; leftMargin: FiliTheme.space2; right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
@@ -2000,7 +2000,7 @@ ApplicationWindow {
                                 elide: Text.ElideMiddle
                                 font.family: FiliTheme.font
                                 font.pixelSize: FiliTheme.sizeList
-                                color: !modelData.ok ? FiliTheme.cendre : modelData.same ? FiliTheme.ardoise : FiliTheme.brume
+                                color: !modelData.ok ? FiliTheme.danger : modelData.same ? FiliTheme.muted : FiliTheme.text
                             }
                         }
                     }
@@ -2012,7 +2012,7 @@ ApplicationWindow {
                     text: Fili.tr("Some new names are not valid or already exist")
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.cendre
+                    color: FiliTheme.danger
                 }
                 Row {
                     anchors.right: parent.right
@@ -2052,7 +2052,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         focus: visible
         onVisibleChanged: if (visible) forceActiveFocus(); else files.focusList()
         Keys.onPressed: e => {
@@ -2073,7 +2073,7 @@ ApplicationWindow {
             width: 380
             height: conflictCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             Column {
@@ -2087,7 +2087,7 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
+                    color: FiliTheme.text
                 }
                 Text {
                     width: parent.width
@@ -2095,7 +2095,7 @@ ApplicationWindow {
                     text: conflictBox.body
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
                 Row {
                     anchors.right: parent.right
@@ -2160,16 +2160,16 @@ ApplicationWindow {
         width: parent ? parent.width : 100
         height: 26
         radius: FiliTheme.radiusControl
-        color: FiliTheme.nuit
+        color: FiliTheme.background
         border.width: FiliTheme.borderWidth
-        border.color: input.activeFocus ? FiliTheme.voile : FiliTheme.border
+        border.color: input.activeFocus ? FiliTheme.accentColor : FiliTheme.border
         Text {
             visible: input.text === ""
             anchors { left: parent.left; leftMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
             text: parent.label
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.size
-            color: FiliTheme.ardoise
+            color: FiliTheme.muted
         }
         TextInput {
             id: input
@@ -2179,7 +2179,7 @@ ApplicationWindow {
             echoMode: TextInput.Password
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.size
-            color: FiliTheme.brume
+            color: FiliTheme.text
             selectByMouse: true
             onAccepted: parent.accepted()
             Keys.onEscapePressed: parent.cancelled()
@@ -2205,7 +2205,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         onVisibleChanged: if (visible) pwField.field.forceActiveFocus(); else files.focusList()
         Connections {
             target: folder
@@ -2220,7 +2220,7 @@ ApplicationWindow {
             width: 380
             height: pwCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             Column {
@@ -2234,7 +2234,7 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
+                    color: FiliTheme.text
                 }
                 Text {
                     visible: passwordBox.wrong
@@ -2242,7 +2242,7 @@ ApplicationWindow {
                     text: Fili.tr("Wrong password. Try again.")
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
                 PasswordField {
                     id: pwField
@@ -2281,7 +2281,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         onVisibleChanged: if (visible) { nameField.forceActiveFocus(); nameField.selectAll(); } else files.focusList()
         MouseArea {
             anchors.fill: parent
@@ -2292,7 +2292,7 @@ ApplicationWindow {
             width: 380
             height: compressCard.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             Column {
@@ -2305,15 +2305,15 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
+                    color: FiliTheme.text
                 }
                 Rectangle {
                     width: parent.width
                     height: 26
                     radius: FiliTheme.radiusControl
-                    color: FiliTheme.nuit
+                    color: FiliTheme.background
                     border.width: FiliTheme.borderWidth
-                    border.color: nameField.activeFocus ? FiliTheme.voile : FiliTheme.border
+                    border.color: nameField.activeFocus ? FiliTheme.accentColor : FiliTheme.border
                     TextInput {
                         id: nameField
                         anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
@@ -2321,7 +2321,7 @@ ApplicationWindow {
                         clip: true
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.size
-                        color: FiliTheme.brume
+                        color: FiliTheme.text
                         selectByMouse: true
                         KeyNavigation.tab: formatRow
                         onAccepted: compressBox.apply()
@@ -2332,7 +2332,7 @@ ApplicationWindow {
                     text: Fili.tr("Format")
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
                 ChoiceRow {
                     id: formatRow
@@ -2348,7 +2348,7 @@ ApplicationWindow {
                     text: Fili.tr("Compression")
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
                 ChoiceRow {
                     id: levelRow
@@ -2377,16 +2377,16 @@ ApplicationWindow {
                         height: 14
                         anchors.verticalCenter: parent.verticalCenter
                         radius: 3
-                        color: FiliTheme.nuit
+                        color: FiliTheme.background
                         border.width: FiliTheme.borderWidth
-                        border.color: compressBox.skipHidden ? FiliTheme.voile : FiliTheme.border
+                        border.color: compressBox.skipHidden ? FiliTheme.accentColor : FiliTheme.border
                         Text {
                             anchors.centerIn: parent
                             visible: compressBox.skipHidden
                             text: "✓"
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.sizeList
-                            color: FiliTheme.voile
+                            color: FiliTheme.accentColor
                         }
                     }
                     Text {
@@ -2394,7 +2394,7 @@ ApplicationWindow {
                         text: Fili.tr("Skip hidden files")
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.size
-                        color: FiliTheme.brume
+                        color: FiliTheme.text
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -2417,7 +2417,7 @@ ApplicationWindow {
                     text: Fili.tr("Only zip and 7z archives can have a password.")
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
                 Row {
                     spacing: FiliTheme.space2
@@ -2447,7 +2447,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         focus: visible
         onVisibleChanged: if (visible) forceActiveFocus(); else files.focusList()
         Keys.onPressed: e => {
@@ -2469,7 +2469,7 @@ ApplicationWindow {
             width: 340
             height: card.implicitHeight + 2 * FiliTheme.space4
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             Column {
@@ -2483,7 +2483,7 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
+                    color: FiliTheme.text
                 }
                 Text {
                     width: parent.width
@@ -2491,7 +2491,7 @@ ApplicationWindow {
                     text: confirm.body
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeList
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
                 Row {
                     anchors.right: parent.right
@@ -2565,7 +2565,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 200
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         focus: visible
         onVisibleChanged: if (visible) forceActiveFocus(); else files.focusList()
         Keys.onPressed: e => {
@@ -2584,7 +2584,7 @@ ApplicationWindow {
             width: 420
             height: grid.implicitHeight + okRow.height + 3 * FiliTheme.space4 + (infoCard.mode >= 0 ? permBox.height + FiliTheme.space3 : 0)
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             Grid {
@@ -2606,7 +2606,7 @@ ApplicationWindow {
                         font.family: FiliTheme.font
                         font.pixelSize: FiliTheme.sizeList
                         font.weight: label ? FiliTheme.weightAccent : Font.Normal
-                        color: label ? FiliTheme.brume2 : FiliTheme.brume
+                        color: label ? FiliTheme.textSecondary : FiliTheme.text
                     }
                 }
             }
@@ -2627,7 +2627,7 @@ ApplicationWindow {
                             text: modelData.label
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.sizeList
-                            color: FiliTheme.brume2
+                            color: FiliTheme.textSecondary
                         }
                         Repeater {
                             model: [{ ch: "r", bit: 4 }, { ch: "w", bit: 2 }, { ch: "x", bit: 1 }]
@@ -2638,15 +2638,15 @@ ApplicationWindow {
                                 width: 28
                                 height: 22
                                 radius: FiliTheme.radiusControl
-                                color: on ? FiliTheme.nuit4 : permArea.containsMouse ? FiliTheme.nuit3 : FiliTheme.nuit
+                                color: on ? FiliTheme.surfaceActive : permArea.containsMouse ? FiliTheme.surfaceHover : FiliTheme.background
                                 border.width: FiliTheme.borderWidth
-                                border.color: on ? FiliTheme.voile : FiliTheme.border
+                                border.color: on ? FiliTheme.accentColor : FiliTheme.border
                                 Text {
                                     anchors.centerIn: parent
                                     text: modelData.ch
                                     font.family: FiliTheme.mono
                                     font.pixelSize: FiliTheme.sizeList
-                                    color: on ? FiliTheme.brume : FiliTheme.ardoise
+                                    color: on ? FiliTheme.text : FiliTheme.muted
                                 }
                                 MouseArea {
                                     id: permArea
@@ -2682,7 +2682,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: false
         z: 210
-        color: FiliTheme.alpha(FiliTheme.nuitProfond, 0.7)
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
         focus: visible
         onVisibleChanged: if (visible) forceActiveFocus(); else files.focusList()
         Keys.onPressed: e => {
@@ -2701,7 +2701,7 @@ ApplicationWindow {
             width: 380
             height: aboutColumn.implicitHeight + 2 * FiliTheme.space5
             radius: FiliTheme.radiusWindow
-            color: FiliTheme.nuit2
+            color: FiliTheme.surface
             border.width: FiliTheme.borderWidth
             border.color: FiliTheme.border
             MouseArea { anchors.fill: parent }
@@ -2736,7 +2736,7 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.sizeTitle
                     font.weight: FiliTheme.weightAccent
-                    color: FiliTheme.brume
+                    color: FiliTheme.text
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -2744,9 +2744,9 @@ ApplicationWindow {
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
                     font.weight: Font.Light
-                    color: FiliTheme.brume2
+                    color: FiliTheme.textSecondary
                 }
-                Rectangle { width: parent.width; height: 1; color: FiliTheme.nuit4 }
+                Rectangle { width: parent.width; height: 1; color: FiliTheme.surfaceActive }
                 Grid {
                     id: aboutGrid
                     width: parent.width
@@ -2765,7 +2765,7 @@ ApplicationWindow {
                             font.family: FiliTheme.font
                             font.pixelSize: FiliTheme.sizeList
                             font.weight: label ? FiliTheme.weightAccent : Font.Normal
-                            color: label ? FiliTheme.brume2 : FiliTheme.brume
+                            color: label ? FiliTheme.textSecondary : FiliTheme.text
                         }
                     }
                 }

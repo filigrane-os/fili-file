@@ -11,7 +11,7 @@ Rectangle {
     width: 2 * 30 + 2 * FiliTheme.space1 + 2
     height: 30
     radius: 8
-    color: FiliTheme.nuit2
+    color: FiliTheme.surface
     border.width: FiliTheme.borderWidth
     border.color: FiliTheme.border
 
@@ -24,8 +24,8 @@ Rectangle {
         width: 30
         height: 22
         radius: FiliTheme.radiusControl
-        color: on || area.containsMouse ? FiliTheme.nuit3 : "transparent"
-        readonly property color ink: on ? FiliTheme.voile : FiliTheme.brume2
+        color: on || area.containsMouse ? FiliTheme.surfaceHover : "transparent"
+        readonly property color ink: on ? FiliTheme.accentColor : FiliTheme.textSecondary
         default property alias glyph: holder.data
         Item {
             id: holder

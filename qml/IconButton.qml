@@ -12,7 +12,7 @@ Rectangle {
     width: 28
     height: 24
     radius: FiliTheme.radiusControl
-    color: !enabledState ? "transparent" : area.pressed ? FiliTheme.nuit4 : area.containsMouse ? FiliTheme.nuit3 : "transparent"
+    color: !enabledState ? "transparent" : area.pressed ? FiliTheme.surfaceActive : area.containsMouse ? FiliTheme.surfaceHover : "transparent"
     activeFocusOnTab: false
 
     Text {
@@ -20,7 +20,7 @@ Rectangle {
         text: b.glyph
         font.family: FiliTheme.icons
         font.pixelSize: 14
-        color: b.enabledState ? FiliTheme.brume : FiliTheme.ardoise
+        color: b.enabledState ? FiliTheme.text : FiliTheme.muted
     }
     MouseArea {
         id: area

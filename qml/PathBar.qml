@@ -88,14 +88,14 @@ Item {
                 text: ""
                 font.family: FiliTheme.icons
                 font.pixelSize: 9
-                color: FiliTheme.ardoise
+                color: FiliTheme.muted
             }
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: label.implicitWidth + 2 * FiliTheme.space2
                 height: Math.min(22, bar.height)
                 radius: FiliTheme.radiusControl
-                color: area.containsMouse && !crumb.last ? FiliTheme.nuit3 : "transparent"
+                color: area.containsMouse && !crumb.last ? FiliTheme.surfaceHover : "transparent"
                 Text {
                     id: label
                     anchors.centerIn: parent
@@ -103,7 +103,7 @@ Item {
                     font.family: FiliTheme.font
                     font.pixelSize: bar.fontSize
                     font.weight: crumb.last ? FiliTheme.weightAccent : Font.Normal
-                    color: crumb.last ? FiliTheme.brume : FiliTheme.brume2
+                    color: crumb.last ? FiliTheme.text : FiliTheme.textSecondary
                 }
                 MouseArea {
                     id: area
@@ -127,9 +127,9 @@ Item {
         height: 24
         visible: bar.editing
         radius: FiliTheme.radiusControl
-        color: FiliTheme.nuit2
+        color: FiliTheme.surface
         border.width: FiliTheme.borderWidth
-        border.color: FiliTheme.voile
+        border.color: FiliTheme.accentColor
         TextInput {
             id: input
             anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
@@ -137,9 +137,9 @@ Item {
             clip: true
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.size
-            color: FiliTheme.brume
-            selectionColor: FiliTheme.nuit4
-            selectedTextColor: FiliTheme.brume
+            color: FiliTheme.text
+            selectionColor: FiliTheme.surfaceActive
+            selectedTextColor: FiliTheme.text
             onTextEdited: bar.refresh(true)
             onAccepted: {
                 if (bar.selected >= 0) {
@@ -166,7 +166,7 @@ Item {
         anchors { left: parent.left; right: parent.right; bottom: parent.top; bottomMargin: FiliTheme.space2 }
         height: Math.min(bar.suggestions.length, 8) * 26 + 2 * FiliTheme.space1
         radius: FiliTheme.radiusControl
-        color: FiliTheme.nuit2
+        color: FiliTheme.surface
         border.width: FiliTheme.borderWidth
         border.color: FiliTheme.border
         ListView {
@@ -183,14 +183,14 @@ Item {
                 width: sugList.width
                 height: 26
                 radius: FiliTheme.radiusControl
-                color: index === bar.selected || sugArea.containsMouse ? FiliTheme.nuit3 : "transparent"
+                color: index === bar.selected || sugArea.containsMouse ? FiliTheme.surfaceHover : "transparent"
                 Text {
                     anchors { left: parent.left; leftMargin: FiliTheme.space2; right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                     text: modelData.name + (modelData.dir ? "/" : "")
                     elide: Text.ElideRight
                     font.family: FiliTheme.font
                     font.pixelSize: FiliTheme.size
-                    color: modelData.dir ? FiliTheme.brume : FiliTheme.brume2
+                    color: modelData.dir ? FiliTheme.text : FiliTheme.textSecondary
                 }
                 MouseArea {
                     id: sugArea

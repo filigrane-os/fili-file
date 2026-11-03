@@ -13,7 +13,7 @@ Rectangle {
     // Clic droit sur un lieu: ses données et la position dans la fenêtre
     signal context(string path, bool removable, bool frequent, real x, real y)
 
-    color: FiliTheme.nuitProfond
+    color: FiliTheme.backgroundDeep
 
     ListModel { id: places }
     function reload() {
@@ -68,7 +68,7 @@ Rectangle {
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.sizeSmall
             font.weight: FiliTheme.weightAccent
-            color: FiliTheme.ardoise
+            color: FiliTheme.muted
         }
         delegate: Rectangle {
             id: row
@@ -84,9 +84,9 @@ Rectangle {
             width: ListView.view.width - 2 * list.inset
             height: FiliTheme.sideRowHeight + 2
             radius: FiliTheme.radiusControl
-            color: sel || area.containsMouse || drop.containsDrag ? FiliTheme.nuit3 : "transparent"
+            color: sel || area.containsMouse || drop.containsDrag ? FiliTheme.surfaceHover : "transparent"
             border.width: drop.containsDrag || (list.activeFocus && Fili.keyNav && ListView.isCurrentItem) ? 1 : 0
-            border.color: FiliTheme.voile
+            border.color: FiliTheme.accentColor
 
             Image {
                 id: img
@@ -99,7 +99,7 @@ Rectangle {
                 layer.enabled: true
                 layer.effect: MultiEffect {
                     colorization: 1.0
-                    colorizationColor: row.sel ? FiliTheme.voileVif : FiliTheme.voile
+                    colorizationColor: row.sel ? FiliTheme.accentBright : FiliTheme.accentColor
                 }
             }
             // Corbeille pleine: pastille sur le glyphe (le glyphe plein ne se distingue guère à 16 px)
@@ -110,9 +110,9 @@ Rectangle {
                 width: 7
                 height: 7
                 radius: 3.5
-                color: FiliTheme.voileVif
+                color: FiliTheme.accentBright
                 border.width: FiliTheme.borderWidth
-                border.color: row.sel ? FiliTheme.nuit3 : FiliTheme.nuitProfond
+                border.color: row.sel ? FiliTheme.surfaceHover : FiliTheme.backgroundDeep
             }
             Text {
                 anchors { left: img.right; leftMargin: FiliTheme.space2 + 2; right: eject.visible ? eject.left : parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
@@ -121,7 +121,7 @@ Rectangle {
                 elide: Text.ElideRight
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
-                color: row.sel ? FiliTheme.voile : FiliTheme.brume
+                color: row.sel ? FiliTheme.accentColor : FiliTheme.text
             }
             // Éjecter un volume monté; oublier un serveur mémorisé (non connecté)
             Text {
@@ -131,7 +131,7 @@ Rectangle {
                 anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                 text: row.path === "" ? "✕" : "⏏"
                 font.pixelSize: FiliTheme.size
-                color: ejectArea.containsMouse ? FiliTheme.brume : FiliTheme.ardoise
+                color: ejectArea.containsMouse ? FiliTheme.text : FiliTheme.muted
                 MouseArea {
                     id: ejectArea
                     anchors { fill: parent; margins: -6 }

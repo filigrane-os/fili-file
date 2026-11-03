@@ -12,23 +12,23 @@ QtObject {
     // [theme.dark], [theme.light], [theme.accents]); les clés sont en anglais, les noms de jetons restent ceux du shell
     readonly property var theme: JSON.parse(Fili.themeJson())
     readonly property var m: light ? theme.light : theme.dark
-    readonly property color nuit: m.background
-    readonly property color nuitProfond: m.background_deep
-    readonly property color nuit2: m.surface
-    readonly property color nuit3: m.surface_hover
-    readonly property color nuit4: m.surface_active
+    readonly property color background: m.background
+    readonly property color backgroundDeep: m.background_deep
+    readonly property color surface: m.surface
+    readonly property color surfaceHover: m.surface_hover
+    readonly property color surfaceActive: m.surface_active
     readonly property color border: m.border
-    readonly property color ardoise: m.muted
-    readonly property color brume2: m.text_secondary
+    readonly property color muted: m.muted
+    readonly property color textSecondary: m.text_secondary
     // Couleur d'accentuation (fili-theme accent): [sombre, sombre vif, clair, clair vif]; défaut = brume en sombre, noir (nuit) en clair.
     // Un `accent` fixé dans le mode passe devant.
     readonly property var accentTones: theme.accents
     readonly property var tone: accentTones[accent] || accentTones.default
-    readonly property color voile: m.accent || (light ? tone[2] : tone[0])
-    readonly property color voileVif: m.accent_bright || (light ? tone[3] : tone[1])
-    readonly property color brume: m.text
-    readonly property color sable: m.warning
-    readonly property color cendre: m.danger
+    readonly property color accentColor: m.accent || (light ? tone[2] : tone[0])
+    readonly property color accentBright: m.accent_bright || (light ? tone[3] : tone[1])
+    readonly property color text: m.text
+    readonly property color warning: m.warning
+    readonly property color danger: m.danger
     function alpha(c, a) {
         return Qt.rgba(c.r, c.g, c.b, a);
     }
