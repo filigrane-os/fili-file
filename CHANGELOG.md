@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.2
+
+- Connecting to a server writes a journal, `~/.cache/fili-file/connect.log`: the questions gio asked, which kind of answer
+  was sent (never a password) and how it ended. Read it when a server will not connect.
+
 ## 1.2.1
 
 - Connecting to an SMB server given without a share (`smb://host/`, what a discovered server fills in) now works: an SMB

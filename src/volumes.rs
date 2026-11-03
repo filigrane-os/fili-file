@@ -337,9 +337,28 @@ pub fn run_mount(cmd: &mut Command, user: &str, password: &str) -> Result<(), St
     run_gio(cmd, user, password).map(|_| ())
 }
 
+// Connection journal: ~/.cache/fili-file/connect.log (the questions gio asked, which kind of answer was sent, how it
+// ended; never a password). Kept small. It is what to read when a server will not connect.
+fn journal(line: &str) {
+    use std::io::Write as _;
+    let cache = std::env::var("XDG_CACHE_HOME").ok().filter(|v| !v.is_empty()).or_else(|| std::env::var("HOME").ok().map(|h| format!("{h}/.cache")));
+    let Some(cache) = cache else { return };
+    let dir = std::path::PathBuf::from(cache).join("fili-file");
+    let _ = std::fs::create_dir_all(&dir);
+    let file = dir.join("connect.log");
+    if std::fs::metadata(&file).map(|m| m.len() > 64 * 1024).unwrap_or(false) {
+        let _ = std::fs::remove_file(&file);
+    }
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
+        let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let _ = writeln!(f, "[{secs}] {line}");
+    }
+}
+
 // Like run_mount, and returns what the command printed (questions included). A password asked a second time means the
 // first one was refused: that fails at once instead of answering the same thing until the time is out.
 fn run_gio(cmd: &mut Command, user: &str, password: &str) -> Result<String, String> {
+    journal(&format!("run {:?} (user {:?}, password {})", cmd, user, if password.is_empty() { "empty" } else { "given" }));
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -377,7 +396,9 @@ fn run_gio(cmd: &mut Command, user: &str, password: &str) -> Result<String, Stri
         if let Ok(chunk) = rx.recv_timeout(Duration::from_millis(100)) {
             seen.push_str(&String::from_utf8_lossy(&chunk));
             output.push_str(&String::from_utf8_lossy(&chunk));
+            journal(&format!("gio said {:?}", chunk_text(&chunk)));
             if let Some(reply) = answer(&seen, user, password) {
+                journal(&format!("answering the question {:?} with {}", seen.rsplit('\n').next().unwrap_or(""), reply_kind(&seen, &reply)));
                 if seen.rsplit('\n').next().unwrap_or("").to_lowercase().starts_with("password") {
                     password_answers += 1;
                     if password_answers > 1 {
@@ -392,15 +413,32 @@ fn run_gio(cmd: &mut Command, user: &str, password: &str) -> Result<String, Stri
             }
         }
     };
+    let msg = err.join().unwrap_or_default();
+    journal(&format!("ended: {status}; stderr {:?}", msg.trim()));
     if status.success() {
         return Ok(output);
     }
-    let msg = err.join().unwrap_or_default();
     // "Error mounting location: Location is already mounted" counts as a success
     if msg.contains("already mounted") {
         return Ok(output);
     }
     Err(msg.trim().rsplit(": ").next().unwrap_or("").to_string())
+}
+
+fn chunk_text(chunk: &[u8]) -> String {
+    String::from_utf8_lossy(chunk).into_owned()
+}
+
+// What kind of thing an answer is, for the journal (a password is never written)
+fn reply_kind(question: &str, reply: &str) -> String {
+    let q = question.rsplit('\n').next().unwrap_or("").to_lowercase();
+    if q.starts_with("password") {
+        "a password".into()
+    } else if reply.is_empty() {
+        "an empty line".into()
+    } else {
+        format!("{reply:?}")
+    }
 }
 
 // Names of the shares printed by `gio list smb://host/` (the questions of the authentication are not names)
