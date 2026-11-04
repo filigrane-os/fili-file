@@ -1527,10 +1527,15 @@ impl FolderModel {
                 return -1;
             }
         }
-        // The application xdg-open will pick: the default one of the type, so that its window can be raised if it exists
-        let names = icons::mime_type(&e.name).and_then(|m| apps::for_mime(&m).into_iter().next()).map(|a| apps::window_names(&a)).unwrap_or_default();
+        // The default application of the type is launched directly, like Open With does (xdg-open stays the fallback,
+        // and the way for terminal programs): its window, if it already exists, is raised
+        let app = icons::mime_type(&e.name).and_then(|m| apps::for_mime(&m).into_iter().next()).filter(|a| !a.terminal);
+        let names = app.as_ref().map(apps::window_names).unwrap_or_default();
         let before = if names.is_empty() { Vec::new() } else { crate::window::snapshot() };
-        spawn("xdg-open", &e.path, Path::new(&self.dir));
+        match app.as_ref().map(|a| apps::command(a, &e.path)) {
+            Some(argv) if !argv.is_empty() => spawn_detached(Command::new(&argv[0]).args(&argv[1..]).current_dir(&self.dir)),
+            _ => spawn("xdg-open", &e.path, Path::new(&self.dir)),
+        }
         crate::window::raise_existing(&before, &names);
         -1
     }
