@@ -105,6 +105,17 @@ Accents, in dark and light:
 - File chooser portal backend (`org.freedesktop.impl.portal.FileChooser`) so browsers use it for "Open" and "Save as"
 - Controllable from a terminal or an assistant: `fili-file ctl actions`, `fili-file ctl state`, `fili-file ctl action NAME`
 - Any freedesktop icon theme, light and dark mode that follows the desktop, fully themable colors and fonts
+- **Open With** and double click launch the application directly; when it is already running, its window is brought to
+  the front (niri), since Wayland does not let it take the focus by itself
+- **Window buttons** at the far right of the toolbar: Close, and a Window panel with one pictogram tile for every niri
+  window action (fullscreen, maximize, fill the width, preset widths and heights, center, floating, move or join columns,
+  tabbed column, overview, send to another workspace or monitor, screenshot). It opens with `Ctrl+Shift+W`, is driven
+  with the arrow keys (first tile preselected, Enter runs it), highlights what describes the window now (fullscreen,
+  floating, full width), adapts its layout to the room the window leaves, and says what an action will really do (a
+  window sharing its column leaves it instead of joining the neighbour). Outside niri it offers fullscreen, maximize and
+  minimize. Hide the buttons with `window_buttons = false` or from the Window menu of the bar
+- Sorted by modification date, most recent first, by default (any column, either direction; changing the sort scrolls
+  back to the top); mouse wheel and touchpad scrolling with inertia
 
 ## Install
 
@@ -139,8 +150,9 @@ The fonts (Jost, JetBrains Mono, Fili Icons) are inside the binary: no font to i
 ```toml
 view = "list"             # "list" or "grid"
 show_hidden = false
-sort = "name"             # name, size, date, kind, created, permissions, owner
-sort_desc = false
+sort = "date"             # name, size, date (modified), kind, created, permissions, owner
+sort_desc = true          # most recently modified first
+window_buttons = true     # Close and Window buttons at the right of the toolbar
 columns = "size,modified"
 start = "~/Documents"     # folder opened when started without an argument
 icon_theme = "Papirus"    # default: the desktop's icon theme
