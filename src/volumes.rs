@@ -279,6 +279,32 @@ pub fn gvfs_name(entry: &str) -> String {
     }
 }
 
+// The mount folder of gvfs that contains `path` ("$XDG_RUNTIME_DIR/gvfs/smb-share:server=…"), or "" outside gvfs
+pub fn gvfs_root(path: &str) -> String {
+    let dir = gvfs_dir();
+    let Some(rest) = path.strip_prefix(&format!("{dir}/")) else { return String::new() };
+    match rest.split('/').next().filter(|n| !n.is_empty()) {
+        Some(name) => format!("{dir}/{name}"),
+        None => String::new(),
+    }
+}
+
+// Name of a folder for the user: the last component, except for a gvfs mount whose technical name
+// ("smb-share:server=192.168.1.18,share=sauvegarde,user=Thomas") becomes "sauvegarde on Nas"
+pub fn display_name(path: &str) -> String {
+    let root = gvfs_root(path);
+    if !root.is_empty() && root == path.trim_end_matches('/') {
+        let entry = root.rsplit('/').next().unwrap_or_default();
+        let rest = entry.split_once(':').map_or("", |(_, r)| r);
+        let get = |k: &str| rest.split(',').find_map(|kv| kv.strip_prefix(&format!("{k}=")).map(str::to_string));
+        return match (entry.starts_with("smb-share:"), get("share"), get("server")) {
+            (true, Some(share), Some(host)) if !host.is_empty() => trf("%1 on %2", &[&share, &server_name(&host)]),
+            _ => gvfs_name(entry),
+        };
+    }
+    Path::new(path).file_name().map_or(path.to_string(), |n| n.to_string_lossy().into_owned())
+}
+
 // Gvfs mounts in progress (FUSE path) and network system mounts, for the sidebar
 pub fn network() -> Vec<Volume> {
     let mut out = Vec::new();
@@ -736,6 +762,9 @@ mod tests {
         assert_eq!(gvfs_name("sftp:host=box,user=ana"), "box (sftp)");
         assert_eq!(gvfs_name("dav:host=cloud.example,ssl=true"), "cloud.example (dav)");
         assert_eq!(gvfs_name("inconnu"), "inconnu");
+        assert_eq!(display_name("/home/ana/docs"), "docs");
+        assert_eq!(display_name("/run/x/gvfs/smb-share:server=h,share=docs/sub"), "sub");
+        assert_eq!(gvfs_root("/home/ana/docs"), "");
         let mounts = "/dev/nvme0n1p2 / ext4 rw 0 0\nnas:/export /mnt/nas\\040data nfs4 rw 0 0\n//srv/share /mnt/s cifs rw 0 0\n";
         let v = system_network(mounts);
         assert_eq!(v.len(), 2);

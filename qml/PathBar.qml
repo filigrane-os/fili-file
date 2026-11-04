@@ -44,12 +44,28 @@ Item {
         refresh();
     }
 
+    // Bumped when the places change (the name of a network share depends on the servers found)
+    property int names: 0
+    Connections {
+        target: Fili
+        function onPlacesChanged() {
+            bar.names++;
+        }
+    }
+
     readonly property var crumbs: {
+        bar.names;
         const home = Fili.home();
         const out = [];
         let base = "";
         let rest = path;
-        if (path === home || path.startsWith(home + "/")) {
+        const mount = Fili.mountRoot(path);
+        if (mount !== "") {
+            // A network share: starts at the share, under its readable name
+            out.push({ name: Fili.nameOf(mount), path: mount });
+            base = mount;
+            rest = path.slice(mount.length);
+        } else if (path === home || path.startsWith(home + "/")) {
             out.push({ name: home.split("/").pop(), path: home });
             base = home;
             rest = path.slice(home.length);

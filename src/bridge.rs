@@ -478,6 +478,14 @@ pub mod qobject {
         fn reconnected(self: Pin<&mut Fili>, path: &QString);
         #[qinvokable]
         fn tr(self: &Fili, text: &QString) -> QString;
+        // Name of a folder for the user (a network share is "share on Server", not its technical folder name), and the
+        // gvfs mount folder that contains a path ("" for a local path)
+        #[qinvokable]
+        #[cxx_name = "nameOf"]
+        fn name_of(self: &Fili, path: &QString) -> QString;
+        #[qinvokable]
+        #[cxx_name = "mountRoot"]
+        fn mount_root(self: &Fili, path: &QString) -> QString;
         // Folder icon in the accent color (other icons unchanged)
         #[qinvokable]
         fn tint(self: &Fili, url: &QString, accent: &QString, light: bool) -> QString;
@@ -3139,6 +3147,14 @@ impl Fili {
         QString::from(crate::about::logo(light))
     }
 
+    pub fn name_of(&self, path: &QString) -> QString {
+        QString::from(volumes::display_name(&path.to_string()))
+    }
+
+    pub fn mount_root(&self, path: &QString) -> QString {
+        QString::from(volumes::gvfs_root(&path.to_string()))
+    }
+
     pub fn tr(&self, text: &QString) -> QString {
         QString::from(i18n::tr(&text.to_string()))
     }
@@ -3146,7 +3162,7 @@ impl Fili {
     pub fn places(&self) -> QString {
         let home = home();
         let (places, devices) = (i18n::tr("Favorites"), i18n::tr("Locations"));
-        let name = |p: &str| Path::new(p).file_name().map_or(p.to_string(), |n| n.to_string_lossy().into_owned());
+        let name = |p: &str| volumes::display_name(p);
         // (section, name, path, icon name, volume)
         let mut items: Vec<(&str, String, String, &str, String)> = Vec::new();
         let mut seen: Vec<String> = Vec::new();

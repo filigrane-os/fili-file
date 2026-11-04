@@ -21,7 +21,16 @@ ApplicationWindow {
     minimumHeight: 300
     visible: true
     color: FiliTheme.background
-    title: picking ? Fili.pickTitle() : win.searchLabel !== "" ? win.searchLabel : folder.shown === "/" ? "/" : folder.shown.split("/").pop()
+    title: picking ? Fili.pickTitle() : win.searchLabel !== "" ? win.searchLabel : folder.shown === "/" ? "/" : (win.names >= 0 ? Fili.nameOf(folder.shown) : "")
+
+    // Bumped when the places change: the readable name of a network share depends on the servers found on the network
+    property int names: 0
+    Connections {
+        target: Fili
+        function onPlacesChanged() {
+            win.names++;
+        }
+    }
 
     // Name of the search in progress (typed or results from the assistant), empty outside a search
     readonly property string searchLabel: folder.filter.trim() !== "" ? Fili.tr("Search “%1”").replace("%1", folder.filter.trim()) : folder.results !== "" && folder.results !== "…" ? folder.results : folder.results !== "" ? Fili.tr("Search results") : ""

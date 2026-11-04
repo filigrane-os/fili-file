@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.2
+
+- A network share opened from its mount folder is named "share on Server" (for example "sauvegarde on Nas") in the window
+  title, the path bar and the Recents list, instead of the technical `smb-share:server=…,share=…,user=…`. The path bar
+  starts at the share and no longer shows the `gvfs` folders.
+
 ## 1.3.1
 
 - Default accent: sand in dark mode, slate in light mode (it was mist / black). Folder icons follow. A chosen accent is unchanged.
