@@ -1,10 +1,7 @@
 // Window management of the compositor, driven from the window panel of the toolbar. Only niri is supported: its
 // actions are run on the focused window (the one the user just clicked in) through `niri msg action`. The names are
 // checked against a fixed list, so nothing but a window action can be run from the interface.
-use std::{
-    process::{Command, Stdio},
-    time::Duration,
-};
+use std::process::{Command, Stdio};
 
 // Every action the window panel offers (qml/WindowPanel.qml), in niri's own spelling
 pub const ACTIONS: &[&str] = &[
@@ -81,21 +78,13 @@ pub fn snapshot() -> Vec<Win> {
     if available() { windows() } else { Vec::new() }
 }
 
-// After launching an application (Open With): a new window gets the focus from niri by itself, but an application that
-// was already running just opens the file in its existing window, and Wayland does not let it take the focus. So when
-// the application already had a window (an app-id from `names`) and no new window shows up right away, that window is
-// brought to the front, unless the user has already moved to another window in the meantime.
-pub fn raise_existing(before: Vec<Win>, names: Vec<String>) {
+// When a file is opened with an application that already has a window, the application just opens the file in that
+// window, and Wayland does not let it take the focus. So the existing window (an app-id from `names`, among the
+// windows listed before the launch) is brought to the front at once. If the application opens a new window instead,
+// niri gives that one the focus a moment later, so nothing is lost.
+pub fn raise_existing(before: &[Win], names: &[String]) {
     let Some(existing) = before.iter().rev().find(|w| names.contains(&w.app)).map(|w| w.id) else { return };
-    let from = before.iter().find(|w| w.focused).map(|w| w.id);
     std::thread::spawn(move || {
-        for _ in 0..4 {
-            std::thread::sleep(Duration::from_millis(300));
-            let now = windows();
-            if now.iter().any(|w| !before.iter().any(|b| b.id == w.id)) || now.iter().find(|w| w.focused).map(|w| w.id) != from {
-                return;
-            }
-        }
         let _ = Command::new("niri").args(["msg", "action", "focus-window", "--id", &existing.to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
     });
 }

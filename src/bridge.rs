@@ -1527,7 +1527,11 @@ impl FolderModel {
                 return -1;
             }
         }
+        // The application xdg-open will pick: the default one of the type, so that its window can be raised if it exists
+        let names = icons::mime_type(&e.name).and_then(|m| apps::for_mime(&m).into_iter().next()).map(|a| apps::window_names(&a)).unwrap_or_default();
+        let before = if names.is_empty() { Vec::new() } else { crate::window::snapshot() };
         spawn("xdg-open", &e.path, Path::new(&self.dir));
+        crate::window::raise_existing(&before, &names);
         -1
     }
 
@@ -2171,7 +2175,7 @@ impl FolderModel {
         let Some((program, args)) = argv.split_first() else { return };
         let before = crate::window::snapshot();
         spawn_detached(Command::new(program).args(args).current_dir(&self.dir));
-        crate::window::raise_existing(before, apps::window_names(&app));
+        crate::window::raise_existing(&before, &apps::window_names(&app));
     }
 
     pub fn all_archives(&self, paths: &QString) -> bool {
