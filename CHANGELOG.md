@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Default sort: most recently modified first (`sort = "date"`, `sort_desc = true`, both editable in `fili-file.toml`;
+  a sort chosen in the window still wins).
+- Window panel, Arrange: "Join left/right" is niri's consume-or-expel, which takes the window out of its column when
+  it shares it. The tile now says and shows what it will do ("Leave column left/right" in a shared column). Tabs and
+  Move up/down are dimmed when the column holds only this window.
+- A list or grid that gets taller (a window leaving a column, a resize) goes back to the top when everything fits,
+  instead of staying scrolled.
+
 - Window panel: the tiles that describe the window as it is now are highlighted (fullscreen, floating, full width,
   maximized to the edges). niri does not report the other states (centered, tabbed, preset sizes).
 - Window panel: the layout adapts to the room the window leaves: more columns in a short window, a scrolling card

@@ -64,7 +64,20 @@ pub fn state() -> String {
         return String::new();
     }
     let run = |args: &[&str]| Command::new("niri").args(args).stdin(Stdio::null()).stderr(Stdio::null()).output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
-    state_of(&run(&["msg", "-j", "focused-window"]), &run(&["msg", "-j", "focused-output"])).join(",")
+    let window = run(&["msg", "-j", "focused-window"]);
+    let mut on = state_of(&window, &run(&["msg", "-j", "focused-output"]));
+    if stacked(&window, &run(&["msg", "-j", "windows"])) {
+        on.push("stacked");
+    }
+    on.join(",")
+}
+
+// Whether the focused window shares its column with other tiled windows: the "join" actions then take it out of the
+// column instead of merging it into the neighbour, and the column actions (tabs, move up/down) have something to act on
+fn stacked(window: &str, windows: &str) -> bool {
+    let key = |w: &str| Some((number(w, "workspace_id")?, numbers(w, "pos_in_scrolling_layout", 2)?[0]));
+    let Some(mine) = key(window) else { return false };
+    windows.split("{\"id\":").skip(1).filter(|w| !w.contains("\"is_floating\":true") && key(w) == Some(mine)).count() > 1
 }
 
 fn state_of(window: &str, output: &str) -> Vec<&'static str> {
@@ -157,6 +170,16 @@ mod tests {
         assert_eq!(state_of(full, out), vec!["maximize-column", "expand-column-to-available-width", "maximize-window-to-edges"]);
         assert_eq!(state_of(small, out), vec!["toggle-window-floating"]);
         assert!(state_of("", "").is_empty());
+    }
+
+    #[test]
+    fn stacked_columns() {
+        let me = r#"{"id":1,"workspace_id":3,"is_floating":false,"layout":{"pos_in_scrolling_layout":[2,1]}}"#;
+        let one = r#"[{"id":1,"workspace_id":3,"is_floating":false,"layout":{"pos_in_scrolling_layout":[2,1]}},{"id":2,"workspace_id":3,"is_floating":false,"layout":{"pos_in_scrolling_layout":[1,1]}}]"#;
+        let two = r#"[{"id":1,"workspace_id":3,"is_floating":false,"layout":{"pos_in_scrolling_layout":[2,1]}},{"id":2,"workspace_id":3,"is_floating":false,"layout":{"pos_in_scrolling_layout":[2,2]}}]"#;
+        assert!(!stacked(me, one));
+        assert!(stacked(me, two));
+        assert!(!stacked("", two));
     }
 
     #[test]

@@ -421,6 +421,13 @@ Rectangle {
         boundsBehavior: Flickable.StopAtBounds
         reuseItems: true
         KineticScroll {}
+        // A taller viewport (the window left a column, was resized): back to the top when everything fits, else back in bounds
+        onHeightChanged: {
+            if (contentHeight <= height)
+                contentY = originY;
+            else
+                returnToBounds();
+        }
 
         BandSelect {
             view: view
@@ -474,6 +481,13 @@ Rectangle {
         boundsBehavior: Flickable.StopAtBounds
         reuseItems: true
         KineticScroll {}
+        // A taller viewport (the window left a column, was resized): back to the top when everything fits, else back in bounds
+        onHeightChanged: {
+            if (contentHeight <= height)
+                contentY = originY;
+            else
+                returnToBounds();
+        }
 
         BandSelect {
             view: view

@@ -21,7 +21,7 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { view: None, show_hidden: false, window_buttons: true, sort: 0, sort_desc: false, columns: None, start: None, icon_theme: None, folder_icon: None, file_icon: None }
+        Config { view: None, show_hidden: false, window_buttons: true, sort: 2, sort_desc: true, columns: None, start: None, icon_theme: None, folder_icon: None, file_icon: None }
     }
 }
 
@@ -54,7 +54,9 @@ pub fn parse(text: &str) -> Config {
             "show_hidden" => c.show_hidden = v == "true",
             "window_buttons" => c.window_buttons = v != "false",
             "sort" => {
-                c.sort = ["name", "size", "date", "kind", "created", "permissions", "owner"].iter().position(|n| *n == v).unwrap_or(0) as i32
+                if let Some(i) = ["name", "size", "date", "kind", "created", "permissions", "owner"].iter().position(|n| *n == v) {
+                    c.sort = i as i32;
+                }
             }
             "sort_desc" => c.sort_desc = v == "true",
             "columns" if !v.is_empty() => c.columns = Some(v.replace(' ', "")),
@@ -281,15 +283,15 @@ mod tests {
 
     #[test]
     fn parses_settings() {
-        let c = parse("# x\nview = \"grid\"\nshow_hidden = true # yes\nwindow_buttons = false\nsort = \"date\"\nsort_desc = true\ncolumns = \"size, kind\"\nstart = \"~/Documents\"\nicon_theme = \"Papirus\"\nfolder_icon = \"folder-blue\"\nfile_icon = \"text-x-generic\"\nbad\nview2 = 1\n");
+        let c = parse("# x\nview = \"grid\"\nshow_hidden = true # yes\nwindow_buttons = false\nsort = \"size\"\nsort_desc = false\ncolumns = \"size, kind\"\nstart = \"~/Documents\"\nicon_theme = \"Papirus\"\nfolder_icon = \"folder-blue\"\nfile_icon = \"text-x-generic\"\nbad\nview2 = 1\n");
         assert_eq!(
             c,
             Config {
                 view: Some("grid".into()),
                 show_hidden: true,
                 window_buttons: false,
-                sort: 2,
-                sort_desc: true,
+                sort: 1,
+                sort_desc: false,
                 columns: Some("size,kind".into()),
                 start: Some("~/Documents".into()),
                 icon_theme: Some("Papirus".into()),

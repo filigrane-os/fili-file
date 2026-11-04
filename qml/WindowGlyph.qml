@@ -126,6 +126,14 @@ Canvas {
             box(1.5, 2.5, 5, 5);
             arrow(1.5, 11, 7, 11);
             break;
+        case "leave-left":
+            box(7, 2.5, 7.5, 11);
+            arrow(10, 8, 1.5, 8);
+            break;
+        case "leave-right":
+            box(1.5, 2.5, 7.5, 11);
+            arrow(6, 8, 14.5, 8);
+            break;
         case "tabs":
             box(1.5, 5.5, 13, 8);
             line(1.5, 5.5, 1.5, 3, 6, 3, 6, 5.5);

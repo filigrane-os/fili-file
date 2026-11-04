@@ -39,13 +39,14 @@ Item {
             { action: "toggle-window-floating", glyph: "float", label: Fili.tr("Floating") },
             { action: "move-column-left", glyph: "column-left", label: Fili.tr("Column left") },
             { action: "move-column-right", glyph: "column-right", label: Fili.tr("Column right") },
-            { action: "move-window-up", glyph: "window-up", label: Fili.tr("Move up") },
-            { action: "move-window-down", glyph: "window-down", label: Fili.tr("Move down") }
+            { action: "move-window-up", glyph: "window-up", label: Fili.tr("Move up"), needsStack: true },
+            { action: "move-window-down", glyph: "window-down", label: Fili.tr("Move down"), needsStack: true }
         ] },
         { title: Fili.tr("Arrange"), items: [
-            { action: "consume-or-expel-window-left", glyph: "join-left", label: Fili.tr("Join left") },
-            { action: "consume-or-expel-window-right", glyph: "join-right", label: Fili.tr("Join right") },
-            { action: "toggle-column-tabbed-display", glyph: "tabs", label: Fili.tr("Tabbed column") },
+            // Alone in its column the window joins the neighbour; with others it leaves the column (what niri does)
+            { action: "consume-or-expel-window-left", glyph: "join-left", label: Fili.tr("Join left"), whenStacked: { glyph: "leave-left", label: Fili.tr("Leave column left") } },
+            { action: "consume-or-expel-window-right", glyph: "join-right", label: Fili.tr("Join right"), whenStacked: { glyph: "leave-right", label: Fili.tr("Leave column right") } },
+            { action: "toggle-column-tabbed-display", glyph: "tabs", label: Fili.tr("Tabbed column"), needsStack: true },
             { action: "toggle-overview", glyph: "overview", label: Fili.tr("Overview") }
         ] },
         { title: Fili.tr("Send to"), items: [
@@ -86,6 +87,16 @@ Item {
     }
     onAvailHChanged: if (visible) fit()
     onAvailWChanged: if (visible) fit()
+    // The window shares its column with others (niri's "join" then leaves the column)
+    readonly property bool stacked: active.includes("stacked")
+    // What a tile shows and does now: its stacked variant when there is one
+    function shown(item) {
+        return stacked && item.whenStacked ? Object.assign({}, item, item.whenStacked) : item;
+    }
+    // A column action with nothing to act on (tabs, move up/down in a column of one window) is dimmed
+    function enabledItem(item) {
+        return !item.needsStack || stacked;
+    }
     function isActive(item) {
         if (item.action)
             return active.includes(item.action);
@@ -146,6 +157,8 @@ Item {
         visible = false;
     }
     function run(item) {
+        if (!enabledItem(item))
+            return;
         close();
         if (item.action) {
             Fili.windowAction(item.action);
@@ -250,6 +263,7 @@ Item {
                                 onSelectedChanged: if (selected) flick.reveal(tile)
                                 width: panel.tileW
                                 height: panel.tileH
+                                opacity: panel.active.length >= 0 && panel.enabledItem(modelData) ? 1 : 0.4
                                 radius: FiliTheme.radiusControl
                                 color: tileArea.pressed ? FiliTheme.surfaceActive : tile.selected ? FiliTheme.surfaceHover : tile.on ? FiliTheme.alpha(FiliTheme.accentColor, 0.22) : "transparent"
                                 border.width: tile.selected ? 1 : 0
@@ -259,7 +273,7 @@ Item {
                                     spacing: 4
                                     WindowGlyph {
                                         anchors.horizontalCenter: parent.horizontalCenter
-                                        kind: tile.modelData.glyph
+                                        kind: panel.shown(tile.modelData).glyph
                                         color: tile.on ? FiliTheme.accentBright : FiliTheme.text
                                         width: 20
                                         height: 20
@@ -267,7 +281,7 @@ Item {
                                     Text {
                                         width: panel.tileW - 8
                                         horizontalAlignment: Text.AlignHCenter
-                                        text: tile.modelData.label
+                                        text: panel.shown(tile.modelData).label
                                         wrapMode: Text.WordWrap
                                         maximumLineCount: 2
                                         elide: Text.ElideRight
