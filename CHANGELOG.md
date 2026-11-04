@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.2
 
 - Window panel: keyboard navigation. The first tile is selected when it opens; arrows move (left/right through the
   tiles, up/down by rows), Home/End, Tab, Enter or Space runs the tile, Esc closes. A pointer resting under the panel
