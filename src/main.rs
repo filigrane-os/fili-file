@@ -34,6 +34,21 @@ fn main() {
     if matches!(name.as_deref(), Some("fili-archive" | "archiveur")) {
         std::process::exit(archive::run_cli(&args[1..]));
     }
+    // Informational flags, before Qt starts (without them the flag would open a window)
+    match args.get(1).map(String::as_str) {
+        Some("-V" | "--version") => {
+            println!("fili-file {}", env!("CARGO_PKG_VERSION"));
+            return;
+        }
+        Some("-h" | "--help") => {
+            println!(
+                "fili-file {}: Casier, the file manager of Filigrane\n\nUsage: fili-file [PATH...]       open a window\n       fili-file ctl ...         command an open window\n       fili-file archive ...     Archiveur (also fili-archive, archiveur)\n       fili-file --portal        FileChooser portal service\n       fili-file -V, --version   print the version",
+                env!("CARGO_PKG_VERSION")
+            );
+            return;
+        }
+        _ => {}
+    }
     if args.get(1).is_some_and(|a| a == "archive") {
         std::process::exit(archive::run_cli(&args[2..]));
     }

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `fili-file --version` (`-V`) and `--help` (`-h`) print and exit; before, the flag opened a window.
+
 ## 1.5.0
 
 - **Archiveur**: the compress and extract engine runs without a window as `fili-archive` and `archiveur`, other names of
