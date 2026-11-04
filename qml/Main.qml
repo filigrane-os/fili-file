@@ -977,7 +977,7 @@ ApplicationWindow {
         Rectangle {
             id: closeButton
             visible: win.windowButtons
-            anchors { right: parent.right; rightMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
+            anchors { right: parent.right; rightMargin: (toolbar.height - height) / 2; verticalCenter: parent.verticalCenter }
             width: 28
             height: 24
             radius: FiliTheme.radiusControl
@@ -1357,7 +1357,7 @@ ApplicationWindow {
     }
     WindowPanel {
         id: windowPanel
-        anchorRight: windowButton.x + windowButton.width + FiliTheme.margin
+        anchorRight: width - (toolbar.height - closeButton.height) / 2
         anchorTop: toolbar.height + 1
     }
     Connections {

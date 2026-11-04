@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.1
+
+- Window buttons: the right margin of the Close button equals the margin above it, and the Window button is a plain
+  square. "Show Window Buttons" and "Window Actions…" moved from the View menu to a new Window menu of the bar.
+
 ## 1.4.0
 
 - Two buttons at the far right of the toolbar: Close (a cross), and Window, which opens a panel of window actions, one
