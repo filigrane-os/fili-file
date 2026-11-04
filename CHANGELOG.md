@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.5.1
 
 - `fili-file --version` (`-V`) and `--help` (`-h`) print and exit; before, the flag opened a window.
 
