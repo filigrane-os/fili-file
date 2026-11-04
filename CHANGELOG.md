@@ -7,6 +7,8 @@
 - Window panel, Arrange: "Join left/right" is niri's consume-or-expel, which takes the window out of its column when
   it shares it. The tile now says and shows what it will do ("Leave column left/right" in a shared column). Tabs and
   Move up/down are dimmed when the column holds only this window.
+- Changing the sort (header click, View menu, `ctl sort`), ascending or descending, scrolls the list back to its top;
+  the selection stays.
 - A list or grid that gets taller (a window leaving a column, a resize) goes back to the top when everything fits,
   instead of staying scrolled.
 

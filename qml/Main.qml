@@ -731,6 +731,7 @@ ApplicationWindow {
                 win.show(folder.sortBy(key, files.currentIndex));
             if (folder.sortDesc !== (dir === "desc"))
                 win.show(folder.sortBy(key, files.currentIndex));
+            files.scrollTop();
             return { ok: true };
         }
         }
@@ -870,8 +871,10 @@ ApplicationWindow {
             files.setViewMode(id.slice(5));
         else if (id === "hidden")
             win.show(folder.toggleHidden(files.currentIndex));
-        else if (id.startsWith("sort:"))
+        else if (id.startsWith("sort:")) {
             win.show(folder.sortBy(parseInt(id.slice(5)), files.currentIndex));
+            files.scrollTop();
+        }
         else if (id.startsWith("col:")) {
             const key = id.slice(4);
             const on = files.enabledKeys.indexOf(key) >= 0;

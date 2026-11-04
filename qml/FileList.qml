@@ -27,6 +27,10 @@ Rectangle {
             active.positionViewAtIndex(i, ListView.Contain);
         focusList();
     }
+    // After a change of sort (either direction) the list starts again from its top; the selection stays
+    function scrollTop() {
+        Qt.callLater(() => active.positionViewAtBeginning());
+    }
     property bool windowActive: true
     signal openRow(int row)
     signal goUp()
@@ -325,8 +329,10 @@ Rectangle {
                         if (e.button === Qt.RightButton) {
                             const p = mapToItem(view, e.x, e.y);
                             view.headerContext(p.x, p.y);
-                        } else
+                        } else {
                             view.select(view.folder.sortBy(col.modelData.sort, view.currentIndex));
+                            view.scrollTop();
+                        }
                     }
                 }
                 // Left edge of a data column: dragging it makes the column wider (to the left) or narrower;
