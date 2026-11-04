@@ -87,7 +87,7 @@ success = "#4a7354"
 # Accent colors chosen with `fili-theme accent <name>`: [dark, dark bright, light, light bright].
 # No accent chosen (or an unknown name) means `default`: sand in dark mode, slate in light mode.
 [theme.accents]
-default = ["#d2bf92", "#e0d1ab", "#4f6884", "#3d5470"]   # sand in dark mode, slate in light mode
+default = ["#d2bf92", "#e0d1ab", "#4f6884", "#3d5470"]
 voile = ["#9dbbd6", "#b9d0e4", "#3f5a78", "#2f4a66"]
 ardoise = ["#7f9ab6", "#9ab2ca", "#4f6884", "#3d5470"]
 sauge = ["#a3bfa8", "#bcd3c0", "#4a7354", "#385a42"]
