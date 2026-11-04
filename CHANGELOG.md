@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.3
 
 - Default sort: most recently modified first (`sort = "date"`, `sort_desc = true`, both editable in `fili-file.toml`;
   a sort chosen in the window still wins).
