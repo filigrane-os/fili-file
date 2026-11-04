@@ -55,12 +55,43 @@ Item {
         ] }
     ]
 
+    // Keyboard selection: index in the flat list of tiles; rows[] gives the tiles of each visual row
+    property int current: 0
+    // Last pointer position seen: the pointer resting under the panel when it opens must not take the selection
+    property real px: -1
+    property real py: -1
+    readonly property var rows: {
+        const r = [];
+        let n = 0;
+        for (const g of groups) {
+            for (let i = 0; i < g.items.length; i += 3) {
+                const row = [];
+                for (let k = i; k < Math.min(i + 3, g.items.length); k++)
+                    row.push(n + k);
+                r.push(row);
+            }
+            n += g.items.length;
+        }
+        return r;
+    }
+    readonly property var flat: groups.reduce((a, g) => a.concat(g.items), [])
+    function rowOf(i) {
+        return rows.findIndex(r => r.includes(i));
+    }
+    function moveRow(d) {
+        const r = rowOf(current), col = rows[r].indexOf(current);
+        const t = rows[(r + d + rows.length) % rows.length];
+        current = t[Math.min(col, t.length - 1)];
+    }
+
     visible: false
     anchors.fill: parent
     focus: visible
     z: 100
 
     function open() {
+        current = 0;
+        px = -1;
         visible = true;
         forceActiveFocus();
     }
@@ -79,7 +110,25 @@ Item {
         const target = { fullscreen: Window.FullScreen, maximize: Window.Maximized, minimize: Window.Minimized }[item.local];
         w.visibility = w.visibility === target ? Window.Windowed : target;
     }
-    Keys.onEscapePressed: close()
+    Keys.onPressed: e => {
+        const n = flat.length;
+        switch (e.key) {
+        case Qt.Key_Escape: close(); break;
+        case Qt.Key_Right: current = (current + 1) % n; break;
+        case Qt.Key_Left: current = (current - 1 + n) % n; break;
+        case Qt.Key_Tab: current = (current + 1) % n; break;
+        case Qt.Key_Backtab: current = (current - 1 + n) % n; break;
+        case Qt.Key_Down: moveRow(1); break;
+        case Qt.Key_Up: moveRow(-1); break;
+        case Qt.Key_Home: current = 0; break;
+        case Qt.Key_End: current = n - 1; break;
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+        case Qt.Key_Space: run(flat[current]); break;
+        default: return;
+        }
+        e.accepted = true;
+    }
 
     MouseArea {
         anchors.fill: parent
@@ -114,6 +163,8 @@ Item {
                 delegate: Column {
                     id: grp
                     required property var modelData
+                    required property int index
+                    readonly property int base: panel.groups.slice(0, index).reduce((a, g) => a + g.items.length, 0)
                     spacing: FiliTheme.space1
                     Text {
                         text: grp.modelData.title
@@ -130,10 +181,14 @@ Item {
                             delegate: Rectangle {
                                 id: tile
                                 required property var modelData
+                                required property int index
+                                readonly property bool selected: panel.current === grp.base + index
                                 width: panel.tileW
                                 height: panel.tileH
                                 radius: FiliTheme.radiusControl
-                                color: tileArea.pressed ? FiliTheme.surfaceActive : tileArea.containsMouse ? FiliTheme.surfaceHover : "transparent"
+                                color: tileArea.pressed ? FiliTheme.surfaceActive : tile.selected ? FiliTheme.surfaceHover : "transparent"
+                                border.width: tile.selected ? 1 : 0
+                                border.color: FiliTheme.accentColor
                                 Column {
                                     anchors.centerIn: parent
                                     spacing: 4
@@ -159,6 +214,16 @@ Item {
                                     id: tileArea
                                     anchors.fill: parent
                                     hoverEnabled: true
+                                    onPositionChanged: mouse => {
+                                        const p = tileArea.mapToItem(panel, mouse.x, mouse.y);
+                                        const moved = panel.px >= 0 && Math.abs(p.x - panel.px) + Math.abs(p.y - panel.py) >= 3;
+                                        if (moved)
+                                            panel.current = grp.base + tile.index;
+                                        if (panel.px < 0 || moved) {
+                                            panel.px = p.x;
+                                            panel.py = p.y;
+                                        }
+                                    }
                                     onClicked: panel.run(tile.modelData)
                                 }
                             }

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Window panel: keyboard navigation. The first tile is selected when it opens; arrows move (left/right through the
+  tiles, up/down by rows), Home/End, Tab, Enter or Space runs the tile, Esc closes. A pointer resting under the panel
+  does not take the selection.
+
 ## 1.4.1
 
 - Window buttons: the right margin of the Close button equals the margin above it, and the Window button is a plain
