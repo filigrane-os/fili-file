@@ -19,6 +19,8 @@ fn main() {
                 "qml/Preview.qml",
                 "qml/PreviewButton.qml",
                 "qml/IconButton.qml",
+                "qml/WindowGlyph.qml",
+                "qml/WindowPanel.qml",
                 "qml/TextButton.qml",
                 "qml/ContextMenu.qml",
                 "qml/ViewSwitch.qml",

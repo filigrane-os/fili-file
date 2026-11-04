@@ -294,6 +294,8 @@ ApplicationWindow {
     Action { id: aCopyStem; text: Fili.tr("Copy Name Without Extension"); enabled: win.canAct && win.selCount > 0; onTriggered: win.copyAs("stem") }
     Action { id: aCopyParent; text: Fili.tr("Copy Parent Folder"); enabled: win.canAct && win.selCount > 0; onTriggered: win.copyAs("parent") }
     Action { id: aPreview; text: Fili.tr("Show Preview"); shortcut: "Ctrl+Shift+P"; checkable: true; checked: win.previewOn; enabled: !win.picking; onTriggered: win.togglePreview() }
+    Action { id: aWindowButtons; text: Fili.tr("Show Window Buttons"); checkable: true; checked: win.windowButtons; onTriggered: win.toggleWindowButtons() }
+    Action { id: aWindowPanel; text: Fili.tr("Window Actions…"); shortcut: "Ctrl+Shift+W"; enabled: windowButton.visible && !win.typing; onTriggered: windowPanel.visible ? windowPanel.close() : windowPanel.open() }
     Action { id: aHidden; text: Fili.tr("Show Hidden Files"); shortcut: "Ctrl+H"; checkable: true; checked: folder.showHidden; onTriggered: win.show(folder.toggleHidden(files.currentIndex)) }
     Action { id: aRefresh; text: Fili.tr("Reload"); shortcut: "F5"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
     Action { id: aRefreshAlt; shortcut: "Ctrl+R"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
@@ -315,7 +317,7 @@ ApplicationWindow {
     readonly property var menuActions: ({
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "put-back": aPutBack, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "detach-tab": aDetachTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "compress": aCompress, "extract": aExtract, "rename": aRename, "bulk-rename": aBulk,
-        "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
+        "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "toggle-window-buttons": aWindowButtons, "window-actions": aWindowPanel, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
     })
     // Files of the selection that can be sent (folders are not sent as they are)
@@ -408,6 +410,11 @@ ApplicationWindow {
         previewWidth = px > 0 ? Math.max(160, Math.min(900, Math.round(px))) : previewDefault;
         if (save !== false)
             Fili.setUiState("preview", px > 0 ? String(previewWidth) : "");
+    }
+    property bool windowButtons: Fili.windowButtons()
+    function toggleWindowButtons() {
+        windowButtons = !windowButtons;
+        Fili.setWindowButtons(windowButtons);
     }
     function togglePreview() {
         previewOn = !previewOn;
@@ -966,9 +973,57 @@ ApplicationWindow {
             }
         }
         // Fuzzy search (Ctrl+F) in the folder shown and all its subfolders, best results first, Esc clears
+        // Window buttons at the far right: close, and the panel of window actions (niri only)
+        Rectangle {
+            id: closeButton
+            visible: win.windowButtons
+            anchors { right: parent.right; rightMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
+            width: 28
+            height: 24
+            radius: FiliTheme.radiusControl
+            color: closeArea.pressed ? FiliTheme.danger : closeArea.containsMouse ? FiliTheme.alpha(FiliTheme.danger, 0.75) : "transparent"
+            WindowGlyph {
+                anchors.centerIn: parent
+                kind: "close"
+                width: 16
+                height: 16
+                color: closeArea.containsMouse ? "#ffffff" : FiliTheme.text
+            }
+            MouseArea {
+                id: closeArea
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: win.quit()
+            }
+            Accessible.role: Accessible.Button
+            Accessible.name: Fili.tr("Close window")
+        }
+        Rectangle {
+            id: windowButton
+            visible: win.windowButtons
+            anchors { right: closeButton.left; rightMargin: FiliTheme.space1; verticalCenter: parent.verticalCenter }
+            width: 28
+            height: 24
+            radius: FiliTheme.radiusControl
+            color: windowArea.pressed ? FiliTheme.surfaceActive : windowArea.containsMouse || windowPanel.visible ? FiliTheme.surfaceHover : "transparent"
+            WindowGlyph {
+                anchors.centerIn: parent
+                kind: "window"
+                width: 16
+                height: 16
+            }
+            MouseArea {
+                id: windowArea
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: windowPanel.visible ? windowPanel.close() : windowPanel.open()
+            }
+            Accessible.role: Accessible.Button
+            Accessible.name: Fili.tr("Window")
+        }
         Rectangle {
             id: search
-            anchors { right: parent.right; rightMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
+            anchors { right: windowButton.visible ? windowButton.left : closeButton.visible ? closeButton.left : parent.right; rightMargin: windowButton.visible || closeButton.visible ? FiliTheme.space3 : FiliTheme.margin; verticalCenter: parent.verticalCenter }
             width: 180
             height: 26
             radius: FiliTheme.radiusControl
@@ -1299,6 +1354,11 @@ ApplicationWindow {
     ContextMenu {
         id: menu
         onActivated: id => win.menuAction(id)
+    }
+    WindowPanel {
+        id: windowPanel
+        anchorRight: windowButton.x + windowButton.width + FiliTheme.margin
+        anchorTop: toolbar.height + 1
     }
     Connections {
         target: folder

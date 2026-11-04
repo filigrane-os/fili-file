@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0
+
+- Two buttons at the far right of the toolbar: Close (a cross), and Window, which opens a panel of window actions, one
+  clickable tile with its own pictogram each. Under niri: fullscreen, maximize, fill the width, preset widths and
+  heights, center, floating, move or join columns, tabbed column, overview, send to another workspace or monitor,
+  screenshot. On any other desktop: fullscreen, maximize, minimize.
+- Hide them with `window_buttons = false` in `fili-file.toml`, or with View > Show Window Buttons (the menu choice
+  wins). View > Window Actions… (Ctrl+Shift+W) opens the panel from the keyboard.
+
 ## 1.3.2
 
 - A network share opened from its mount folder is named "share on Server" (for example "sauvegarde on Nas") in the window

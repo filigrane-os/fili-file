@@ -321,6 +321,19 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "hasTool"]
         fn has_tool(self: &Fili, name: &QString) -> bool;
+        // Window management under niri (the window panel of the toolbar)
+        #[qinvokable]
+        #[cxx_name = "windowControl"]
+        fn window_control(self: &Fili) -> bool;
+        #[qinvokable]
+        #[cxx_name = "windowButtons"]
+        fn window_buttons(self: &Fili) -> bool;
+        #[qinvokable]
+        #[cxx_name = "setWindowButtons"]
+        fn set_window_buttons(self: &Fili, on: bool);
+        #[qinvokable]
+        #[cxx_name = "windowAction"]
+        fn window_action(self: &Fili, name: &QString) -> bool;
         #[qinvokable]
         #[cxx_name = "pickTitle"]
         fn pick_title(self: &Fili) -> QString;
@@ -2964,6 +2977,27 @@ impl Fili {
             "fili-archive" => crate::tools::archive_available(),
             other => crate::tools::available(other),
         }
+    }
+
+    pub fn window_control(&self) -> bool {
+        crate::window::available()
+    }
+
+    // Toolbar buttons close / window: the last choice made in the menu takes precedence over the setting
+    pub fn window_buttons(&self) -> bool {
+        match ui_get(&std::fs::read_to_string(ui_file()).unwrap_or_default(), "window_buttons").as_str() {
+            "1" => true,
+            "0" => false,
+            _ => crate::config::load().window_buttons,
+        }
+    }
+
+    pub fn set_window_buttons(&self, on: bool) {
+        ui_store("window_buttons", if on { "1" } else { "0" });
+    }
+
+    pub fn window_action(&self, name: &QString) -> bool {
+        crate::window::run(&name.to_string())
     }
 
     pub fn pick_title(&self) -> QString {

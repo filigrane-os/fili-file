@@ -21,6 +21,7 @@ mod tools;
 mod visits;
 mod volumes;
 mod watch;
+mod window;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 
