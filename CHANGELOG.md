@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Window panel: the tiles that describe the window as it is now are highlighted (fullscreen, floating, full width,
+  maximized to the edges). niri does not report the other states (centered, tabbed, preset sizes).
+- Window panel: the layout adapts to the room the window leaves: more columns in a short window, a scrolling card
+  when even that is too tall, so it is always shown completely.
+- Double click and Open With launch the default application directly and raise its window if it was already open.
+
 - Mouse wheel: the inertia handler of the lists took the wheel events of a mouse and ignored them, so nothing
   scrolled. It now scrolls by steps for a wheel and keeps the momentum for a touchpad.
 - Open With: when the chosen application is already running (it opens the file in its existing window, which Wayland

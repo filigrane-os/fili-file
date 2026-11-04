@@ -2,6 +2,8 @@
 // It opens under the button, a click elsewhere or Esc closes it, and it closes after an action. The actions run on
 // this window (the focused one) through Fili.windowAction (src/window.rs lists the names it accepts). Outside niri
 // the panel offers what Qt does on any desktop: fullscreen, maximize, minimize (items with `local`).
+// The tiles that describe the window as it is now (fullscreen, floating, full width...) are highlighted. The layout
+// adapts to the space the window leaves: more columns when it is short, a scrollable card when even that is too tall.
 import QtQuick
 import QtQuick.Window
 import Fili.Files
@@ -55,6 +57,49 @@ Item {
         ] }
     ]
 
+    // Tiles that match the state of the window now (names of `action` items, or `local` kinds), read when it opens
+    property var active: []
+    property int cols: 3
+    readonly property int headingH: 16
+    readonly property real availH: height - anchorTop - FiliTheme.space2
+    readonly property real availW: width - 2 * FiliTheme.space1
+    function heightFor(c) {
+        let h = 2 * FiliTheme.space2 + 2 + (groups.length - 1) * FiliTheme.space2;
+        for (const g of groups) {
+            const r = Math.ceil(g.items.length / c);
+            h += headingH + FiliTheme.space1 + r * tileH + (r - 1) * FiliTheme.space1;
+        }
+        return h;
+    }
+    function widthFor(c) {
+        return c * tileW + (c - 1) * FiliTheme.space1 + 2 * FiliTheme.space2 + 2;
+    }
+    // Fewest columns (3 or more) for which the card fits in the height; as many as fit in the width otherwise
+    function fit() {
+        let most = 3;
+        while (widthFor(most + 1) <= availW && most < 8)
+            most++;
+        let c = 3;
+        while (c < most && heightFor(c) > availH)
+            c++;
+        cols = Math.min(c, Math.max(1, most));
+    }
+    onAvailHChanged: if (visible) fit()
+    onAvailWChanged: if (visible) fit()
+    function isActive(item) {
+        if (item.action)
+            return active.includes(item.action);
+        const w = Window.window;
+        return !!w && w.visibility === { fullscreen: Window.FullScreen, maximize: Window.Maximized, minimize: Window.Minimized }[item.local];
+    }
+    function refreshState() {
+        const w = Window.window;
+        const full = !!w && w.visibility === Window.FullScreen;
+        let list = Fili.windowControl() ? Fili.windowState().split(",").filter(x => x !== "") : [];
+        if (full)
+            list = list.filter(x => x !== "maximize-window-to-edges").concat(["fullscreen-window"]);
+        active = list;
+    }
     // Keyboard selection: index in the flat list of tiles; rows[] gives the tiles of each visual row
     property int current: 0
     // Last pointer position seen: the pointer resting under the panel when it opens must not take the selection
@@ -64,9 +109,9 @@ Item {
         const r = [];
         let n = 0;
         for (const g of groups) {
-            for (let i = 0; i < g.items.length; i += 3) {
+            for (let i = 0; i < g.items.length; i += cols) {
                 const row = [];
-                for (let k = i; k < Math.min(i + 3, g.items.length); k++)
+                for (let k = i; k < Math.min(i + cols, g.items.length); k++)
                     row.push(n + k);
                 r.push(row);
             }
@@ -92,7 +137,9 @@ Item {
     function open() {
         current = 0;
         px = -1;
+        refreshState();
         visible = true;
+        fit();
         forceActiveFocus();
     }
     function close() {
@@ -140,8 +187,8 @@ Item {
         id: card
         x: Math.max(FiliTheme.space1, panel.anchorRight - width)
         y: panel.anchorTop
-        width: 3 * panel.tileW + 2 * FiliTheme.space1 + 2 * FiliTheme.space2 + 2
-        height: body.height + 2 * FiliTheme.space2 + 2
+        width: panel.widthFor(panel.cols)
+        height: Math.min(body.height + 2 * FiliTheme.space2 + 2, panel.availH)
         radius: 8
         color: FiliTheme.surface
         border.width: FiliTheme.borderWidth
@@ -153,10 +200,26 @@ Item {
             acceptedButtons: Qt.AllButtons
         }
 
+        Flickable {
+            id: flick
+            anchors { fill: parent; margins: 1 }
+            clip: true
+            contentWidth: width
+            contentHeight: body.height + 2 * FiliTheme.space2
+            boundsBehavior: Flickable.StopAtBounds
+            interactive: contentHeight > height
+        // Brings a tile into view (keyboard selection)
+        function reveal(item) {
+            const top = item.mapToItem(body, 0, 0).y + FiliTheme.space2;
+            if (top < flick.contentY)
+                flick.contentY = top - FiliTheme.space1;
+            else if (top + item.height > flick.contentY + flick.height)
+                flick.contentY = top + item.height - flick.height + FiliTheme.space1;
+        }
         Column {
             id: body
-            x: FiliTheme.space2 + 1
-            y: FiliTheme.space2 + 1
+            x: FiliTheme.space2
+            y: FiliTheme.space2
             spacing: FiliTheme.space2
             Repeater {
                 model: panel.groups
@@ -174,7 +237,7 @@ Item {
                         color: FiliTheme.muted
                     }
                     Grid {
-                        columns: 3
+                        columns: panel.cols
                         spacing: FiliTheme.space1
                         Repeater {
                             model: grp.modelData.items
@@ -183,10 +246,12 @@ Item {
                                 required property var modelData
                                 required property int index
                                 readonly property bool selected: panel.current === grp.base + index
+                                readonly property bool on: panel.active.length >= 0 && panel.isActive(modelData)
+                                onSelectedChanged: if (selected) flick.reveal(tile)
                                 width: panel.tileW
                                 height: panel.tileH
                                 radius: FiliTheme.radiusControl
-                                color: tileArea.pressed ? FiliTheme.surfaceActive : tile.selected ? FiliTheme.surfaceHover : "transparent"
+                                color: tileArea.pressed ? FiliTheme.surfaceActive : tile.selected ? FiliTheme.surfaceHover : tile.on ? FiliTheme.alpha(FiliTheme.accentColor, 0.22) : "transparent"
                                 border.width: tile.selected ? 1 : 0
                                 border.color: FiliTheme.accentColor
                                 Column {
@@ -195,6 +260,7 @@ Item {
                                     WindowGlyph {
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         kind: tile.modelData.glyph
+                                        color: tile.on ? FiliTheme.accentBright : FiliTheme.text
                                         width: 20
                                         height: 20
                                     }
@@ -207,7 +273,7 @@ Item {
                                         elide: Text.ElideRight
                                         font.family: FiliTheme.font
                                         font.pixelSize: FiliTheme.sizeSmall
-                                        color: FiliTheme.text
+                                        color: tile.on ? FiliTheme.accentBright : FiliTheme.text
                                     }
                                 }
                                 MouseArea {
@@ -231,6 +297,7 @@ Item {
                     }
                 }
             }
+        }
         }
     }
 }

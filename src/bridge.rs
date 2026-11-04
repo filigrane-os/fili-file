@@ -326,6 +326,9 @@ pub mod qobject {
         #[cxx_name = "windowControl"]
         fn window_control(self: &Fili) -> bool;
         #[qinvokable]
+        #[cxx_name = "windowState"]
+        fn window_state(self: &Fili) -> QString;
+        #[qinvokable]
         #[cxx_name = "windowButtons"]
         fn window_buttons(self: &Fili) -> bool;
         #[qinvokable]
@@ -2995,6 +2998,10 @@ impl Fili {
     }
 
     // Toolbar buttons close / window: the last choice made in the menu takes precedence over the setting
+    pub fn window_state(&self) -> QString {
+        QString::from(&crate::window::state())
+    }
+
     pub fn window_buttons(&self) -> bool {
         match ui_get(&std::fs::read_to_string(ui_file()).unwrap_or_default(), "window_buttons").as_str() {
             "1" => true,
