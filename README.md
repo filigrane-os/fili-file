@@ -97,6 +97,7 @@ Accents, in dark and light:
 - Copy, cut, paste, drag and drop, bulk rename, undo, trash (including the trash of other volumes)
 - Quick look (Space), preview panel, thumbnails for images and PDF, file info with SHA-256
 - Compress and extract (zip, 7z, tar.gz/xz/zst, with passwords), built in: Casier drives `tar`, `zip` and `7z`
+  (**Archiveur**, below, is the same engine without a window)
 - Volumes, USB drives, MTP phones and network places (SMB, SFTP) through udisks and gvfs; the servers announced on
   the local network (NAS boxes, Macs, Linux machines with Samba or SSH) are listed in the sidebar by themselves, one click
   opens Connect to Server with their address filled in (multicast DNS, no daemon needed). A server is one row in the
@@ -116,6 +117,27 @@ Accents, in dark and light:
   minimize. Hide the buttons with `window_buttons = false` or from the Window menu of the bar
 - Sorted by modification date, most recent first, by default (any column, either direction; changing the sort scrolls
   back to the top); mouse wheel and touchpad scrolling with inertia
+
+## Archiveur: compress and extract without a window
+
+The compress and extract engine of Casier also runs as **Archiveur**, with no window and no Qt start-up (about 10 ms):
+`fili-archive` and `archiveur` are other names of the `fili-file` binary, like `casier`, and `fili-file archive ...` does the same.
+It is what a double click on an archive from the browser or a notification runs, and what scripts and assistants call.
+
+```
+archiveur pack photos/              # photos.zip, next to the folder
+fili-archive unpack backup.tar.zst  # a folder next to the archive
+fili-archive list backup.tar.zst
+fili-archive about                  # version, commands, formats
+```
+
+`pack [-f zip|7z|tar.gz|tar.xz|tar.zst] [-l fast|normal|best] [--no-hidden] [--password-stdin] [-q] [-o OUT] FILE...`,
+`unpack [--password-stdin] [-o FOLDER] ARCHIVE...`, `open` (same as `unpack`, for the file association), `list`, `about`
+(see `man fili-archive`). It never overwrites (`Archive 2.zip`), the result only appears once finished, an archive is
+extracted into a folder of its own, a password never goes through the arguments, and the paths created are printed, one per
+line. Outside a terminal the result is announced with `notify-send` (English or French). With Filigrane's `fili-tx`, each
+call is a transaction that `fili-tx undo` reverses; `-q` skips that and the notification (Casier has its own panel and undo).
+Default format: `zip`, or `$FILI_ARCHIVE_FORMAT`. The icon uses the "archive" glyph of [Lucide](https://lucide.dev) (ISC).
 
 ## Install
 
@@ -138,7 +160,7 @@ elsewhere. A linker such as `mold` or `lld` makes linking much faster.
 Only the Void names were checked against a package repository; the others are the usual ones and may differ slightly.
 
 Optional programs: `poppler` / `poppler-utils` (`pdftoppm`, PDF thumbnails), `udisks2` (mount and eject), `gvfs`
-(network places, phones), `tar`, `zip` and `7z` (compress and extract; the `fili-archive` tool is used instead when installed), `fili-share` (Nearby and Share), `quicklook` (the Space preview window). A feature whose
+(network places, phones), `tar`, `zip` and `7z` (compress and extract), `fili-share` (Nearby and Share), `quicklook` (the Space preview window). A feature whose
 program is missing is switched off; nothing else depends on them.
 
 The fonts (Jost, JetBrains Mono, Fili Icons) are inside the binary: no font to install.

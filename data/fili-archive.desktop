@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Archiveur
+GenericName=Archive extractor
+GenericName[fr]=Extracteur d’archives
+Comment=Extract archives
+Comment[fr]=Extraire des archives
+Exec=fili-archive open %F
+Icon=fili-archive
+Keywords=archive;zip;7z;tar;compress;extract;
+Keywords[fr]=archive;zip;7z;tar;compresser;extraire;
+Categories=System;Archiving;Compression;
+MimeType=application/zip;application/x-7z-compressed;application/vnd.rar;application/x-rar;application/x-tar;application/x-compressed-tar;application/x-bzip-compressed-tar;application/x-xz-compressed-tar;application/x-zstd-compressed-tar;application/zstd;application/gzip;
+NoDisplay=true
+Terminal=false

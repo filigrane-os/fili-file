@@ -3,6 +3,8 @@
 
 pub const BINARY: &str = "fili-file";
 pub const ALIAS: &str = "casier";
+// Archiveur: the archive commands (fili-archive, archiveur) are other names of the same binary (see archive.rs)
+pub const ARCHIVE_NAME: &str = "Archiveur";
 
 // Crate version, plus the git description when it adds something (a development build between two tags); a release
 // build made from the tag `v<version>` shows the version alone.

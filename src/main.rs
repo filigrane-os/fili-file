@@ -28,7 +28,12 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 fn main() {
     // Command to an open instance (assistant): fili-file ctl goto|show ...
     let args: Vec<String> = std::env::args().collect();
-    // Compress and extract without the optional fili-archive tool (see archive.rs): fili-file archive pack|unpack ...
+    // Archiveur (see archive.rs): `fili-archive` and `archiveur` are other names of this binary, and `fili-file archive ...`
+    // does the same. It runs before Qt starts.
+    let name = args.first().and_then(|a| std::path::Path::new(a).file_name()).map(|n| n.to_string_lossy().into_owned());
+    if matches!(name.as_deref(), Some("fili-archive" | "archiveur")) {
+        std::process::exit(archive::run_cli(&args[1..]));
+    }
     if args.get(1).is_some_and(|a| a == "archive") {
         std::process::exit(archive::run_cli(&args[2..]));
     }

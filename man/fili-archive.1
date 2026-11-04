@@ -1,0 +1,70 @@
+.TH FILI-ARCHIVE 1 "" "fili-archive" "User Commands"
+.SH NAME
+fili-archive, archiveur \- compress and extract files (Archiveur)
+.SH SYNOPSIS
+.B fili-archive pack
+[\fB\-f\fR \fIFORMAT\fR] [\fB\-l\fR \fILEVEL\fR] [\fB\-\-no\-hidden\fR] [\fB\-\-password\-stdin\fR] [\fB\-q\fR] [\fB\-o\fR \fIOUTPUT\fR] \fIFILE\fR...
+.br
+.B fili-archive unpack
+[\fB\-\-password\-stdin\fR] [\fB\-o\fR \fIFOLDER\fR] \fIARCHIVE\fR...
+.br
+.B fili-archive open
+\fIARCHIVE\fR...
+.br
+.B fili-archive list
+\fIARCHIVE\fR
+.br
+.B fili-archive about
+.SH DESCRIPTION
+Archiveur is the display name of \fBfili-archive\fR; \fBarchiveur\fR is the same command. Both are other names of the \fBfili-file\fR program (Casier), which runs as Archiveur under these names. It has no window: it compresses
+and extracts with \fBtar\fR, \fBzip\fR and \fB7z\fR, which must be installed. It is meant to be called by a file manager, a
+file association or a script.
+.PP
+It never overwrites anything ("Archive 2.zip", "folder 2"), and the result only appears once it is finished: a failure or
+an interruption leaves nothing half done. The created paths are printed, one per line. Outside a terminal the result is
+announced with \fBnotify-send\fR. When the Filigrane \fBfili-tx\fR is installed, every call is a transaction that
+\fBfili-tx undo\fR reverses.
+.SH COMMANDS
+.TP
+.B pack
+Create an archive next to the files (zip by default).
+.TP
+.B unpack, extract
+Extract next to the archive, or into \fIFOLDER\fR. A single item at the top of the archive is put down as it is,
+otherwise the contents go into a folder named after the archive.
+.TP
+.B open
+Same as \fBunpack\fR (file association).
+.TP
+.B list
+Show the contents of an archive.
+.TP
+.B about
+Version, commands and what Archiveur is made of.
+.SH OPTIONS
+.TP
+\fB\-f\fR, \fB\-\-format\fR \fIFORMAT\fR
+zip (default), 7z, tar.gz, tar.xz or tar.zst.
+.TP
+\fB\-l\fR, \fB\-\-level\fR \fILEVEL\fR
+fast, normal (default) or best.
+.TP
+\fB\-\-no\-hidden\fR
+Leave hidden files out.
+.TP
+\fB\-\-password\-stdin\fR
+The password is the first line of standard input (AES\-256 zip or 7z with encrypted names). It is never an argument.
+.TP
+\fB\-o\fR, \fB\-\-output\fR \fIOUTPUT\fR
+The archive to create (pack; the format follows its extension), or the folder to extract into (unpack).
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+No transaction and no notification, for a caller with its own panel and undo.
+.SH ENVIRONMENT
+.TP
+.B FILI_ARCHIVE_FORMAT
+Default format of \fBpack\fR.
+.SH EXIT STATUS
+0 on success, 1 when something failed, 2 for a usage error.
+.SH SEE ALSO
+tar(1), zip(1), 7z(1)

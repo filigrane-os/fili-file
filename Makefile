@@ -30,11 +30,18 @@ test:
 check: build test
 	python3 -I scripts/check-i18n.py
 	tests/run.sh
+	tests/archive.sh
 
 install: build
 	install -Dm755 $(TARGET_DIR)/release/fili-file $(DESTDIR)$(BINDIR)/fili-file
 	ln -sf fili-file $(DESTDIR)$(BINDIR)/casier
+	ln -sf fili-file $(DESTDIR)$(BINDIR)/fili-archive
+	ln -sf fili-file $(DESTDIR)$(BINDIR)/archiveur
 	install -Dm644 data/fili-file.desktop $(DESTDIR)$(DATADIR)/applications/fili-file.desktop
+	install -Dm644 data/fili-archive.desktop $(DESTDIR)$(DATADIR)/applications/fili-archive.desktop
+	install -Dm644 data/icons/hicolor/scalable/apps/fili-archive.svg $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/fili-archive.svg
+	install -Dm644 man/fili-archive.1 $(DESTDIR)$(DATADIR)/man/man1/fili-archive.1
+	ln -sf fili-archive.1 $(DESTDIR)$(DATADIR)/man/man1/archiveur.1
 	install -Dm644 data/icons/hicolor/scalable/apps/fili-file.svg $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/fili-file.svg
 	install -d $(DESTDIR)$(DATADIR)/dbus-1/services
 	sed 's|@BINDIR@|$(BINDIR)|' data/org.freedesktop.impl.portal.desktop.filigrane.service.in > $(DESTDIR)$(DATADIR)/dbus-1/services/org.freedesktop.impl.portal.desktop.filigrane.service
@@ -43,7 +50,9 @@ install: build
 	for f in licenses/*; do install -Dm644 "$$f" $(DESTDIR)$(DATADIR)/licenses/fili-file/$$(basename "$$f"); done
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/fili-file $(DESTDIR)$(BINDIR)/casier
+	rm -f $(DESTDIR)$(BINDIR)/fili-file $(DESTDIR)$(BINDIR)/casier $(DESTDIR)$(BINDIR)/fili-archive $(DESTDIR)$(BINDIR)/archiveur
+	rm -f $(DESTDIR)$(DATADIR)/applications/fili-archive.desktop $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/fili-archive.svg
+	rm -f $(DESTDIR)$(DATADIR)/man/man1/fili-archive.1 $(DESTDIR)$(DATADIR)/man/man1/archiveur.1
 	rm -f $(DESTDIR)$(DATADIR)/applications/fili-file.desktop
 	rm -f $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/fili-file.svg
 	rm -f $(DESTDIR)$(DATADIR)/dbus-1/services/org.freedesktop.impl.portal.desktop.filigrane.service

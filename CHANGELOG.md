@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.5.0
+
+- **Archiveur**: the compress and extract engine runs without a window as `fili-archive` and `archiveur`, other names of
+  the `fili-file` binary (like `casier`), and `fili-file archive ...` still works. It was a separate tool of the
+  Filigrane repository next to a copy of the same code in Casier; there is now one engine.
+- New commands: `list ARCHIVE`, `open ARCHIVE...` (file association), `about` (the About card: version, commands,
+  formats) and `--version`.
+- Outside a terminal the result is announced with `notify-send`, in English or French. With Filigrane's `fili-tx` every
+  call is a transaction (`fili-tx undo`); `-q` skips both. Casier keeps using `-q`.
+- Installed: `fili-archive.desktop` (a hidden file handler for the archive types), its icon, the `fili-archive(1)` manual page
+  and the aliases; the package needs `libnotify`.
+- `tests/archive.sh`: 31 end-to-end checks (every write format, passwords, refusals, About), run by `make check`.
+
 ## 1.4.3
 
 - Default sort: most recently modified first (`sort = "date"`, `sort_desc = true`, both editable in `fili-file.toml`;

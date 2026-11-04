@@ -1,20 +1,28 @@
-// Compress and extract without any other program than tar, zip and 7z (the tools every distribution has): the same job
-// that the optional `fili-archive` tool does for Filigrane. Casier starts `fili-archive` when it is installed and
-// otherwise runs itself with this subcommand:
+// Compress and extract with tar, zip and 7z (the tools every distribution has): Archiveur, the display name of the
+// `fili-archive` command. It is the same program as Casier: `fili-archive` and `archiveur` are other names of the
+// `fili-file` binary (like `casier`), and `fili-file archive ...` does the same. No window, no Qt start-up.
 //
-//   fili-file archive pack [-f FORMAT] [-l fast|normal|best] [--no-hidden] [-q] [-o OUT] FILE...
-//   fili-file archive unpack [--password-stdin] [-o FOLDER] ARCHIVE...
+//   fili-archive pack [-f FORMAT] [-l fast|normal|best] [--no-hidden] [--password-stdin] [-q] [-o OUT] FILE...
+//                                                  creates an archive next to the files (zip by default)
+//   fili-archive unpack [--password-stdin] [-o FOLDER] ARCHIVE...   extracts next to the archive (or into FOLDER)
+//   fili-archive open ARCHIVE...                   same as unpack (file association, fili-archive.desktop)
+//   fili-archive list ARCHIVE                      contents of the archive
+//   fili-archive about                             version, commands and what it is made of
 //
-// Write formats: zip (default), 7z, tar.gz, tar.xz, tar.zst; read: whatever tar and 7z open. Rules: never overwrite
-// ("Archive 2.zip", "folder 2"); the archive or folder only appears once finished (written under a hidden name, then
-// renamed: a failure or an interruption leaves nothing half done); an archive is extracted into a folder of its own
-// (a single top-level item is put as it is, otherwise a folder named after the archive). A password goes through the
-// standard input (--password-stdin), never as an argument. Output: one created path per line; errors on stderr.
+// Write formats: zip (default, or $FILI_ARCHIVE_FORMAT), 7z, tar.gz, tar.xz, tar.zst; read: whatever tar and 7z open
+// (zip, 7z, rar, iso...). Rules: never overwrite ("Archive 2.zip", "folder 2"); the archive or folder only appears once
+// finished (written under a hidden name, then renamed: a failure or an interruption leaves nothing half done); an archive
+// is extracted into a folder of its own (a single top-level item is put as it is, otherwise a folder named after the
+// archive). A password goes through the standard input (--password-stdin), never as an argument. Output: one created path
+// per line; errors on stderr. Outside a terminal (menu, file association) the result is announced by a notification
+// (notify-send); with the Filigrane `fili-tx` each call is a transaction (`fili-tx undo` trashes the result); -q skips both
+// (Casier has its own panel, cancel and undo).
+use crate::i18n::tr;
 use std::{
     env,
     ffi::OsString,
     fs,
-    io::Read,
+    io::{IsTerminal, Read},
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -116,7 +124,7 @@ fn os(s: &str) -> OsString {
     OsString::from(s)
 }
 
-const USAGE_PACK: &str = "usage: fili-file archive pack [-f zip|7z|tar.gz|tar.xz|tar.zst] [-l fast|normal|best] [--no-hidden] [--password-stdin] [-q] [-o OUT] FILE...";
+const USAGE_PACK: &str = "usage: fili-archive pack [-f zip|7z|tar.gz|tar.xz|tar.zst] [-l fast|normal|best] [--no-hidden] [--password-stdin] [-q] [-o OUT] FILE...";
 
 // ---- pack ----------------------------------------------------------------------------------------------
 
@@ -367,7 +375,7 @@ fn unpack(args: &[String]) -> (Vec<PathBuf>, Vec<String>) {
         }
     }
     if archives.is_empty() {
-        return (vec![], vec!["no archive given (usage: fili-file archive unpack [--password-stdin] [-o FOLDER] ARCHIVE...)".into()]);
+        return (vec![], vec!["no archive given (usage: fili-archive unpack [--password-stdin] [-o FOLDER] ARCHIVE...)".into()]);
     }
     let password = if ask_password {
         match read_password() {
@@ -387,31 +395,140 @@ fn unpack(args: &[String]) -> (Vec<PathBuf>, Vec<String>) {
     (done, errors)
 }
 
-// Entry point of `fili-file archive ...`; returns the exit code
+fn list(args: &[String]) -> Result<(), String> {
+    let [a] = args else { return Err("usage: fili-archive list ARCHIVE".into()) };
+    let name = file_name(Path::new(a));
+    let tar = split_ext(&name).map(|(_, e)| is_tar(e)).unwrap_or(false);
+    let st = if tar {
+        Command::new("tar").args(["-tvf", a]).status()
+    } else {
+        Command::new("7z").args(["l", "-bd", "--", a]).status()
+    }
+    .map_err(|e| e.to_string())?;
+    if st.success() { Ok(()) } else { Err(format!("cannot read “{name}”")) }
+}
+
+// ---- transaction and announcement ----------------------------------------------------------------------------
+
+fn tx_made(paths: &[PathBuf], label: &str) {
+    let tx = format!("{}/.local/bin/fili-tx", env::var("HOME").unwrap_or_default());
+    let tx = if Path::new(&tx).exists() { tx } else { "fili-tx".into() };
+    let quiet = |args: &[OsString]| {
+        Command::new(&tx).args(args).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+    };
+    if quiet(&[os("begin"), os(label)]) {
+        let mut a = vec![os("made")];
+        a.extend(paths.iter().map(|p| p.clone().into_os_string()));
+        quiet(&a);
+    }
+}
+
+fn size_of(p: &Path) -> String {
+    let n = fs::metadata(p).map(|m| m.len()).unwrap_or(0) as f64;
+    match n {
+        n if n >= 1e9 => format!("{:.1} GB", n / 1e9),
+        n if n >= 1e6 => format!("{:.1} MB", n / 1e6),
+        n if n >= 1e3 => format!("{:.0} kB", n / 1e3),
+        n => format!("{n:.0} B"),
+    }
+}
+
+fn notify(title: &str, body: &str, urgent: bool) {
+    let _ = Command::new("notify-send")
+        .args(["-a", crate::about::ARCHIVE_NAME, "-u", if urgent { "critical" } else { "normal" }, title, body])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+// Entry point of `fili-archive ...` and `fili-file archive ...`; returns the exit code
 pub fn run_cli(args: &[String]) -> i32 {
     let Some(cmd) = args.first().map(String::as_str) else {
-        eprintln!("usage: fili-file archive pack|unpack ...");
+        eprintln!("usage: fili-archive pack|unpack|open|list|about ... (fili-archive --help)");
         return 2;
     };
     let rest = &args[1..];
-    let (done, errors) = match cmd {
+    let quiet = rest.iter().any(|a| a == "-q" || a == "--quiet");
+    let tty = quiet || std::io::stdout().is_terminal();
+    let (done, errors, compress, verb) = match cmd {
         "pack" | "compress" => match pack(rest) {
-            Ok(p) => (p, vec![]),
-            Err(e) => (vec![], vec![e]),
+            Ok(p) => (p, vec![], true, tr("Archive created")),
+            Err(e) => (vec![], vec![e], true, ""),
         },
-        "unpack" | "extract" => unpack(rest),
+        "unpack" | "extract" | "open" => {
+            let (d, e) = unpack(rest);
+            (d, e, false, tr("Extracted"))
+        }
+        "list" => match list(rest) {
+            Ok(()) => return 0,
+            Err(e) => {
+                eprintln!("fili-archive: {e}");
+                return 1;
+            }
+        },
+        "about" | "--about" => {
+            print_about();
+            return 0;
+        }
+        "-V" | "--version" => {
+            println!("fili-archive {}", crate::about::version());
+            return 0;
+        }
+        "-h" | "--help" | "help" => {
+            println!(
+                "fili-archive pack [-f zip|7z|tar.gz|tar.xz|tar.zst] [-l fast|normal|best] [--no-hidden] [--password-stdin] [-q] [-o OUT] FILE...\nfili-archive unpack [--password-stdin] [-o FOLDER] ARCHIVE...\nfili-archive open ARCHIVE...\nfili-archive list ARCHIVE\nfili-archive about"
+            );
+            return 0;
+        }
         _ => {
-            eprintln!("fili-file archive: unknown command “{cmd}”");
+            eprintln!("fili-archive: unknown command “{cmd}”");
             return 2;
         }
     };
-    for p in &done {
-        println!("{}", p.display());
+    if !done.is_empty() {
+        if !quiet {
+            tx_made(&done, if compress { tr("Compress") } else { tr("Extract") });
+        }
+        for p in &done {
+            println!("{}", p.display());
+        }
+        if !tty {
+            let body = if done.len() == 1 {
+                format!("{} ({})", file_name(&done[0]), size_of(&done[0]))
+            } else {
+                format!("{} {}", done.len(), tr("items"))
+            };
+            notify(verb, &body, false);
+        }
     }
     for e in &errors {
-        eprintln!("fili-file archive: {e}");
+        eprintln!("fili-archive: {e}");
+        if !tty {
+            notify(if compress { tr("Compress failed") } else { tr("Extract failed") }, e, true);
+        }
     }
     if errors.is_empty() { 0 } else { 1 }
+}
+
+// The About card of Archiveur (no window: printed). Labels are translated, values are shown as they are.
+fn print_about() {
+    let default = env::var("FILI_ARCHIVE_FORMAT").unwrap_or_else(|_| "zip".into());
+    let rows = [
+        (tr("Version"), crate::about::version()),
+        (tr("Also known as"), "fili-archive".to_string()),
+        (tr("Commands"), "archiveur, fili-archive".to_string()),
+        (tr("Writes"), "zip, 7z, tar.gz, tar.xz, tar.zst".to_string()),
+        (tr("Reads"), "zip, 7z, rar, iso, tar.*, gz, xz, bz2, zst, cab, jar".to_string()),
+        (tr("Default format"), default),
+        (tr("Part of"), "Casier, Filigrane".to_string()),
+        (tr("Built with"), "Rust".to_string()),
+        (tr("Uses"), "tar, zip, 7z".to_string()),
+    ];
+    println!("{}", crate::about::ARCHIVE_NAME);
+    let width = rows.iter().map(|(k, _)| k.chars().count()).max().unwrap_or(0);
+    for (k, v) in rows {
+        println!("  {k:<width$}  {v}");
+    }
 }
 
 #[cfg(test)]
