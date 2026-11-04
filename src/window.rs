@@ -1,7 +1,10 @@
 // Window management of the compositor, driven from the window panel of the toolbar. Only niri is supported: its
 // actions are run on the focused window (the one the user just clicked in) through `niri msg action`. The names are
 // checked against a fixed list, so nothing but a window action can be run from the interface.
-use std::process::{Command, Stdio};
+use std::{
+    process::{Command, Stdio},
+    time::Duration,
+};
 
 // Every action the window panel offers (qml/WindowPanel.qml), in niri's own spelling
 pub const ACTIONS: &[&str] = &[
@@ -44,9 +47,64 @@ pub fn run(name: &str) -> bool {
     Command::new("niri").args(["msg", "action", name]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_ok()
 }
 
+// Windows of the session as (id, app-id), read from `niri msg windows`
+fn windows() -> Vec<(u64, String)> {
+    let Ok(out) = Command::new("niri").args(["msg", "windows"]).stdin(Stdio::null()).stderr(Stdio::null()).output() else { return Vec::new() };
+    parse_windows(&String::from_utf8_lossy(&out.stdout))
+}
+
+fn parse_windows(text: &str) -> Vec<(u64, String)> {
+    let mut list: Vec<(u64, String)> = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("Window ID ") {
+            let id = rest.split(':').next().and_then(|n| n.trim().parse().ok()).unwrap_or(0);
+            list.push((id, String::new()));
+        } else if let Some(rest) = line.strip_prefix("App ID: ")
+            && let Some(last) = list.last_mut()
+        {
+            last.1 = rest.trim().trim_matches('"').to_lowercase();
+        }
+    }
+    list
+}
+
+// The windows that exist before an application is launched, so that a new one can be told from an old one
+pub fn snapshot() -> Vec<u64> {
+    if !available() { Vec::new() } else { windows().into_iter().map(|(id, _)| id).collect() }
+}
+
+// After launching an application (Open With): a new window gets the focus from niri by itself, but an application that
+// was already running just opens the file in its existing window, and Wayland does not let it take the focus. If no
+// new window shows up, the existing window of that application (an app-id from `names`) is brought to the front.
+pub fn raise_existing(before: Vec<u64>, names: Vec<String>) {
+    if !available() || names.is_empty() {
+        return;
+    }
+    std::thread::spawn(move || {
+        for _ in 0..12 {
+            std::thread::sleep(Duration::from_millis(250));
+            let now = windows();
+            if now.iter().any(|(id, _)| !before.contains(id)) {
+                return;
+            }
+        }
+        if let Some((id, _)) = windows().into_iter().rev().find(|(_, app)| names.contains(app)) {
+            let _ = Command::new("niri").args(["msg", "action", "focus-window", "--id", &id.to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_window_list() {
+        let text = "Window ID 7: (focused)\n  Title: \"a\"\n  App ID: \"Foot\"\n  PID: 1\n\nWindow ID 9:\n  Title: \"b\"\n  App ID: \"org.gnome.TextEditor\"\n";
+        assert_eq!(parse_windows(text), vec![(7, "foot".to_string()), (9, "org.gnome.texteditor".to_string())]);
+        assert!(parse_windows("").is_empty());
+    }
 
     #[test]
     fn only_listed_actions_run() {

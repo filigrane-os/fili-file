@@ -2169,7 +2169,9 @@ impl FolderModel {
         let Some(app) = apps::desktop(&id) else { return };
         let argv = apps::command(&app, &path);
         let Some((program, args)) = argv.split_first() else { return };
+        let before = crate::window::snapshot();
         spawn_detached(Command::new(program).args(args).current_dir(&self.dir));
+        crate::window::raise_existing(before, apps::window_names(&app));
     }
 
     pub fn all_archives(&self, paths: &QString) -> bool {

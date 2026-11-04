@@ -13,6 +13,7 @@ pub struct App {
     pub exec: String,
     pub terminal: bool,
     pub hidden: bool,
+    pub wm_class: String, // StartupWMClass: the app-id its windows carry, when the file says so
 }
 
 fn home() -> String {
@@ -29,7 +30,7 @@ fn app_dirs() -> Vec<PathBuf> {
 
 pub fn parse_desktop(id: &str, text: &str) -> Option<App> {
     let mut section = "";
-    let (mut name, mut exec, mut terminal, mut hidden) = (None, None, false, false);
+    let (mut name, mut exec, mut terminal, mut hidden, mut wm_class) = (None, None, false, false, String::new());
     for line in text.lines() {
         let line = line.trim();
         if line.starts_with('[') {
@@ -44,12 +45,13 @@ pub fn parse_desktop(id: &str, text: &str) -> Option<App> {
             "Name" => name = Some(v.to_string()),
             "Exec" => exec = Some(v.to_string()),
             "Terminal" => terminal = v == "true",
+            "StartupWMClass" => wm_class = v.to_string(),
             "NoDisplay" | "Hidden" => hidden |= v == "true",
             "Type" if v != "Application" => return None,
             _ => {}
         }
     }
-    Some(App { id: id.to_string(), name: name?, exec: exec?, terminal, hidden })
+    Some(App { id: id.to_string(), name: name?, exec: exec?, terminal, hidden, wm_class })
 }
 
 pub fn desktop(id: &str) -> Option<App> {
@@ -167,7 +169,7 @@ mod tests {
 
     #[test]
     fn exec_codes_and_quotes() {
-        let app = |exec: &str, terminal| App { id: "a".into(), name: "a".into(), exec: exec.into(), terminal, hidden: false };
+        let app = |exec: &str, terminal| App { id: "a".into(), name: "a".into(), exec: exec.into(), terminal, hidden: false, wm_class: String::new() };
         assert_eq!(command(&app("viewer --file=%f %i", false), "/tmp/a b.png"), ["viewer", "--file=/tmp/a b.png"]);
         assert_eq!(command(&app("\"/opt/my app/run\" --x %U 100%%", false), "/p"), ["/opt/my app/run", "--x", "/p", "100%"]);
         assert_eq!(command(&app("vim %F", true), "/p"), ["foot", "-e", "vim", "/p"]);
@@ -178,4 +180,15 @@ mod tests {
         let m = section_map("[Default Applications]\nimage/png=imv.desktop;b.desktop;\n[Added Associations]\nimage/png=c.desktop;\n", "[Default Applications]");
         assert_eq!(m["image/png"], ["imv.desktop", "b.desktop"]);
     }
+}
+
+// Names the windows of an application may carry as app-id: its StartupWMClass, the id of its .desktop file without the
+// extension, and the program it runs (lowercase, to compare without case)
+pub fn window_names(app: &App) -> Vec<String> {
+    let program = app.exec.split_whitespace().next().unwrap_or("").rsplit('/').next().unwrap_or("");
+    [app.wm_class.as_str(), app.id.trim_end_matches(".desktop"), program]
+        .iter()
+        .filter(|n| !n.is_empty())
+        .map(|n| n.to_lowercase())
+        .collect()
 }

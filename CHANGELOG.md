@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Mouse wheel: the inertia handler of the lists took the wheel events of a mouse and ignored them, so nothing
+  scrolled. It now scrolls by steps for a wheel and keeps the momentum for a touchpad.
+- Open With: when the chosen application is already running (it opens the file in its existing window, which Wayland
+  does not let it focus), Casier brings that window to the front under niri.
+
 ## 1.4.2
 
 - Window panel: keyboard navigation. The first tile is selected when it opens; arrows move (left/right through the

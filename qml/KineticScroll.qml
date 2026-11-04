@@ -1,6 +1,8 @@
 // Inertial touchpad scrolling for a list (ListView, Flickable): follows the fingers, then the list keeps going on
-// its momentum and slows down when they lift (like macOS). A mouse wheel (notches, no pixelDelta) keeps Qt's
-// step scrolling. The only animation of the shell besides niri's blur: a few dozen frames, on release.
+// its momentum and slows down when they lift (like macOS). A mouse wheel (notches, no pixelDelta) scrolls by steps
+// of `notch` pixels: the handler sees every wheel event of the list, so it handles those itself instead of relying on
+// Qt's default (an event taken by a handler never reaches the Flickable's own wheel scrolling).
+// The only animation of the shell besides niri's blur: a few dozen frames, on release.
 // Usage: KineticScroll {} as a direct child of the list.
 import QtQuick
 
@@ -10,13 +12,22 @@ WheelHandler {
     readonly property Flickable view: parent instanceof Flickable ? parent : parent?.parent ?? null
     property real velocity: 0   // px/s, smoothed
     property real last: 0
-    acceptedDevices: PointerDevice.TouchPad
+    property real notch: 96     // px for one wheel notch (120 units of angleDelta)
+    acceptedDevices: PointerDevice.AllDevices
     target: null
 
     onWheel: e => {
         const dy = e.pixelDelta.y;
-        if (dy === 0)
+        if (dy === 0) {
+            // Wheel notches: plain steps, no momentum
+            const step = e.angleDelta.y * k.notch / 120;
+            if (step === 0)
+                return;
+            view.cancelFlick();
+            const top = Math.max(view.originY, view.originY + view.contentHeight - view.height);
+            view.contentY = Math.max(view.originY, Math.min(top, view.contentY - step));
             return;
+        }
         view.cancelFlick();
         const now = Date.now();
         const dt = Math.max(1, now - last);
