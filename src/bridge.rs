@@ -38,6 +38,7 @@ pub mod qobject {
         // Folder to show in the breadcrumb and the title: the common folder of the results, else the folder shown
         #[qproperty(QString, shown, READ, NOTIFY = changed)]
         #[qproperty(bool, busy, READ, NOTIFY = changed)]
+        #[qproperty(bool, indexing, READ, NOTIFY = changed)]
         // Progress of the operation in progress (0 to 1), -1 while the total is not known
         #[qproperty(f64, progress, READ, NOTIFY = changed)]
         #[qproperty(QString, job, READ, NOTIFY = changed)]
@@ -1240,6 +1241,7 @@ impl FolderModel {
             let _ = qt.queue(move |mut m| {
                 if INDEX_GEN.load(Ordering::SeqCst) == serial {
                     m.as_mut().rust_mut().indexing = false;
+                    m.as_mut().changed();
                     m.as_mut().index_ready();
                 }
             });

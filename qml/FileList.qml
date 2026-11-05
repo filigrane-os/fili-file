@@ -800,7 +800,7 @@ Rectangle {
     Text {
         anchors.centerIn: view.active
         visible: view.active.count === 0
-        text: Fili.tr("Empty folder")
+        text: folder.filter.trim() !== "" && folder.indexing ? Fili.tr("Searching…") : Fili.tr("Empty folder")
         font.family: FiliTheme.font
         font.pixelSize: FiliTheme.size
         color: FiliTheme.textSecondary

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.2
+
+- Search: while the index of a large folder is still being built, the list says "Searching…" instead of "Empty folder".
+
 ## 1.5.1
 
 - `fili-file --version` (`-V`) and `--help` (`-h`) print and exit; before, the flag opened a window.
