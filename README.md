@@ -51,7 +51,7 @@ without a toolkit's theming layers.
 
 ## Resources
 
-Casier is built to be cheap. Nothing stays resident when the last window is closed; the file chooser service for
+Casier is built to be cheap. Nothing stays resident when the last window is closed (unless you turn on `resident`, below); the file chooser service for
 browsers starts on demand and exits after two minutes without a request. Measured on the author's machine
 (`scripts/measure.sh`, 6 seconds after opening, release build 1.0.x, Qt 6.11, niri):
 
@@ -71,6 +71,12 @@ you use today, run the same script on both, with the same folder, on your own ma
 scripts/measure.sh casier ~/Documents
 scripts/measure.sh thunar ~/Documents      # or nautilus, dolphin, pcmanfm...
 ```
+
+**Resident mode (optional, off by default).** With `resident = true`, `fili-file --spare` keeps a copy of Casier loaded
+and hidden; opening Casier hands the launch to it, so the window appears in about 0.15 s instead of 0.4 s (measured, same
+machine), and a new copy loads for the next time. It costs about 35 MB of private memory while it is on (the Qt and Mesa
+libraries it uses are shared with other Qt programs). Control it with `fili-file spare on|off|status`; `fili-file spare
+auto` starts it at the beginning of a session when it is on.
 
 ## Screenshots
 
@@ -183,6 +189,7 @@ show_hidden = false
 sort = "date"             # name, size, date (modified), kind, created, permissions, owner
 sort_desc = true          # most recently modified first
 window_buttons = true     # Close and Window buttons at the right of the toolbar
+resident = false          # keep a hidden copy loaded so that Casier opens at once (see Resources)
 columns = "size,modified"
 start = "~/Documents"     # folder opened when started without an argument
 icon_theme = "Papirus"    # default: the desktop's icon theme

@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.6.0
 
+- **Resident mode** (optional, off by default): `resident = true` in `fili-file.toml`, or `fili-file spare on`, keeps a hidden copy of Casier loaded; opening Casier shows its window in about 0.15 s instead of 0.4 s. About 35 MB of private memory while on; a new copy loads after each opening. `fili-file spare on|off|status|auto`.
 - Paste and copy into network places (gvfs: FTP, SMB, SFTP...) work: the copy no longer fails, and is no longer removed, when the share refuses `chmod`.
 - `fili-file.toml` in the source tree lists every editable setting, commented out, to copy to `~/.config/filigrane/`; the README explains how.
 

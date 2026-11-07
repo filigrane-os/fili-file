@@ -301,6 +301,12 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "placesChanged"]
         fn places_changed(self: Pin<&mut Fili>);
+        // Resident mode: this process is a loaded spare (window hidden) until a launch claims it, which emits claimed
+        #[qinvokable]
+        #[cxx_name = "isSpare"]
+        fn is_spare(self: &Fili) -> bool;
+        #[qsignal]
+        fn claimed(self: Pin<&mut Fili>);
         // Command from the assistant (fili-file ctl): number (to give back to reply), verb, argument, body
         #[qsignal]
         fn command(self: Pin<&mut Fili>, id: i32, verb: &QString, arg: &QString, body: &QString);
@@ -1389,7 +1395,7 @@ impl FolderModel {
         let previous = self.dir.clone();
         match self.as_mut().load(&dir, select.as_deref()) {
             Ok(row) => {
-                if dir != ops::trash_files() {
+                if dir != ops::trash_files() && !crate::spare::waiting() {
                     visits::record(&dir.to_string_lossy());
                 }
                 if !previous.is_empty() {
@@ -2622,18 +2628,27 @@ pub struct FiliRust {
     key_nav: bool,
 }
 
+static SPARE_LISTENER: std::sync::Mutex<Option<std::os::unix::net::UnixListener>> = std::sync::Mutex::new(None);
+
+// The spare's socket, taken before Qt starts (main.rs), served once the objects exist
+pub fn set_spare_listener(l: std::os::unix::net::UnixListener) {
+    if let Ok(mut s) = SPARE_LISTENER.lock() {
+        *s = Some(l);
+    }
+}
+
 fn view_file() -> PathBuf {
     let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
     PathBuf::from(state).join("filigrane/fili-file-view")
 }
 
-fn ui_file() -> PathBuf {
+pub(crate) fn ui_file() -> PathBuf {
     let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
     PathBuf::from(state).join("filigrane/fili-file-ui")
 }
 
 // State file "key=value" (one per line): reading of a key
-fn ui_get(text: &str, key: &str) -> String {
+pub(crate) fn ui_get(text: &str, key: &str) -> String {
     text.lines().find_map(|l| l.split_once('=').filter(|(k, _)| *k == key).map(|(_, v)| v.trim().to_string())).unwrap_or_default()
 }
 
@@ -2650,7 +2665,7 @@ fn ui_set(text: &str, key: &str, value: &str) -> String {
 }
 
 // Writes a key of the interface state (empty: removes it)
-fn ui_store(key: &str, value: &str) {
+pub(crate) fn ui_store(key: &str, value: &str) {
     let file = ui_file();
     let text = ui_set(&std::fs::read_to_string(&file).unwrap_or_default(), key, value);
     if let Some(dir) = file.parent() {
@@ -2693,14 +2708,20 @@ impl cxx_qt::Initialize for Fili {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().light = read_light();
         self.as_mut().rust_mut().accent = QString::from(&read_accent());
-        // Commands of the assistant (not in the file chooser)
-        if pick::get().is_none() {
-            let cmd = self.qt_thread();
-            crate::context::serve(move |id, verb, arg, body| {
-                let _ = cmd.queue(move |mut f| {
-                    f.as_mut().command(id, &QString::from(&verb), &QString::from(&arg), &QString::from(&body));
+        // A spare waits for its claim; the services below start then (a hidden spare must not look like an open window
+        // to `fili-file ctl`, nor scan the network)
+        if crate::spare::is_spare() {
+            if let Some(listener) = SPARE_LISTENER.lock().ok().and_then(|mut l| l.take()) {
+                let qt = self.qt_thread();
+                crate::spare::serve(listener, move || {
+                    let _ = qt.queue(|mut f| {
+                        f.as_mut().start_services();
+                        f.as_mut().claimed();
+                    });
                 });
-            });
+            }
+        } else {
+            self.as_mut().start_services();
         }
         // Mounts: /proc/self/mountinfo signals each change with POLLPRI
         let mounts = self.qt_thread();
@@ -2785,17 +2806,6 @@ impl cxx_qt::Initialize for Fili {
                 });
             });
         }
-        // Servers announced on the network (mDNS): a scan at start and every two minutes while the window lives, the
-        // sidebar is told when the list changes. Not in the file chooser, which has no use for them.
-        if pick::get().is_none() {
-            let found = self.qt_thread();
-            std::thread::spawn(move || loop {
-                if discover::refresh() && found.queue(|mut f| f.as_mut().places_changed()).is_err() {
-                    return;
-                }
-                std::thread::sleep(std::time::Duration::from_secs(120));
-            });
-        }
         // Follow the state directory (inotify, thread blocked on read: no wake-up while nothing changes)
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -2832,6 +2842,34 @@ impl cxx_qt::Initialize for Fili {
 }
 
 impl Fili {
+    // Commands of the assistant and network discovery: started with the window (at once, or when a spare is claimed)
+    fn start_services(self: Pin<&mut Self>) {
+        // Commands of the assistant (not in the file chooser)
+        if pick::get().is_none() {
+            let cmd = self.qt_thread();
+            crate::context::serve(move |id, verb, arg, body| {
+                let _ = cmd.queue(move |mut f| {
+                    f.as_mut().command(id, &QString::from(&verb), &QString::from(&arg), &QString::from(&body));
+                });
+            });
+        }
+        // Servers announced on the network (mDNS): a scan at start and every two minutes while the window lives, the
+        // sidebar is told when the list changes. Not in the file chooser, which has no use for them.
+        if pick::get().is_none() {
+            let found = self.qt_thread();
+            std::thread::spawn(move || loop {
+                if discover::refresh() && found.queue(|mut f| f.as_mut().places_changed()).is_err() {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(120));
+            });
+        }
+    }
+
+    pub fn is_spare(&self) -> bool {
+        crate::spare::is_spare()
+    }
+
     // Mounts or unmounts in the background (udisksctl): the QML is told by mounted / volumeError, then placesChanged
     pub fn mount_volume(self: Pin<&mut Self>, dev: &QString) {
         let dev = dev.to_string();
@@ -3301,10 +3339,10 @@ impl Fili {
     }
 
     pub fn start_path(&self) -> QString {
-        let args: Vec<String> = env::args().skip(1).collect();
+        let args: Vec<String> = crate::spare::args();
         let arg = pick::positional(&args).or_else(|| pick::get().map(|p| p.folder.clone()).filter(|f| !f.is_empty()));
         let start = crate::config::load().start.unwrap_or_else(home);
-        let p = normalize(&arg.unwrap_or(start), &env::current_dir().map_or(home(), |d| d.to_string_lossy().into_owned()));
+        let p = normalize(&arg.unwrap_or(start), &crate::spare::cwd().unwrap_or_else(home));
         QString::from(&p.to_string_lossy().into_owned())
     }
 
@@ -3331,7 +3369,7 @@ impl Fili {
     }
 
     pub fn start_info(&self) -> bool {
-        env::args().any(|a| a == "--info")
+        crate::spare::args().iter().any(|a| a == "--info")
     }
 }
 

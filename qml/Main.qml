@@ -19,7 +19,9 @@ ApplicationWindow {
     height: 560
     minimumWidth: 520
     minimumHeight: 300
-    visible: true
+    // Resident mode: a loaded spare keeps its window hidden until a launch claims it (see spare.rs)
+    property bool warm: Fili.isSpare()
+    visible: !warm
     color: FiliTheme.background
     title: picking ? Fili.pickTitle() : win.searchLabel !== "" ? win.searchLabel : folder.shown === "/" ? "/" : (win.names >= 0 ? Fili.nameOf(folder.shown) : "")
 
@@ -240,12 +242,22 @@ ApplicationWindow {
     }
     Component.onDestruction: Fili.publishContext("", "", "", "")
 
-    Component.onCompleted: {
+    // First folder: at once, or when the spare is claimed (the arguments of the launch are known then)
+    function start() {
         nameInput.text = Fili.pickName();
         show(folder.go(Fili.startPath()));
         files.focusList();
         if (Fili.startInfo())
             showInfo();
+    }
+    // A spare reads the default folder while it waits: the claim then finds it listed (same folder: nothing to read again)
+    Component.onCompleted: warm ? folder.go(Fili.startPath()) : start()
+    Connections {
+        target: Fili
+        function onClaimed() {
+            win.start();
+            win.warm = false;
+        }
     }
 
     Shortcut { sequence: "Ctrl+["; onActivated: win.show(folder.back()) }

@@ -17,6 +17,7 @@ mod icons;
 mod ops;
 mod pick;
 mod portal;
+mod spare;
 mod tools;
 mod visits;
 mod volumes;
@@ -69,6 +70,26 @@ fn main() {
             std::process::exit(1);
         }
         return;
+    }
+    // Resident mode (spare.rs): `fili-file spare ...` controls the spare; a launch that a loaded spare can take over is
+    // handed to it (it shows its window at once); the spare itself takes its socket before loading the interface.
+    if args.get(1).is_some_and(|a| a == "spare") {
+        std::process::exit(spare::control(args.get(2).map_or("", String::as_str)));
+    }
+    if spare::is_spare() {
+        match spare::bind() {
+            Some(listener) => bridge::set_spare_listener(listener),
+            None => return,
+        }
+    } else if spare::claimable(&args[1..]) && spare::enabled() {
+        if spare::claim(&args[1..]) {
+            return;
+        }
+        // No spare yet (first launch of the session, or it was lost): load one a little later, not during this start
+        std::thread::spawn(|| {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            spare::start();
+        });
     }
     let mut app = QGuiApplication::new();
     // Wayland app-id (niri rules, fili-file.desktop)

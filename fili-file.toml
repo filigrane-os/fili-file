@@ -28,6 +28,12 @@
 # Close and Window buttons at the right of the toolbar: true or false.
 # window_buttons = true
 
+# Resident mode: keep a hidden copy of Casier loaded in the background, so that the window appears in about 0.15 s
+# instead of 0.4 s. It costs about 35 MB of private memory while it is on (the libraries are shared with other Qt
+# programs); a new copy loads after each opening. false: nothing runs while Casier is closed.
+# Filigrane's Settings > Casier > Open instantly takes precedence over this line.
+# resident = false
+
 # Columns of the list view, comma separated (for example "size,modified").
 # columns = "size,modified"
 

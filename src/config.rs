@@ -17,11 +17,12 @@ pub struct Config {
     pub icon_theme: Option<String>, // freedesktop icon theme; default: the desktop's (see icon_theme.rs)
     pub folder_icon: Option<String>, // icon name for every folder; default: the theme's X-Fili-FolderIcon, else "folder"
     pub file_icon: Option<String>,   // icon name for every regular file; default: the theme's X-Fili-FileIcon, else by type
+    pub resident: bool,          // keep a spare window loaded in the background so that Casier opens at once (see spare.rs)
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { view: None, show_hidden: false, window_buttons: true, sort: 2, sort_desc: true, columns: None, start: None, icon_theme: None, folder_icon: None, file_icon: None }
+        Config { view: None, show_hidden: false, window_buttons: true, sort: 2, sort_desc: true, columns: None, start: None, icon_theme: None, folder_icon: None, file_icon: None, resident: false }
     }
 }
 
@@ -64,6 +65,7 @@ pub fn parse(text: &str) -> Config {
             "icon_theme" if !v.is_empty() => c.icon_theme = Some(v.into()),
             "folder_icon" if !v.is_empty() => c.folder_icon = Some(v.into()),
             "file_icon" if !v.is_empty() => c.file_icon = Some(v.into()),
+            "resident" => c.resident = v == "true",
             _ => {}
         }
     }
@@ -296,7 +298,7 @@ mod tests {
 
     #[test]
     fn parses_settings() {
-        let c = parse("# x\nview = \"grid\"\nshow_hidden = true # yes\nwindow_buttons = false\nsort = \"size\"\nsort_desc = false\ncolumns = \"size, kind\"\nstart = \"~/Documents\"\nicon_theme = \"Papirus\"\nfolder_icon = \"folder-blue\"\nfile_icon = \"text-x-generic\"\nbad\nview2 = 1\n");
+        let c = parse("# x\nview = \"grid\"\nshow_hidden = true # yes\nwindow_buttons = false\nsort = \"size\"\nsort_desc = false\ncolumns = \"size, kind\"\nstart = \"~/Documents\"\nicon_theme = \"Papirus\"\nfolder_icon = \"folder-blue\"\nfile_icon = \"text-x-generic\"\nresident = true\nbad\nview2 = 1\n");
         assert_eq!(
             c,
             Config {
@@ -310,6 +312,7 @@ mod tests {
                 icon_theme: Some("Papirus".into()),
                 folder_icon: Some("folder-blue".into()),
                 file_icon: Some("text-x-generic".into()),
+                resident: true,
             }
         );
         assert_eq!(parse("view = \"x\"\nsort = \"zz\""), Config::default());
