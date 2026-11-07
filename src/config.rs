@@ -10,7 +10,7 @@ pub struct Config {
     pub view: Option<String>,    // "list" | "grid"
     pub show_hidden: bool,
     pub window_buttons: bool,    // close and window-actions buttons at the right of the toolbar
-    pub sort: i32,               // index de fs::Key
+    pub sort: i32,               // index into fs::Key
     pub sort_desc: bool,
     pub columns: Option<String>, // "size,modified"
     pub start: Option<String>,   // folder opened when started without an argument
@@ -117,7 +117,7 @@ const KEYS: &[(&str, Kind)] = &[
     ("danger", Kind::Color),
     ("success", Kind::Color),
     ("accent", Kind::Color),        // optional: without a value, the accent follows fili-theme
-    ("accent_bright", Kind::Color), // facultatif
+    ("accent_bright", Kind::Color), // optional
     ("font", Kind::Str),
     ("mono", Kind::Str),
     ("icons", Kind::Str),
@@ -280,6 +280,19 @@ pub fn theme_json() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The documented example must list every setting and, left commented, change nothing
+    #[test]
+    fn example_file_documents_every_setting() {
+        let example = include_str!("../fili-file.toml");
+        assert_eq!(parse(example), Config::default());
+        for key in ["view", "show_hidden", "sort", "sort_desc", "window_buttons", "columns", "start", "icon_theme", "folder_icon", "file_icon"] {
+            assert!(example.contains(&format!("\n# {key} = ")), "setting {key} is missing from fili-file.toml");
+        }
+        for (key, _) in KEYS {
+            assert!(example.contains(&format!("\n# {key} = ")), "theme key {key} is missing from fili-file.toml");
+        }
+    }
 
     #[test]
     fn parses_settings() {

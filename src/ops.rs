@@ -67,7 +67,16 @@ fn copy_file(src: &Path, dst: &Path, progress: Progress) -> io::Result<()> {
             return Err(cancelled());
         }
     }
-    fs::set_permissions(dst, fs::Permissions::from_mode(from.metadata()?.permissions().mode()))
+    keep_mode(dst, from.metadata()?.permissions())
+}
+
+// Copies the permissions on a best-effort basis: network shares (gvfs, FTP, SMB...) and some other file systems
+// refuse chmod (ENOTSUP, EPERM), which must not fail a copy whose data is already written.
+fn keep_mode(dst: &Path, perm: fs::Permissions) -> io::Result<()> {
+    match fs::set_permissions(dst, perm) {
+        Err(e) if matches!(e.raw_os_error(), Some(libc::ENOTSUP | libc::EPERM | libc::ENOSYS | libc::EINVAL)) => Ok(()),
+        r => r,
+    }
 }
 
 // Recursive copy of src to dst (dst does not exist). Symbolic links are copied as they are.
@@ -81,7 +90,7 @@ pub fn copy_tree(src: &Path, dst: &Path, progress: Progress) -> io::Result<()> {
             let e = e?;
             copy_tree(&e.path(), &dst.join(e.file_name()), progress)?;
         }
-        fs::set_permissions(dst, m.permissions())
+        keep_mode(dst, m.permissions())
     } else if m.is_file() {
         copy_file(src, dst, progress)
     } else {
@@ -568,6 +577,21 @@ mod tests {
         assert_eq!((dst, fs::read_to_string(&target).unwrap()), (target, "new".into()));
         let moved = move_to(&d.join("a/f.txt"), d.join("b/g.txt"), &mut all).unwrap();
         assert!(exists(&moved) && !exists(&d.join("a/f.txt")));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn refused_chmod_does_not_fail_a_copy() {
+        // Network shares answer ENOTSUP/EPERM to chmod: the permissions are best effort, other errors still count
+        let d = tmp("chmod");
+        fs::create_dir_all(&d).unwrap();
+        let perm = fs::metadata(&d).unwrap().permissions();
+        // A file owned by root: chmod gives EPERM for a normal user (skipped when run as root)
+        let root_file = Path::new("/etc/hostname");
+        if root_file.exists() && fs::set_permissions(root_file, perm.clone()).is_err() {
+            assert!(keep_mode(root_file, perm.clone()).is_ok());
+        }
+        assert!(keep_mode(&d.join("missing"), perm).is_err());
         fs::remove_dir_all(&d).unwrap();
     }
 

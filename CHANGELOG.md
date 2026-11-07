@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Paste and copy into network places (gvfs: FTP, SMB, SFTP...) work: the copy no longer fails, and is no longer removed, when the share refuses `chmod`.
+- `fili-file.toml` in the source tree lists every editable setting, commented out, to copy to `~/.config/filigrane/`; the README explains how.
+
 ## 1.5.2
 
 - Search: while the index of a large folder is still being built, the list says "Searching…" instead of "Empty folder".

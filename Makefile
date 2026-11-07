@@ -46,6 +46,7 @@ install: build
 	install -d $(DESTDIR)$(DATADIR)/dbus-1/services
 	sed 's|@BINDIR@|$(BINDIR)|' data/org.freedesktop.impl.portal.desktop.filigrane.service.in > $(DESTDIR)$(DATADIR)/dbus-1/services/org.freedesktop.impl.portal.desktop.filigrane.service
 	install -Dm644 data/filigrane.portal $(DESTDIR)$(DATADIR)/xdg-desktop-portal/portals/filigrane.portal
+	install -Dm644 fili-file.toml $(DESTDIR)$(DATADIR)/doc/fili-file/fili-file.toml
 	install -Dm644 LICENSE $(DESTDIR)$(DATADIR)/licenses/fili-file/LICENSE
 	for f in licenses/*; do install -Dm644 "$$f" $(DESTDIR)$(DATADIR)/licenses/fili-file/$$(basename "$$f"); done
 
@@ -54,6 +55,7 @@ uninstall:
 	rm -f $(DESTDIR)$(DATADIR)/applications/fili-archive.desktop $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/fili-archive.svg
 	rm -f $(DESTDIR)$(DATADIR)/man/man1/fili-archive.1 $(DESTDIR)$(DATADIR)/man/man1/archiveur.1
 	rm -f $(DESTDIR)$(DATADIR)/applications/fili-file.desktop
+	rm -f $(DESTDIR)$(DATADIR)/doc/fili-file/fili-file.toml
 	rm -f $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/fili-file.svg
 	rm -f $(DESTDIR)$(DATADIR)/dbus-1/services/org.freedesktop.impl.portal.desktop.filigrane.service
 	rm -f $(DESTDIR)$(DATADIR)/xdg-desktop-portal/portals/filigrane.portal

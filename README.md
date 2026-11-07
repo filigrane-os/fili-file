@@ -167,7 +167,15 @@ The fonts (Jost, JetBrains Mono, Fili Icons) are inside the binary: no font to i
 
 ## Configuration
 
-`~/.config/filigrane/fili-file.toml`, optional. Flat settings:
+`~/.config/filigrane/fili-file.toml`, optional. [`fili-file.toml`](fili-file.toml) in this repository lists every
+editable setting (general settings and the whole theme) with its default value, all commented out. To use it:
+
+```
+mkdir -p ~/.config/filigrane
+cp fili-file.toml ~/.config/filigrane/fili-file.toml    # after `make install`: /usr/local/share/doc/fili-file/fili-file.toml
+```
+
+Then uncomment only the lines you want to change; a key you leave out keeps its default. Flat settings:
 
 ```toml
 view = "list"             # "list" or "grid"
