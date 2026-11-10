@@ -77,6 +77,7 @@ fn main() {
         std::process::exit(spare::control(args.get(2).map_or("", String::as_str)));
     }
     if spare::is_spare() {
+        spare::wait_delay();
         match spare::bind() {
             Some(listener) => bridge::set_spare_listener(listener),
             None => return,
@@ -85,11 +86,9 @@ fn main() {
         if spare::claim(&args[1..]) {
             return;
         }
-        // No spare yet (first launch of the session, or it was lost): load one a little later, not during this start
-        std::thread::spawn(|| {
-            std::thread::sleep(std::time::Duration::from_secs(3));
-            spare::start();
-        });
+        // No spare yet (first launch of the session, it was lost, or an update replaced the binary): a detached process
+        // loads one a little later, not during this start; it does not depend on this window staying open
+        spare::start_later(3);
     }
     let mut app = QGuiApplication::new();
     // Wayland app-id (niri rules, fili-file.desktop)

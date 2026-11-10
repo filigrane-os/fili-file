@@ -80,6 +80,7 @@ Rectangle {
             required property string path
             required property string dev
             required property bool removable
+            required property bool indent
             required property string section
             required property string mono
             required property bool full
@@ -94,7 +95,8 @@ Rectangle {
 
             Image {
                 id: img
-                x: FiliTheme.margin - list.inset
+                // A share of a server sits under the server's row, indented
+                x: FiliTheme.margin - list.inset + (row.indent ? 14 : 0)
                 anchors.verticalCenter: parent.verticalCenter
                 width: 16
                 height: 16

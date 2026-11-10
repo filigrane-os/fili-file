@@ -1390,15 +1390,25 @@ impl FolderModel {
         };
         if dir.to_string_lossy() == self.dir {
             self.as_mut().close_results();
+            // The spare's warm folder is the one asked for: its visit counts now
+            if crate::spare::take_warm() && dir != ops::trash_files() {
+                visits::record(&dir.to_string_lossy());
+            }
             return select.map_or(-1, |n| self.row_of(&n));
         }
         let previous = self.dir.clone();
         match self.as_mut().load(&dir, select.as_deref()) {
             Ok(row) => {
-                if dir != ops::trash_files() && !crate::spare::waiting() {
-                    visits::record(&dir.to_string_lossy());
+                // The spare loads its first folder while it waits: not a visit, and not a history entry either
+                let warm_before = crate::spare::take_warm();
+                if dir != ops::trash_files() {
+                    if crate::spare::waiting() {
+                        crate::spare::note_warm();
+                    } else {
+                        visits::record(&dir.to_string_lossy());
+                    }
                 }
-                if !previous.is_empty() {
+                if !previous.is_empty() && !warm_before {
                     let mut r = self.as_mut().rust_mut();
                     r.history_back.push(previous);
                     r.history_forward.clear();
@@ -3297,9 +3307,23 @@ impl Fili {
             items.push((devices, v.name, String::new(), "phone", v.dev));
         }
         // Servers already used, not connected: a click reconnects them, ✕ forgets them
+        // The shares mounted from a server follow its row, indented, each one ejectable
         let saved = volumes::saved_servers();
+        let mounts: Vec<String> = volumes::network().into_iter().filter_map(|v| v.mount).collect();
+        let mut indented: Vec<String> = Vec::new();
+        let mut placed: Vec<String> = Vec::new();
         for v in &saved {
             items.push((devices, v.name.clone(), String::new(), "network-server", v.dev.clone()));
+            let (user, host, _) = volumes::address_parts(v.dev.strip_prefix(volumes::SRV).unwrap_or(""));
+            for m in volumes::server_mounts(&mounts, &host, &user) {
+                let Some(share) = volumes::share_name(&m) else { continue };
+                if placed.contains(&m) {
+                    continue;
+                }
+                placed.push(m.clone());
+                indented.push(m.clone());
+                items.push((devices, share, m.clone(), "folder-remote", format!("{}{m}", volumes::GVFS)));
+            }
         }
         // Servers announced on the network (mDNS) that are not already listed: a click opens Connect to Server with the address
         let known: Vec<String> = saved.iter().map(|v| v.dev.clone()).chain(volumes::network().into_iter().map(|v| v.dev)).collect();
@@ -3324,12 +3348,14 @@ impl Fili {
             .iter()
             .map(|(s, n, p, i, dev)| {
                 format!(
-                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"removable\":{},\"mono\":{},\"full\":{}}}",
+                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"removable\":{},\"indent\":{},\"mono\":{},\"full\":{}}}",
                     json(s),
                     json(n),
                     json(p),
                     json(dev),
                     removable.contains(p),
+                    // Only the share rows under a server (they have a volume): the same folder in Recents stays flat
+                    !dev.is_empty() && indented.contains(p),
                     json(&icons::symbolic(i)),
                     *i == "user-trash-full"
                 )

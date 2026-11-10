@@ -2,7 +2,7 @@
 // [--multiple] [--directory] [--title T] [--name N] [--folder FOLDER] [--accept LABEL] [--filters JSON]
 // [--filter N] --out FILE. The selection is written to FILE, one path per line (empty: cancelled).
 // Without Qt: tested by cargo test.
-use std::{env, sync::OnceLock};
+use std::sync::OnceLock;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pattern {
@@ -69,7 +69,7 @@ pub fn positional(args: &[String]) -> Option<String> {
 
 pub fn get() -> Option<&'static Pick> {
     static P: OnceLock<Option<Pick>> = OnceLock::new();
-    P.get_or_init(|| parse(&env::args().skip(1).collect::<Vec<_>>())).as_ref()
+    P.get_or_init(|| parse(&crate::spare::args())).as_ref()
 }
 
 // [{"name":"Images","globs":["*.png"],"mimes":["image/*"]}]

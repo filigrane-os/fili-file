@@ -1883,6 +1883,7 @@ ApplicationWindow {
             property alias field: input
             property string label
             property bool secret: false
+            property bool revealed: false
             property Item next
             width: parent ? parent.width : 100
             height: 26
@@ -1900,10 +1901,10 @@ ApplicationWindow {
             }
             TextInput {
                 id: input
-                anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+                anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: parent.secret ? revealLabel.width + FiliTheme.space3 : FiliTheme.space2 }
                 verticalAlignment: TextInput.AlignVCenter
                 clip: true
-                echoMode: parent.secret ? TextInput.Password : TextInput.Normal
+                echoMode: parent.secret && !parent.revealed ? TextInput.Password : TextInput.Normal
                 font.family: FiliTheme.font
                 font.pixelSize: FiliTheme.size
                 color: FiliTheme.text
@@ -1911,6 +1912,23 @@ ApplicationWindow {
                 onAccepted: connectBox.apply()
                 KeyNavigation.tab: parent.next ? parent.next.field : null
                 Keys.onEscapePressed: connectBox.visible = false
+            }
+            // Show / hide the password being typed
+            Text {
+                id: revealLabel
+                visible: parent.secret
+                anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+                text: parent.revealed ? Fili.tr("Hide") : Fili.tr("Show")
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.size
+                color: revealArea.containsMouse ? FiliTheme.text : FiliTheme.muted
+                MouseArea {
+                    id: revealArea
+                    anchors { fill: parent; margins: -4 }
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: { parent.parent.revealed = !parent.parent.revealed; input.forceActiveFocus(); }
+                }
             }
         }
         Rectangle {
@@ -2311,6 +2329,7 @@ ApplicationWindow {
         property alias text: input.text
         property alias field: input
         property string label
+        property bool revealed: false
         signal accepted()
         signal cancelled()
         width: parent ? parent.width : 100
@@ -2329,16 +2348,32 @@ ApplicationWindow {
         }
         TextInput {
             id: input
-            anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+            anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: revealLabel.width + FiliTheme.space3 }
             verticalAlignment: TextInput.AlignVCenter
             clip: true
-            echoMode: TextInput.Password
+            echoMode: parent.revealed ? TextInput.Normal : TextInput.Password
             font.family: FiliTheme.font
             font.pixelSize: FiliTheme.size
             color: FiliTheme.text
             selectByMouse: true
             onAccepted: parent.accepted()
             Keys.onEscapePressed: parent.cancelled()
+        }
+        // Show / hide the password being typed
+        Text {
+            id: revealLabel
+            anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+            text: parent.revealed ? Fili.tr("Hide") : Fili.tr("Show")
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.size
+            color: revealArea.containsMouse ? FiliTheme.text : FiliTheme.muted
+            MouseArea {
+                id: revealArea
+                anchors { fill: parent; margins: -4 }
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: { parent.parent.revealed = !parent.parent.revealed; input.forceActiveFocus(); }
+            }
         }
     }
     // Password of an archive to extract (asked when fili-archive says it is protected)

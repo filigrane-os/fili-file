@@ -119,6 +119,19 @@ pub fn mount(dev: &str) -> Result<String, String> {
 
 pub fn unmount(dev: &str) -> Result<(), String> {
     if let Some(uri) = dev.strip_prefix(SRV) {
+        // The cross of a server disconnects it (every share of the server mounted by gvfs), then forgets it. The row is
+        // built from the mounts too: forgetting alone would leave it there.
+        let (user, host, _) = address_parts(uri);
+        let paths: Vec<String> = network().into_iter().filter_map(|v| v.mount).collect();
+        let mut first_error = None;
+        for path in server_mounts(&paths, &host, &user) {
+            if let Err(e) = run_plain("gio", &["mount", "-u", &path]) {
+                first_error.get_or_insert(e);
+            }
+        }
+        if let Some(e) = first_error {
+            return Err(e);
+        }
         forget_server(uri);
         return Ok(());
     }
@@ -490,18 +503,30 @@ fn shares_from(output: &str) -> Vec<String> {
 // Connects the shares of an SMB server given without one: at most MAX_SHARES, the first connected one is returned
 const MAX_SHARES: usize = 8;
 
+// The commands that list the shares of a server: gvfs does not mount the root of a server by itself (smb-browse.mount:
+// AutoMount=false), `gio list` alone fails with "The specified location is not mounted", so the root is mounted first
+// (the authentication questions are asked then; an already mounted root counts as a success).
+fn list_commands(root: &str) -> [Vec<String>; 2] {
+    let unbuffered = Command::new("stdbuf").arg("--version").output().is_ok();
+    let build = |verb: &str| -> Vec<String> {
+        let mut v: Vec<String> = if unbuffered { vec!["stdbuf".into(), "-o0".into()] } else { vec![] };
+        v.extend(["gio".to_string(), verb.to_string(), root.to_string()]);
+        v
+    };
+    [build("mount"), build("list")]
+}
+
+fn command_of(argv: &[String]) -> Command {
+    let mut c = Command::new(&argv[0]);
+    c.args(&argv[1..]);
+    c
+}
+
 // The shares of an SMB server, `root` being "smb://user@host/"
 pub fn list_shares(root: &str, user: &str, password: &str) -> Result<Vec<String>, String> {
-    let mut cmd = if Command::new("stdbuf").arg("--version").output().is_ok() {
-        let mut c = Command::new("stdbuf");
-        c.args(["-o0", "gio", "list", root]);
-        c
-    } else {
-        let mut c = Command::new("gio");
-        c.args(["list", root]);
-        c
-    };
-    Ok(shares_from(&run_gio(&mut cmd, user, password)?))
+    let [mount, list] = list_commands(root);
+    run_gio(&mut command_of(&mount), user, password)?;
+    Ok(shares_from(&run_gio(&mut command_of(&list), user, password)?))
 }
 
 // The shares of a server with the password kept in the keyring (anonymous listing otherwise)
@@ -593,6 +618,30 @@ pub fn forget_server(uri: &str) {
     let mut list = read_servers();
     list.retain(|u| u != uri);
     write_servers(&list);
+}
+
+// The gvfs mounts (FUSE paths) that belong to a server: "smb-share:server=nas,share=docs,user=ana" or
+// "sftp:host=nas,user=ana". The user counts when given (any case: smb says "Ana" and "ana"); a mount of the
+// same host for another user is left alone.
+pub fn server_mounts(paths: &[String], host: &str, user: &str) -> Vec<String> {
+    paths
+        .iter()
+        .filter(|p| {
+            let entry = p.rsplit('/').next().unwrap_or("");
+            let Some((_, rest)) = entry.split_once(':') else { return false };
+            let get = |k: &str| rest.split(',').find_map(|kv| kv.strip_prefix(&format!("{k}=")));
+            let same_host = get("server").or_else(|| get("host")).is_some_and(|h| h.eq_ignore_ascii_case(host));
+            same_host && (user.is_empty() || get("user").is_some_and(|u| u.eq_ignore_ascii_case(user)))
+        })
+        .cloned()
+        .collect()
+}
+
+// Name of a share under its server in the sidebar: "…/smb-share:server=nas,share=docs,user=ana" -> "docs"
+pub fn share_name(path: &str) -> Option<String> {
+    let entry = path.rsplit('/').next()?;
+    let rest = entry.strip_prefix("smb-share:")?;
+    rest.split(',').find_map(|kv| kv.strip_prefix("share=")).filter(|s| !s.is_empty()).map(String::from)
 }
 
 // Remembered servers that are not connected (a gvfs mount talks about the same host, and the same share for SMB)
@@ -703,6 +752,40 @@ pub fn connect_with(uri: &str, user: &str, password: &str, remember: bool) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn share_name_in_the_sidebar() {
+        assert_eq!(share_name("/run/user/1000/gvfs/smb-share:server=nas,share=docs,user=ana").as_deref(), Some("docs"));
+        assert_eq!(share_name("/run/user/1000/gvfs/sftp:host=nas,user=ana"), None);
+        assert_eq!(share_name("/x/smb-share:server=nas,user=ana"), None);
+    }
+
+    #[test]
+    fn a_server_cross_takes_its_shares_and_no_others() {
+        let p = |n: &str| format!("/run/user/1000/gvfs/{n}");
+        let paths = vec![
+            p("smb-share:server=192.0.2.10,share=photos,user=Ana"),
+            p("smb-share:server=192.0.2.10,share=public,user=ana"),
+            p("smb-share:server=192.0.2.10,share=docs,user=guest"),
+            p("smb-share:server=other,share=x,user=Ana"),
+            p("sftp:host=192.0.2.10,user=Ana"),
+        ];
+        let got = server_mounts(&paths, "192.0.2.10", "Ana");
+        assert_eq!(got, vec![paths[0].clone(), paths[1].clone(), paths[4].clone()]);
+        // Without a user in the address: every mount of the host
+        assert_eq!(server_mounts(&paths, "192.0.2.10", "").len(), 4);
+        assert!(server_mounts(&paths, "nowhere", "").is_empty());
+    }
+
+    // gvfs does not mount a server root by itself: listing the shares needs `gio mount` first, then `gio list`
+    #[test]
+    fn shares_are_listed_after_mounting_the_server() {
+        let [mount, list] = list_commands("smb://ana@nas/");
+        let tail = |v: &Vec<String>| v[v.len() - 3..].to_vec();
+        assert_eq!(tail(&mount), ["gio", "mount", "smb://ana@nas/"]);
+        assert_eq!(tail(&list), ["gio", "list", "smb://ana@nas/"]);
+        assert_eq!(command_of(&mount).get_program().to_string_lossy(), mount[0]);
+    }
 
     #[test]
     fn mtp_phone_from_udev() {

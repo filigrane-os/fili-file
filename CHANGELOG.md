@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.0
+
+- SMB: connecting to a server by its address (`smb://host/`, without a share) works again: the server root is mounted before its shares are listed (gvfs does not mount it by itself, `gio list` failed with "The specified location is not mounted").
+- Sidebar: the shares mounted from a server appear under its row, indented, one per line; each has its own eject button.
+- The cross of a server in the sidebar disconnects it: its shares are unmounted before it is forgotten (the row came back as long as a share stayed mounted).
+- Password fields (Connect to Server, archive password): a "Show" / "Hide" button next to the field reveals what is typed.
+- Resident mode fixes: a launch that arrives while the spare is still loading no longer opens two windows; the next spare is started by a detached process (it no longer depends on the window staying open for 3 s); an update that replaces the binary retires the old spare at the next launch; the first folder of a claimed spare counts as a visit and no longer leaves a bogus Back entry; the focus token and search path of the launch reach the window; `--spare` is only a subcommand as the first argument; the socket folder is private from its creation.
+
 ## 1.6.0
 
 - **Resident mode** (optional, off by default): `resident = true` in `fili-file.toml`, or `fili-file spare on`, keeps a hidden copy of Casier loaded; opening Casier shows its window in about 0.15 s instead of 0.4 s. About 35 MB of private memory while on; a new copy loads after each opening. `fili-file spare on|off|status|auto`.
