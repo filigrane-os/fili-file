@@ -92,6 +92,8 @@
 # toolbar_height = 44
 # status_height = 28
 # sidebar_width = 200
+# tab_bar_height = 40
+# tab_height = 28
 
 # Dark mode colors (defaults shown)
 # [theme.dark]

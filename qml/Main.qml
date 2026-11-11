@@ -1143,16 +1143,24 @@ ApplicationWindow {
         color: FiliTheme.border
     }
 
-    // Tabs (from two): folder name, × on hover; middle click closes
+    // Tabs (from two): folder name, × on hover; middle click closes. Look shared by every fili-* application
+    // (app-window.md of the filigrane-ui skill, after Facteur's tabs): band tabBarHeight, tabs tabHeight, current one
+    // on surfaceActive, line below
     Rectangle {
         id: tabBar
         anchors { top: toolbarLine.bottom; left: sideLine.right; right: previewLine.left }
-        height: visible ? 30 : 0
+        height: visible ? FiliTheme.tabBarHeight : 0
         visible: win.tabs.length > 1 && !win.picking
         color: FiliTheme.background
+        Rectangle {
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+            height: FiliTheme.borderWidth
+            color: FiliTheme.border
+        }
         Row {
-            anchors { fill: parent; leftMargin: FiliTheme.space2; topMargin: FiliTheme.space1; bottomMargin: FiliTheme.space1 }
-            spacing: FiliTheme.space1
+            anchors { left: parent.left; right: parent.right; leftMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
+            height: FiliTheme.tabHeight
+            spacing: FiliTheme.space3
             Repeater {
                 model: win.tabs
                 Rectangle {
@@ -1160,10 +1168,10 @@ ApplicationWindow {
                     required property int index
                     readonly property bool current: index === win.tabIndex
                     readonly property string path: current ? folder.shown : modelData.path
-                    width: Math.max(80, Math.min(180, (tabBar.width - 2 * FiliTheme.space2) / win.tabs.length - FiliTheme.space1))
+                    width: Math.max(80, Math.min(180, (tabBar.width - 2 * FiliTheme.margin) / win.tabs.length - FiliTheme.space3))
                     height: parent.height
                     radius: FiliTheme.radiusControl
-                    color: current ? FiliTheme.surfaceHover : tabArea.containsMouse || tabDrop.containsDrag ? FiliTheme.surface : "transparent"
+                    color: current ? FiliTheme.surfaceActive : tabArea.containsMouse || tabDrop.containsDrag ? FiliTheme.surfaceHover : "transparent"
                     border.width: tabDrop.containsDrag ? 1 : 0
                     border.color: FiliTheme.accentColor
                     // Drag the tab to move it: it follows the cursor, the place is decided on release
@@ -1194,7 +1202,7 @@ ApplicationWindow {
                         }
                     }
                     Text {
-                        anchors { left: parent.left; leftMargin: FiliTheme.space3; right: closeX.left; rightMargin: FiliTheme.space1; verticalCenter: parent.verticalCenter }
+                        anchors { left: parent.left; leftMargin: FiliTheme.space4; right: closeX.left; rightMargin: FiliTheme.space1; verticalCenter: parent.verticalCenter }
                         text: path === "/" ? "/" : path === Fili.home() ? Fili.home().split("/").pop() : path.split("/").pop()
                         elide: Text.ElideRight
                         font.family: FiliTheme.font
@@ -1222,7 +1230,7 @@ ApplicationWindow {
                             moving = true;
                             wasDrag = true;
                             // Stays in the bar: from the first to the last tab
-                            const slot = parent.width + FiliTheme.space1;
+                            const slot = parent.width + FiliTheme.space3;
                             dragDx = Math.max(-index * slot, Math.min((win.tabs.length - 1 - index) * slot, dx));
                             // Far from the bar: it will become a window (half transparent to say so)
                             leaving = outside(e);
@@ -1235,7 +1243,7 @@ ApplicationWindow {
                         onReleased: e => {
                             if (moving) {
                                 const out = outside(e);
-                                const to = Math.max(0, Math.min(win.tabs.length - 1, index + Math.round(dragDx / (parent.width + FiliTheme.space1))));
+                                const to = Math.max(0, Math.min(win.tabs.length - 1, index + Math.round(dragDx / (parent.width + FiliTheme.space3))));
                                 moving = false;
                                 leaving = false;
                                 dragDx = 0;
@@ -1455,10 +1463,11 @@ ApplicationWindow {
         anchors.bottom: parent.bottom
         width: parent.width
         height: FiliTheme.statusHeight
-        color: FiliTheme.background
+        // Recessed like Facteur's footer (app-window.md of the filigrane-ui skill)
+        color: FiliTheme.backgroundDeep
         Rectangle {
             width: parent.width
-            height: 1
+            height: FiliTheme.borderWidth
             color: FiliTheme.border
         }
         // Breadcrumb on the left (click: go there, right click: menu), selection info on the right; an error,
@@ -1546,7 +1555,6 @@ ApplicationWindow {
             }
             TextButton {
                 label: Fili.tr("Cancel")
-                height: statusbar.height - 2
                 onClicked: folder.cancel()
             }
         }
@@ -2144,11 +2152,17 @@ ApplicationWindow {
                     color: FiliTheme.background
                     border.width: FiliTheme.borderWidth
                     border.color: FiliTheme.border
+                    FiliScrollBar {
+                        flick: bulkList
+                        anchors { top: bulkList.top; bottom: bulkList.bottom; right: bulkList.right }
+                    }
                     ListView {
+                        id: bulkList
                         anchors { fill: parent; margins: FiliTheme.space1 }
                         clip: true
                         model: bulkBox.plan
                         boundsBehavior: Flickable.StopAtBounds
+                        KineticScroll {}
                         delegate: Item {
                             required property var modelData
                             width: ListView.view.width

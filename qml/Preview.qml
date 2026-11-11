@@ -39,12 +39,14 @@ Rectangle {
         cache: false
     }
     Flickable {
+        id: textFlick
         visible: pane.kind === "text" || pane.kind === "folder"
         anchors { fill: parent; margins: FiliTheme.space4 }
         contentWidth: width
         contentHeight: txt.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        KineticScroll {}
         Text {
             id: txt
             width: parent.width
@@ -56,6 +58,11 @@ Rectangle {
             lineHeight: 1.2
             color: FiliTheme.text
         }
+    }
+    FiliScrollBar {
+        flick: textFlick
+        visible: needed && textFlick.visible
+        anchors { top: textFlick.top; bottom: textFlick.bottom; right: textFlick.right; rightMargin: -FiliTheme.space4 }
     }
     Text {
         visible: pane.kind === "none" || (pane.kind === "folder" && pane.body === "")

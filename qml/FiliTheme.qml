@@ -63,4 +63,7 @@ QtObject {
     readonly property int toolbarHeight: m.toolbar_height
     readonly property int statusHeight: m.status_height
     readonly property int sidebarWidth: m.sidebar_width
+    // Tab row and tab (look of Facteur's tabs, shared by every fili-* application)
+    readonly property int tabBarHeight: m.tab_bar_height
+    readonly property int tabHeight: m.tab_height
 }

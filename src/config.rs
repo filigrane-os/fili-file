@@ -146,6 +146,8 @@ const KEYS: &[(&str, Kind)] = &[
     ("toolbar_height", Kind::Int),
     ("status_height", Kind::Int),
     ("sidebar_width", Kind::Int),
+    ("tab_bar_height", Kind::Int),
+    ("tab_height", Kind::Int),
 ];
 
 const DEFAULT_THEME: &str = include_str!("../theme.toml");

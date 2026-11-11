@@ -19,6 +19,16 @@ Rectangle {
 
     color: FiliTheme.backgroundDeep
 
+    // Sections folded by the user (key: the section heading), for the session. Headings fold as in Facteur
+    // (app-window.md of the filigrane-ui skill): arrow, then the heading; a click folds or unfolds.
+    property var folded: ({})
+    function isFolded(key) { return folded[key] === true; }
+    function toggle(key) {
+        const next = Object.assign({}, folded);
+        next[key] = !isFolded(key);
+        folded = next;
+    }
+
     ListModel { id: places }
     function reload() {
         places.clear();
@@ -45,10 +55,10 @@ Rectangle {
         boundsBehavior: Flickable.StopAtBounds
         model: places
         keyNavigationEnabled: true
-        // A hairline between rows: the background of the current place does not touch the hover one
-        spacing: 2
+        spacing: 0
         activeFocusOnTab: true
         highlightMoveDuration: 0
+        KineticScroll {}
         // Drop a folder between places (or in the empty space): add it to the favorites
         DropArea {
             z: -1
@@ -61,20 +71,47 @@ Rectangle {
             }
         }
         section.property: "section"
-        section.delegate: Text {
+        // Heading: room above it (space4), then a row of sideRowHeight with the fold arrow and the name
+        section.delegate: Item {
+            id: head
             required property string section
-            width: ListView.view.width
-            height: 38
-            leftPadding: FiliTheme.margin - list.inset
-            verticalAlignment: Text.AlignBottom
-            bottomPadding: FiliTheme.space1
-            text: section
-            font.family: FiliTheme.font
-            font.pixelSize: FiliTheme.sizeSmall
-            font.weight: FiliTheme.weightAccent
-            color: FiliTheme.muted
+            readonly property bool open: !side.isFolded(section)
+            width: ListView.view.width - 2 * list.inset
+            height: FiliTheme.sideRowHeight + FiliTheme.space4
+            Rectangle {
+                anchors { fill: parent; topMargin: FiliTheme.space4 }
+                radius: FiliTheme.radiusControl
+                color: headArea.containsMouse ? FiliTheme.alpha(FiliTheme.surfaceHover, 0.5) : "transparent"
+            }
+            Text {
+                id: arrow
+                x: FiliTheme.margin / 2 - list.inset
+                anchors { bottom: parent.bottom; bottomMargin: (FiliTheme.sideRowHeight - height) / 2 }
+                text: head.open ? "▾" : "▸"
+                font.pixelSize: FiliTheme.sizeSmall
+                color: FiliTheme.muted
+            }
+            Text {
+                anchors { left: arrow.right; leftMargin: FiliTheme.space2; right: parent.right; rightMargin: FiliTheme.space2; bottom: parent.bottom; bottomMargin: (FiliTheme.sideRowHeight - height) / 2 }
+                text: head.section
+                elide: Text.ElideRight
+                font.family: FiliTheme.font
+                font.pixelSize: FiliTheme.sizeSmall
+                font.weight: FiliTheme.weightAccent
+                color: FiliTheme.muted
+            }
+            MouseArea {
+                id: headArea
+                anchors { fill: parent; topMargin: FiliTheme.space4 }
+                hoverEnabled: true
+                onClicked: side.toggle(head.section)
+            }
+            Accessible.role: Accessible.Button
+            Accessible.name: head.section
         }
-        delegate: Rectangle {
+        // A row is an item of sideRowHeight + 4 holding its background (1 px from the top and bottom: a hairline
+        // between rows, the background of the current place does not touch the hover one); a folded row has no height
+        delegate: Item {
             id: row
             required property string name
             required property string path
@@ -86,12 +123,17 @@ Rectangle {
             required property bool full
             required property int index
             readonly property bool sel: path !== "" && path === side.current
+            readonly property bool folded: side.isFolded(section)
             width: ListView.view.width - 2 * list.inset
-            height: FiliTheme.sideRowHeight + 2
-            radius: FiliTheme.radiusControl
-            color: sel || area.containsMouse || drop.containsDrag ? FiliTheme.surfaceHover : "transparent"
-            border.width: drop.containsDrag || (list.activeFocus && Fili.keyNav && ListView.isCurrentItem) ? 1 : 0
-            border.color: FiliTheme.accentColor
+            height: folded ? 0 : FiliTheme.sideRowHeight + 4
+            visible: !folded
+            Rectangle {
+                anchors { fill: parent; topMargin: 1; bottomMargin: 1 }
+                radius: FiliTheme.radiusControl
+                color: row.sel || area.containsMouse || drop.containsDrag ? FiliTheme.surfaceHover : "transparent"
+                border.width: drop.containsDrag || (list.activeFocus && Fili.keyNav && row.ListView.isCurrentItem) ? 1 : 0
+                border.color: FiliTheme.accentColor
+            }
 
             Image {
                 id: img
@@ -182,6 +224,17 @@ Rectangle {
         }
         Keys.onPressed: e => {
             Fili.keyNav = true;
+            // Up and down skip the rows of folded sections
+            if (e.key === Qt.Key_Up || e.key === Qt.Key_Down) {
+                const step = e.key === Qt.Key_Up ? -1 : 1;
+                let i = currentIndex + step;
+                while (i >= 0 && i < places.count && side.isFolded(places.get(i).section))
+                    i += step;
+                if (i >= 0 && i < places.count)
+                    currentIndex = i;
+                e.accepted = true;
+                return;
+            }
             if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Space) && currentIndex >= 0) {
                 const p = places.get(currentIndex);
                 if (p.dev.startsWith("find:"))
@@ -195,5 +248,9 @@ Rectangle {
                 e.accepted = true;
             }
         }
+    }
+    FiliScrollBar {
+        flick: list
+        anchors { top: list.top; bottom: list.bottom; right: list.right }
     }
 }

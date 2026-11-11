@@ -110,11 +110,13 @@ Rectangle {
     }
 
     Flickable {
+        id: nearbyFlick
         anchors.fill: parent
         contentWidth: width
         contentHeight: Math.max(height, column.implicitHeight + 2 * FiliTheme.space6)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        KineticScroll {}
 
         Column {
             id: column
@@ -321,5 +323,9 @@ Rectangle {
                 }
             }
         }
+    }
+    FiliScrollBar {
+        flick: nearbyFlick
+        anchors { top: nearbyFlick.top; bottom: nearbyFlick.bottom; right: nearbyFlick.right }
     }
 }

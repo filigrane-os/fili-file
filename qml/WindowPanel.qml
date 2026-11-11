@@ -214,20 +214,21 @@ Item {
         }
 
         Flickable {
-            id: flick
+            id: scroller
             anchors { fill: parent; margins: 1 }
             clip: true
             contentWidth: width
             contentHeight: body.height + 2 * FiliTheme.space2
             boundsBehavior: Flickable.StopAtBounds
             interactive: contentHeight > height
+            KineticScroll {}
         // Brings a tile into view (keyboard selection)
         function reveal(item) {
             const top = item.mapToItem(body, 0, 0).y + FiliTheme.space2;
-            if (top < flick.contentY)
-                flick.contentY = top - FiliTheme.space1;
-            else if (top + item.height > flick.contentY + flick.height)
-                flick.contentY = top + item.height - flick.height + FiliTheme.space1;
+            if (top < scroller.contentY)
+                scroller.contentY = top - FiliTheme.space1;
+            else if (top + item.height > scroller.contentY + scroller.height)
+                scroller.contentY = top + item.height - scroller.height + FiliTheme.space1;
         }
         Column {
             id: body
@@ -260,7 +261,7 @@ Item {
                                 required property int index
                                 readonly property bool selected: panel.current === grp.base + index
                                 readonly property bool on: panel.active.length >= 0 && panel.isActive(modelData)
-                                onSelectedChanged: if (selected) flick.reveal(tile)
+                                onSelectedChanged: if (selected) scroller.reveal(tile)
                                 width: panel.tileW
                                 height: panel.tileH
                                 opacity: panel.active.length >= 0 && panel.enabledItem(modelData) ? 1 : 0.4
@@ -312,6 +313,10 @@ Item {
                 }
             }
         }
+        }
+        FiliScrollBar {
+            flick: scroller
+            anchors { top: scroller.top; bottom: scroller.bottom; right: scroller.right }
         }
     }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.0
+
+- Common window anatomy shared with the other Filigrane applications (Facteur first): the footer is on the recessed background, the tabs take Facteur's look (a 40 px band with a line below, 28 px tabs, the current one on a lighter fill; the `×`, middle click, drag and drop of files and drag to reorder stay), and every scrollable view (sidebar, preview, Nearby, batch rename list, Window Actions panel) has the same inertial scrolling and thin scroll bar.
+- Sidebar: the section headings (Favorites, Devices, ...) fold and unfold with a click, with the ▾ / ▸ arrow; Up and Down skip the rows of a folded section.
+- New theme keys `tab_bar_height` and `tab_height` (see `fili-file.toml`).
+
 ## 1.7.0
 
 - SMB: connecting to a server by its address (`smb://host/`, without a share) works again: the server root is mounted before its shares are listed (gvfs does not mount it by itself, `gio list` failed with "The specified location is not mounted").
