@@ -624,6 +624,9 @@ ApplicationWindow {
         case "compress":
             accept ? compressBox.apply() : (compressBox.visible = false);
             return { ok: true };
+        case "openwith":
+            accept ? openWithBox.apply() : (openWithBox.visible = false);
+            return { ok: true };
         case "info":
         case "about":
         case "password":
@@ -640,7 +643,7 @@ ApplicationWindow {
     }
     // Open dialog, otherwise ""
     function dialogName() {
-        const open = { menu: menu.visible, confirm: confirm.visible, info: infoCard.visible, match: matchBox.visible, bulk: bulkBox.visible, conflict: conflictBox.visible, compress: compressBox.visible, password: passwordBox.visible, share: shareBox.visible, connect: connectBox.visible, about: aboutCard.visible };
+        const open = { menu: menu.visible, confirm: confirm.visible, info: infoCard.visible, match: matchBox.visible, bulk: bulkBox.visible, conflict: conflictBox.visible, compress: compressBox.visible, openwith: openWithBox.visible, password: passwordBox.visible, share: shareBox.visible, connect: connectBox.visible, about: aboutCard.visible };
         for (const k in open)
             if (open[k])
                 return k;
@@ -753,7 +756,7 @@ ApplicationWindow {
     // No menu bar in the window: the menu lives in the fili-bar (fallback appmenu/fili-file.json, commands above)
 
     // No file shortcuts while typing (rename, path) or under the confirmation
-    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible || matchBox.visible || bulkBox.visible || conflictBox.visible || compressBox.visible || passwordBox.visible || shareBox.visible || connectBox.visible || aboutCard.visible
+    readonly property bool typing: menu.visible || nameInput.activeFocus || files.editing || pathBar.editing || searchInput.activeFocus || confirm.visible || infoCard.visible || matchBox.visible || bulkBox.visible || conflictBox.visible || compressBox.visible || openWithBox.visible || passwordBox.visible || shareBox.visible || connectBox.visible || aboutCard.visible
     function trashSelection() {
         const row = folder.trash(files.targetsText(), files.currentIndex);
         files.reloaded();
@@ -782,10 +785,17 @@ ApplicationWindow {
         if (t.length > 0) {
             list.push({ id: "open", label: Fili.tr("Open"), enabled: one });
             if (one && !folder.pathIsDir(t[0])) {
+                // The preferred applications of the type, then "Other…" for any installed one
                 const apps = JSON.parse(folder.openWithList(t[0]));
                 list.push({
                     id: "with", label: Fili.tr("Open With"),
-                    children: apps.length > 0 ? apps.map(a => ({ id: "app:" + a.id, label: a.name })) : [{ id: "", label: Fili.tr("No application"), enabled: false }]
+                    children: apps.map(a => ({ id: "app:" + a.id, label: a.name })).concat([{ id: "withother", label: Fili.tr("Other…") }])
+                });
+                const editors = JSON.parse(folder.editWithList(t[0]));
+                list.push({ id: "edit", label: Fili.tr("Edit"), enabled: editors.length > 0 });
+                list.push({
+                    id: "editwith", label: Fili.tr("Edit With"),
+                    children: editors.map(a => ({ id: "editor:" + a.id, label: a.name })).concat([{ id: "editother", label: Fili.tr("Other…") }])
                 });
             }
             list.push({ id: "quicklook", label: Fili.tr("Quick Look"), hint: "Space", enabled: one });
@@ -911,6 +921,17 @@ ApplicationWindow {
             win.show(folder.activate(files.currentIndex));
         else if (id.startsWith("app:"))
             folder.openWith(id.slice(4), files.targets()[0]);
+        else if (id === "edit") {
+            const editors = JSON.parse(folder.editWithList(files.targets()[0]));
+            if (editors.length > 0)
+                folder.openWith(editors[0].id, files.targets()[0]);
+        }
+        else if (id.startsWith("editor:"))
+            folder.openWith(id.slice(7), files.targets()[0]);
+        else if (id === "withother")
+            openWithBox.open(files.targets()[0], false);
+        else if (id === "editother")
+            openWithBox.open(files.targets()[0], true);
         else if (id === "quicklook")
             folder.quicklook(files.targets()[0]);
         else if (id === "copy")
@@ -2629,6 +2650,201 @@ ApplicationWindow {
                     anchors.right: parent.right
                     TextButton { label: Fili.tr("Cancel"); onClicked: compressBox.visible = false }
                     TextButton { label: Fili.tr("Compress"); primary: true; onClicked: compressBox.apply() }
+                }
+            }
+        }
+    }
+    // "Other…" dialog of Open With / Edit With: search field, the installed applications, and a choice that makes the
+    // application the one for every file of this type from now on
+    Rectangle {
+        id: openWithBox
+        property string path: ""
+        property bool edit: false
+        property bool remember: false
+        property var apps: []
+        property int index: 0
+        readonly property var matches: {
+            const q = searchApp.text.trim().toLowerCase();
+            return apps.filter(a => q === "" || a.name.toLowerCase().indexOf(q) >= 0);
+        }
+        function open(file, forEdit) {
+            path = file;
+            edit = forEdit;
+            remember = false;
+            apps = JSON.parse(folder.openWithAll());
+            searchApp.text = "";
+            index = 0;
+            visible = true;
+        }
+        function apply() {
+            const a = matches[index];
+            if (!a)
+                return;
+            visible = false;
+            if (remember)
+                folder.openWithRemember(a.id, path, edit);
+            folder.openWith(a.id, path);
+        }
+        function step(d) {
+            if (matches.length > 0)
+                index = Math.max(0, Math.min(matches.length - 1, index + d));
+            appList.positionViewAtIndex(index, ListView.Contain);
+        }
+        anchors.fill: parent
+        visible: false
+        z: 200
+        color: FiliTheme.alpha(FiliTheme.backgroundDeep, 0.7)
+        onVisibleChanged: if (visible) searchApp.forceActiveFocus(); else files.focusList()
+        MouseArea {
+            anchors.fill: parent
+            onClicked: openWithBox.visible = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 380
+            height: Math.min(parent.height - 2 * FiliTheme.space4, 440)
+            radius: FiliTheme.radiusWindow
+            color: FiliTheme.surface
+            border.width: FiliTheme.borderWidth
+            border.color: FiliTheme.border
+            MouseArea { anchors.fill: parent }
+            Column {
+                anchors { fill: parent; margins: FiliTheme.space4 }
+                spacing: FiliTheme.space3
+                Text {
+                    width: parent.width
+                    elide: Text.ElideMiddle
+                    text: (openWithBox.edit ? Fili.tr("Edit “%1” with") : Fili.tr("Open “%1” with")).replace("%1", openWithBox.path.split("/").pop())
+                    font.family: FiliTheme.font
+                    font.pixelSize: FiliTheme.size
+                    font.weight: FiliTheme.weightAccent
+                    color: FiliTheme.text
+                }
+                Rectangle {
+                    width: parent.width
+                    height: 26
+                    radius: FiliTheme.radiusControl
+                    color: FiliTheme.background
+                    border.width: FiliTheme.borderWidth
+                    border.color: searchApp.activeFocus ? FiliTheme.accentColor : FiliTheme.border
+                    TextInput {
+                        id: searchApp
+                        anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+                        verticalAlignment: TextInput.AlignVCenter
+                        clip: true
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.size
+                        color: FiliTheme.text
+                        selectByMouse: true
+                        onTextChanged: openWithBox.index = 0
+                        onAccepted: openWithBox.apply()
+                        Keys.onEscapePressed: openWithBox.visible = false
+                        Keys.onUpPressed: openWithBox.step(-1)
+                        Keys.onDownPressed: openWithBox.step(1)
+                        Text {
+                            visible: searchApp.text === ""
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Fili.tr("Search")
+                            font: searchApp.font
+                            color: FiliTheme.textSecondary
+                        }
+                    }
+                }
+                Item {
+                    width: parent.width
+                    height: parent.height - 3 * FiliTheme.space3 - 26 - 22 - 22 - 20
+                    clip: true
+                    ListView {
+                        id: appList
+                        anchors.fill: parent
+                        model: openWithBox.matches
+                        boundsBehavior: Flickable.StopAtBounds
+                        KineticScroll {}
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: appList.width
+                            height: 24
+                            radius: FiliTheme.radiusControl
+                            color: index === openWithBox.index ? FiliTheme.surfaceActive : rowArea.containsMouse ? FiliTheme.surfaceHover : "transparent"
+                            Text {
+                                anchors { fill: parent; leftMargin: FiliTheme.space2; rightMargin: FiliTheme.space2 }
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                                text: modelData.name
+                                font.family: FiliTheme.font
+                                font.pixelSize: FiliTheme.size
+                                color: FiliTheme.text
+                            }
+                            MouseArea {
+                                id: rowArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: { openWithBox.index = index; searchApp.forceActiveFocus(); }
+                                onDoubleClicked: openWithBox.apply()
+                            }
+                        }
+                    }
+                    Text {
+                        visible: openWithBox.matches.length === 0
+                        anchors.centerIn: parent
+                        text: Fili.tr("No application")
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.sizeList
+                        color: FiliTheme.textSecondary
+                    }
+                    FiliScrollBar {
+                        flick: appList
+                        anchors { top: parent.top; bottom: parent.bottom; right: parent.right }
+                    }
+                }
+                Item {
+                    id: withRemember
+                    width: parent.width
+                    height: 22
+                    activeFocusOnTab: true
+                    function flip() { openWithBox.remember = !openWithBox.remember; }
+                    Keys.onSpacePressed: flip()
+                    Keys.onReturnPressed: openWithBox.apply()
+                    Keys.onEnterPressed: openWithBox.apply()
+                    Keys.onEscapePressed: openWithBox.visible = false
+                    Rectangle {
+                        id: withCheck
+                        width: 14
+                        height: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        radius: 3
+                        color: FiliTheme.background
+                        border.width: FiliTheme.borderWidth
+                        border.color: openWithBox.remember ? FiliTheme.accentColor : FiliTheme.border
+                        Text {
+                            anchors.centerIn: parent
+                            visible: openWithBox.remember
+                            text: "✓"
+                            font.family: FiliTheme.font
+                            font.pixelSize: FiliTheme.sizeList
+                            color: FiliTheme.accentColor
+                        }
+                    }
+                    Text {
+                        anchors { left: withCheck.right; leftMargin: FiliTheme.space2; right: parent.right; verticalCenter: parent.verticalCenter }
+                        elide: Text.ElideRight
+                        text: (openWithBox.edit ? Fili.tr("Always edit files of this type (%1) with this application") : Fili.tr("Always open files of this type (%1) with this application")).replace("%1", openWithBox.visible ? folder.openWithKind(openWithBox.path) : "")
+                        font.family: FiliTheme.font
+                        font.pixelSize: FiliTheme.sizeList
+                        color: FiliTheme.text
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: { withRemember.flip(); withRemember.forceActiveFocus(); }
+                    }
+                    FocusRing {}
+                }
+                Row {
+                    spacing: FiliTheme.space2
+                    anchors.right: parent.right
+                    TextButton { label: Fili.tr("Cancel"); onClicked: openWithBox.visible = false }
+                    TextButton { label: openWithBox.edit ? Fili.tr("Edit") : Fili.tr("Open"); primary: true; onClicked: openWithBox.apply() }
                 }
             }
         }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.0
+
+- Open With lists the applications of the file type, then **Other…**: a dialog with every installed application and a search field. Its checkbox ("Always open files of this type with this application") makes the chosen application the default of the type (`~/.config/mimeapps.list`), so double click uses it too.
+- New **Edit** and **Edit With** entries: Edit opens the preferred editor of the type, Edit With lists the editors (applications made for editing, every text editor for a text type) and has the same **Other…** dialog. The editor chosen with "Always edit…" is kept in `~/.local/state/filigrane/fili-file/editors.list`.
+
 ## 1.8.0
 
 - Common window anatomy shared with the other Filigrane applications (Facteur first): the footer is on the recessed background, the tabs take Facteur's look (a 40 px band with a line below, 28 px tabs, the current one on a lighter fill; the `×`, middle click, drag and drop of files and drag to reorder stay), and every scrollable view (sidebar, preview, Nearby, batch rename list, Window Actions panel) has the same inertial scrolling and thin scroll bar.

@@ -184,6 +184,22 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openWith"]
         fn open_with(self: &FolderModel, id: &QString, path: &QString);
+        // Every installed application, as JSON: [{id, name}] (the "Other…" dialog)
+        #[qinvokable]
+        #[cxx_name = "openWithAll"]
+        fn open_with_all(self: &FolderModel) -> QString;
+        // Readable type of the file ("PNG image"), for the "always open this type" choice
+        #[qinvokable]
+        #[cxx_name = "openWithKind"]
+        fn open_with_kind(self: &FolderModel, path: &QString) -> QString;
+        // Makes the application the default one of the file's type (mimeapps.list); true if it worked
+        #[qinvokable]
+        #[cxx_name = "openWithRemember"]
+        fn open_with_remember(self: &FolderModel, id: &QString, path: &QString, edit: bool) -> bool;
+        // Editors for this file, as JSON: [{id, name}] (the preferred one first)
+        #[qinvokable]
+        #[cxx_name = "editWithList"]
+        fn edit_with_list(self: &FolderModel, path: &QString) -> QString;
         // All the paths are archives that extract can open
         #[qinvokable]
         #[cxx_name = "allArchives"]
@@ -2192,6 +2208,33 @@ impl FolderModel {
         let list = icons::mime_type(&base(&path)).map(|m| apps::for_mime(&m)).unwrap_or_default();
         let body: Vec<String> = list.iter().map(|a| format!("{{\"id\":{},\"name\":{}}}", json(&a.id), json(&a.name))).collect();
         QString::from(&format!("[{}]", body.join(",")))
+    }
+
+    pub fn edit_with_list(&self, path: &QString) -> QString {
+        let path = path.to_string();
+        let list = icons::mime_type(&base(&path)).map(|m| apps::editors_for_mime(&m)).unwrap_or_default();
+        let body: Vec<String> = list.iter().map(|a| format!("{{\"id\":{},\"name\":{}}}", json(&a.id), json(&a.name))).collect();
+        QString::from(&format!("[{}]", body.join(",")))
+    }
+
+    pub fn open_with_all(&self) -> QString {
+        let body: Vec<String> = apps::all().iter().map(|a| format!("{{\"id\":{},\"name\":{}}}", json(&a.id), json(&a.name))).collect();
+        QString::from(&format!("[{}]", body.join(",")))
+    }
+
+    pub fn open_with_kind(&self, path: &QString) -> QString {
+        QString::from(&icons::kind(&base(&path.to_string()), false))
+    }
+
+    pub fn open_with_remember(&self, id: &QString, path: &QString, edit: bool) -> bool {
+        let Some(mime) = icons::mime_type(&base(&path.to_string())) else { return false };
+        match apps::set_default(&mime, &id.to_string(), edit) {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("fili-file: cannot save the default application: {e}");
+                false
+            }
+        }
     }
 
     pub fn open_with(&self, id: &QString, path: &QString) {
