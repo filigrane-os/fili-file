@@ -32,6 +32,26 @@ pub fn path() -> PathBuf {
     PathBuf::from(dir).join("filigrane/fili-file.toml")
 }
 
+// Parts of the window that can be left out: the header (`header`, headless windows) and the footer (`footer`, status bar),
+// `[window] header = false` / `footer = false` (written by `fili-theme header|footer off`) in fili-file.toml, which takes
+// precedence, or in the shared ~/.config/filigrane/theme.toml; the command-line flags --no-header / --header and
+// --no-footer / --footer win over both. Absent or invalid: the part is shown.
+pub fn window_layers(key: &str, global: &str, user: &str, args: &[String]) -> bool {
+    let (on, off) = (format!("--{key}"), format!("--no-{key}"));
+    let flag = args.iter().rev().find_map(|a| if *a == off { Some(false) } else if *a == on { Some(true) } else { None });
+    let get = |text: &str| match parse_sections(text).get("window").and_then(|s| s.get(key)) {
+        Some(Val::Str(v)) if v == "true" => Some(true),
+        Some(Val::Str(v)) if v == "false" => Some(false),
+        _ => None,
+    };
+    flag.or_else(|| get(user)).or_else(|| get(global)).unwrap_or(true)
+}
+
+pub fn window_part(key: &str, args: &[String]) -> bool {
+    let read = |p: PathBuf| std::fs::read_to_string(p).unwrap_or_default();
+    window_layers(key, &read(global_path()), &read(path()), args)
+}
+
 pub fn load() -> Config {
     parse(&std::fs::read_to_string(path()).unwrap_or_default())
 }
@@ -286,6 +306,25 @@ mod tests {
     use super::*;
 
     // The documented example must list every setting and, left commented, change nothing
+    #[test]
+    fn window_layers_flag_then_app_then_global() {
+        let header_layers = |g: &str, u: &str, a: &[String]| window_layers("header", g, u, a);
+        let none: Vec<String> = vec![];
+        let flag = |f: &str| vec!["/path".to_string(), f.to_string()];
+        assert!(header_layers("", "", &none));
+        assert!(!header_layers("[window]\nheader = false\n", "", &none));
+        assert!(header_layers("[window]\nheader = false\n", "[window]\nheader = true # on\n", &none));
+        assert!(!header_layers("", "[window]\nheader = \"false\"\n", &none));
+        assert!(header_layers("[window]\nheader = false\n", "", &flag("--header")));
+        assert!(!header_layers("", "[window]\nheader = true\n", &flag("--no-header")));
+        assert!(header_layers("[window]\nheader = maybe\n", "", &none));
+        // The footer is independent of the header
+        assert!(!window_layers("footer", "[window]\nfooter = false\n", "", &none));
+        assert!(window_layers("header", "[window]\nfooter = false\n", "", &none));
+        assert!(!window_layers("footer", "", "", &["--no-footer".to_string()]));
+        assert!(window_layers("footer", "[window]\nfooter = false\n", "", &["--footer".to_string()]));
+    }
+
     #[test]
     fn example_file_documents_every_setting() {
         let example = include_str!("../fili-file.toml");

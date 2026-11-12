@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.0
+
+- Headless window: the header (navigation, title, search, window buttons) and the status bar can be hidden with `[window] header = false` / `footer = false` in `~/.config/filigrane/theme.toml` or `fili-file.toml`, with `--no-header` / `--no-footer` (and `--header` / `--footer`) at launch, or from Settings > Appearance of the shell. Open windows follow the file live. Ctrl+F shows the search while it is used; the status bar comes back for an operation, an error, a notice, a typed path, a task list, search results or picker mode. New menu entries Show Header and Show Status Bar change one window only.
+
 ## 1.9.0
 
 - Open With lists the applications of the file type, then **Other…**: a dialog with every installed application and a search field. Its checkbox ("Always open files of this type with this application") makes the chosen application the default of the type (`~/.config/mimeapps.list`), so double click uses it too.

@@ -28,6 +28,17 @@
 # Close and Window buttons at the right of the toolbar: true or false.
 # window_buttons = true
 
+# Headless window: hide the whole header (navigation, title, tools, search, window buttons) to give the content
+# the window. Everything stays reachable from the keyboard and the menu of the bar; Ctrl+F shows the search.
+# Chosen for every Filigrane application in Settings > Appearance (or `fili-theme header off`, which writes this
+# key to ~/.config/filigrane/theme.toml); here it applies to Casier only. `fili-file --no-header` / `--header`
+# decide for one window.
+# Status bar: hide it too. It still appears when it has something to say (an operation in progress, an error, a
+# notice, a typed path); `--no-footer` / `--footer` decide for one window.
+# [window]
+# header = true
+# footer = true
+
 # Resident mode: keep a hidden copy of Casier loaded in the background, so that the window appears in about 0.15 s
 # instead of 0.4 s. It costs about 35 MB of private memory while it is on (the libraries are shared with other Qt
 # programs); a new copy loads after each opening. false: nothing runs while Casier is closed.

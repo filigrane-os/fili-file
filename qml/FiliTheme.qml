@@ -10,7 +10,8 @@ QtObject {
 
     // Merged theme: defaults of theme.toml overridden by ~/.config/filigrane/fili-file.toml (sections [theme],
     // [theme.dark], [theme.light], [theme.accents]); the keys are in English, the token names are the shell's
-    readonly property var theme: JSON.parse(Fili.themeJson())
+    // Re-read when the settings files change (Fili.settingsRev): a font or colour edited by hand, or chosen in Settings, shows at once
+    readonly property var theme: { const rev = Fili.settingsRev; return JSON.parse(Fili.themeJson()); }
     readonly property var m: light ? theme.light : theme.dark
     readonly property color background: m.background
     readonly property color backgroundDeep: m.background_deep

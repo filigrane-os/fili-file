@@ -306,8 +306,10 @@ ApplicationWindow {
     Action { id: aCopyStem; text: Fili.tr("Copy Name Without Extension"); enabled: win.canAct && win.selCount > 0; onTriggered: win.copyAs("stem") }
     Action { id: aCopyParent; text: Fili.tr("Copy Parent Folder"); enabled: win.canAct && win.selCount > 0; onTriggered: win.copyAs("parent") }
     Action { id: aPreview; text: Fili.tr("Show Preview"); shortcut: "Ctrl+Shift+P"; checkable: true; checked: win.previewOn; enabled: !win.picking; onTriggered: win.togglePreview() }
+    Action { id: aHeader; text: Fili.tr("Show Header"); checkable: true; checked: win.showHeader; onTriggered: win.showHeader = !win.showHeader }
+    Action { id: aFooter; text: Fili.tr("Show Status Bar"); checkable: true; checked: win.showFooter; onTriggered: win.showFooter = !win.showFooter }
     Action { id: aWindowButtons; text: Fili.tr("Show Window Buttons"); checkable: true; checked: win.windowButtons; onTriggered: win.toggleWindowButtons() }
-    Action { id: aWindowPanel; text: Fili.tr("Window Actions…"); shortcut: "Ctrl+Shift+W"; enabled: windowButton.visible && !win.typing; onTriggered: windowPanel.visible ? windowPanel.close() : windowPanel.open() }
+    Action { id: aWindowPanel; text: Fili.tr("Window Actions…"); shortcut: "Ctrl+Shift+W"; enabled: win.windowButtons && !win.typing; onTriggered: windowPanel.visible ? windowPanel.close() : windowPanel.open() }
     Action { id: aHidden; text: Fili.tr("Show Hidden Files"); shortcut: "Ctrl+H"; checkable: true; checked: folder.showHidden; onTriggered: win.show(folder.toggleHidden(files.currentIndex)) }
     Action { id: aRefresh; text: Fili.tr("Reload"); shortcut: "F5"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
     Action { id: aRefreshAlt; shortcut: "Ctrl+R"; onTriggered: win.show(folder.refresh(files.currentIndex)) }
@@ -321,15 +323,15 @@ ApplicationWindow {
     Action { id: aExtract; text: Fili.tr("Extract Here"); enabled: win.hasArchive && win.canAct && !folder.inTrash && !win.picking && Object.keys(files.selected).length > 0 && folder.allArchives(files.targetsText()); onTriggered: folder.extract(files.targetsText(), "") }
     Action { id: aConnect; text: Fili.tr("Connect to Server…"); shortcut: "Ctrl+K"; onTriggered: connectBox.open() }
     // "/" like Ctrl+F (vim, yazi style); without a label: the menu bar only shows Ctrl+F
-    Action { id: aSearchSlash; shortcut: "/"; enabled: win.canAct; onTriggered: searchInput.forceActiveFocus() }
-    Action { id: aSearch; text: Fili.tr("Search"); shortcut: "Ctrl+F"; onTriggered: searchInput.forceActiveFocus() }
+    Action { id: aSearchSlash; shortcut: "/"; enabled: win.canAct; onTriggered: win.openSearch() }
+    Action { id: aSearch; text: Fili.tr("Search"); shortcut: "Ctrl+F"; onTriggered: win.openSearch() }
 
     // `fili-file ctl action NAME`: the fili-bar shows these commands in its menu (dotfiles/config/filigrane/appmenu/fili-file.json,
     // test tests/fili-shell/check-fili-file-menu.py: same names, same shortcuts). A greyed out command does nothing.
     readonly property var menuActions: ({
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "put-back": aPutBack, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "detach-tab": aDetachTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "compress": aCompress, "extract": aExtract, "rename": aRename, "bulk-rename": aBulk,
-        "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "toggle-window-buttons": aWindowButtons, "window-actions": aWindowPanel, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
+        "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "toggle-header": aHeader, "toggle-footer": aFooter, "toggle-window-buttons": aWindowButtons, "window-actions": aWindowPanel, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
     })
     // Files of the selection that can be sent (folders are not sent as they are)
@@ -422,6 +424,27 @@ ApplicationWindow {
         previewWidth = px > 0 ? Math.max(160, Math.min(900, Math.round(px))) : previewDefault;
         if (save !== false)
             Fili.setUiState("preview", px > 0 ? String(previewWidth) : "");
+    }
+    // Header (toolbar): hidden when headless (Settings > Appearance, [window] header, --no-header); the search (Ctrl+F)
+    // shows it while it is used, Esc hides it again. The menu entry "Show Header" changes it for this window only
+    property bool showHeader: Fili.header()
+    // Footer (status bar), same rule: hidden when the setting says so, but shown while it has something to say (an
+    // operation, an error or notice, a path being typed, the task list, search results, the file chooser)
+    property bool showFooter: Fili.footer()
+    readonly property bool footerShown: showFooter || statusbar.message || pathBar.editing || tasksList.shown && tasks.length > 0 || searchLabel !== "" || picking
+    property bool searchOpen: false
+    // Settings > Appearance (fili-theme header on|off) applies to the windows already open
+    Connections {
+        target: Fili
+        function onThemeChanged() {
+            win.showHeader = Fili.header();
+            win.showFooter = Fili.footer();
+        }
+    }
+    readonly property bool headerShown: showHeader || searchOpen || searchInput.text !== ""
+    function openSearch() {
+        searchOpen = true;
+        searchInput.forceActiveFocus();
     }
     property bool windowButtons: Fili.windowButtons()
     function toggleWindowButtons() {
@@ -979,7 +1002,8 @@ ApplicationWindow {
     Rectangle {
         id: toolbar
         width: parent.width
-        height: FiliTheme.toolbarHeight
+        height: win.headerShown ? FiliTheme.toolbarHeight : 0
+        visible: win.headerShown
         color: FiliTheme.background
         // Back/forward buttons gathered in a capsule
         Rectangle {
@@ -1085,6 +1109,7 @@ ApplicationWindow {
                 selectionColor: FiliTheme.surfaceActive
                 selectedTextColor: FiliTheme.text
                 onTextChanged: if (text !== folder.filter) folder.setFilter(text)
+                onActiveFocusChanged: if (!activeFocus && text === "") win.searchOpen = false
                 Keys.onEscapePressed: {
                     text = "";
                     files.focusList();
@@ -1142,7 +1167,8 @@ ApplicationWindow {
         id: toolbarLine
         anchors.top: toolbar.bottom
         width: parent.width
-        height: 1
+        height: win.headerShown ? 1 : 0
+        visible: win.headerShown
         color: FiliTheme.border
     }
 
@@ -1483,7 +1509,8 @@ ApplicationWindow {
         z: pathBar.editing || tasksList.visible ? 150 : 0
         anchors.bottom: parent.bottom
         width: parent.width
-        height: FiliTheme.statusHeight
+        height: win.footerShown ? FiliTheme.statusHeight : 0
+        visible: win.footerShown
         // Recessed like Facteur's footer (app-window.md of the filigrane-ui skill)
         color: FiliTheme.backgroundDeep
         Rectangle {

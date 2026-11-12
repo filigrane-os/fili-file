@@ -306,6 +306,9 @@ pub mod qobject {
         #[qml_singleton]
         #[qproperty(bool, light, READ, NOTIFY = theme_changed)]
         #[qproperty(QString, accent, READ, NOTIFY = theme_changed)]
+        // Counts the changes of the settings files (fili-file.toml, theme.toml): bindings that read it, and the
+        // headless header (Main.qml, onThemeChanged), follow a change made while the window is open
+        #[qproperty(i32, settings_rev, cxx_name = "settingsRev", READ, NOTIFY = theme_changed)]
         #[qproperty(bool, key_nav, cxx_name = "keyNav")]
         type Fili = super::FiliRust;
 
@@ -351,6 +354,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "windowState"]
         fn window_state(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "header"]
+        fn header(self: &Fili) -> bool;
+        #[qinvokable]
+        #[cxx_name = "footer"]
+        fn footer(self: &Fili) -> bool;
         #[qinvokable]
         #[cxx_name = "windowButtons"]
         fn window_buttons(self: &Fili) -> bool;
@@ -2678,6 +2687,7 @@ impl cxx_qt::Initialize for FolderModel {
 pub struct FiliRust {
     light: bool,
     accent: QString,
+    settings_rev: i32,
     key_nav: bool,
 }
 
@@ -2859,6 +2869,34 @@ impl cxx_qt::Initialize for Fili {
                 });
             });
         }
+        // Follow the settings directory (~/.config/filigrane: fili-file.toml, theme.toml written by `fili-theme font|header`
+        // or by hand): same thread model as below
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let file = crate::config::path();
+            let Some(dir) = file.parent() else { return };
+            let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_encoded_bytes()) else { return };
+            let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC) };
+            if fd < 0
+                || unsafe { libc::inotify_add_watch(fd, c.as_ptr(), libc::IN_CLOSE_WRITE | libc::IN_MOVED_TO | libc::IN_CREATE) } < 0
+            {
+                return;
+            }
+            let mut buf = [0u8; 4096];
+            loop {
+                if unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) } <= 0 {
+                    return;
+                }
+                let sent = qt.queue(move |mut f| {
+                    let rev = f.settings_rev.wrapping_add(1);
+                    f.as_mut().rust_mut().settings_rev = rev;
+                    f.as_mut().theme_changed();
+                });
+                if sent.is_err() {
+                    return;
+                }
+            }
+        });
         // Follow the state directory (inotify, thread blocked on read: no wake-up while nothing changes)
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -3093,6 +3131,16 @@ impl Fili {
     // Toolbar buttons close / window: the last choice made in the menu takes precedence over the setting
     pub fn window_state(&self) -> QString {
         QString::from(&crate::window::state())
+    }
+
+    // Header of the window (toolbar): false = headless (settings and --no-header, see config::header)
+    pub fn header(&self) -> bool {
+        crate::config::window_part("header", &crate::spare::args())
+    }
+
+    // Footer (status bar): false = hidden until it has something to say (settings and --no-footer)
+    pub fn footer(&self) -> bool {
+        crate::config::window_part("footer", &crate::spare::args())
     }
 
     pub fn window_buttons(&self) -> bool {
