@@ -1,6 +1,6 @@
 [package]
 name = "fili-file"
-version = "1.10.0"
+version = "1.11.0"
 edition = "2024"
 description = "Casier (fili-file): a fast file manager for Wayland desktops, written in Rust with a Qt Quick interface"
 license = "GPL-3.0-or-later"

@@ -273,28 +273,30 @@ pub fn ensure_trash(base: &Path) -> io::Result<()> {
     fs::create_dir_all(base.join("info"))
 }
 
-// Mount points from /proc/self/mountinfo (5th field; spaces and special characters are in octal there: \040)
-fn mount_points(mountinfo: &str) -> Vec<PathBuf> {
-    let unescape = |s: &str| {
-        let b = s.as_bytes();
-        let mut out = Vec::with_capacity(b.len());
-        let mut i = 0;
-        while i < b.len() {
-            let octal = (b[i] == b'\\' && i + 3 < b.len() + 0).then(|| std::str::from_utf8(&b[i + 1..i + 4]).ok().and_then(|o| u8::from_str_radix(o, 8).ok())).flatten();
-            match octal {
-                Some(c) => {
-                    out.push(c);
-                    i += 4;
-                }
-                None => {
-                    out.push(b[i]);
-                    i += 1;
-                }
+// Path as written in /proc/self/mountinfo (spaces and special characters are in octal there: \040)
+pub fn mount_unescape(s: &str) -> PathBuf {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let octal = (b[i] == b'\\' && i + 3 < b.len() + 0).then(|| std::str::from_utf8(&b[i + 1..i + 4]).ok().and_then(|o| u8::from_str_radix(o, 8).ok())).flatten();
+        match octal {
+            Some(c) => {
+                out.push(c);
+                i += 4;
+            }
+            None => {
+                out.push(b[i]);
+                i += 1;
             }
         }
-        PathBuf::from(String::from_utf8_lossy(&out).into_owned())
-    };
-    mountinfo.lines().filter_map(|l| l.split(' ').nth(4)).map(unescape).collect()
+    }
+    PathBuf::from(String::from_utf8_lossy(&out).into_owned())
+}
+
+// Mount points from /proc/self/mountinfo (5th field)
+fn mount_points(mountinfo: &str) -> Vec<PathBuf> {
+    mountinfo.lines().filter_map(|l| l.split(' ').nth(4)).map(mount_unescape).collect()
 }
 
 // Trashes of the user on these volumes ($volume/.Trash-UID, or $volume/.Trash/UID when .Trash exists), except the one

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11.0
+
+- Recursive search (Ctrl+F) no longer crawls slow mounts: network file systems and FUSE drives (cloud drives such as rclone, sshfs, gvfs, NFS, SMB) below the searched folder are listed but not entered, so a search from the home folder does not hang on them. Searching from inside such a mount still walks it, with two readers.
+- The search walks the folder tree with several threads (one per core, 2 to 6) instead of one, and no longer descends into `.git`, `node_modules`, `__pycache__`, `.cache`, `.venv`, `.npm`, `.rustup` or a Cargo `target` folder (the folder itself is still listed).
+
 ## 1.10.0
 
 - Headless window: the header (navigation, title, search, window buttons) and the status bar can be hidden with `[window] header = false` / `footer = false` in `~/.config/filigrane/theme.toml` or `fili-file.toml`, with `--no-header` / `--no-footer` (and `--header` / `--footer`) at launch, or from Settings > Appearance of the shell. Open windows follow the file live. Ctrl+F shows the search while it is used; the status bar comes back for an operation, an error, a notice, a typed path, a task list, search results or picker mode. New menu entries Show Header and Show Status Bar change one window only.

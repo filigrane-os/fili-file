@@ -274,46 +274,139 @@ pub fn fuzzy(path: &str, needle: &str) -> Option<i64> {
     any.then_some(total * 4 - (hay.len() - base) as i64)
 }
 
+// Mount points that make a recursive walk crawl: network file systems and FUSE (cloud drives such as rclone,
+// sshfs, gvfs). Read from the text of /proc/self/mountinfo ("... mount point ... - fstype source options").
+pub fn slow_mounts(mountinfo: &str) -> Vec<PathBuf> {
+    mountinfo
+        .lines()
+        .filter_map(|l| {
+            let (left, right) = l.split_once(" - ")?;
+            let fstype = right.split(' ').next()?;
+            let slow = fstype.starts_with("fuse.") || matches!(fstype, "nfs" | "nfs4" | "cifs" | "smb3" | "9p" | "davfs");
+            if !slow {
+                return None;
+            }
+            Some(crate::ops::mount_unescape(left.split(' ').nth(4)?))
+        })
+        .collect()
+}
+
+// Folders a search does not descend into (their own entry is still listed): version control, dependency and
+// build trees, caches. Never applied to the folder the search starts in.
+fn skipped_dir(name: &str, parent: &Path) -> bool {
+    match name {
+        ".git" | "node_modules" | "__pycache__" | ".cache" | ".venv" | ".npm" | ".rustup" => true,
+        "target" => parent.join("Cargo.toml").exists(),
+        _ => false,
+    }
+}
+
 // The whole content of root, level by level (links to folders are not followed), without reading the
 // metadata (name = relative path, the rest is filled in for the displayed results only). Hidden folders are
-// only walked if hidden. emit receives the items in batches; stops at cap items or when emit returns false.
-pub fn walk(root: &Path, hidden: bool, cap: usize, mut emit: impl FnMut(Vec<Entry>) -> bool) {
-    let mut batch = Vec::new();
-    let mut total = 0;
-    let mut queue = std::collections::VecDeque::from([PathBuf::new()]);
-    while let Some(rel) = queue.pop_front() {
-        let Ok(rd) = fs::read_dir(root.join(&rel)) else { continue };
-        for d in rd.flatten() {
-            let name = d.file_name().to_string_lossy().into_owned();
-            let sub = rel.join(&name);
-            let is_dir = d.file_type().is_ok_and(|t| t.is_dir());
-            if is_dir && (hidden || !name.starts_with('.')) {
-                queue.push_back(sub.clone());
-            }
-            batch.push(Entry {
-                path: root.join(&sub).to_string_lossy().into_owned(),
-                name: sub.to_string_lossy().into_owned(),
-                is_dir,
-                size: 0,
-                mtime: 0,
-                exec: false,
-                created: 0,
-                mode: 0,
-                uid: 0,
-                kind: String::new(),
+// only walked if hidden; slow mounts (network, cloud drives) below root are listed but not entered, unless the
+// search starts inside one. emit receives the items in batches; stops at cap items or when emit returns false.
+pub fn walk(root: &Path, hidden: bool, cap: usize, emit: impl FnMut(Vec<Entry>) -> bool + Send) {
+    let mounts = slow_mounts(&fs::read_to_string("/proc/self/mountinfo").unwrap_or_default());
+    walk_with(root, hidden, cap, &mounts, emit);
+}
+
+pub fn walk_with(root: &Path, hidden: bool, cap: usize, mounts: &[PathBuf], emit: impl FnMut(Vec<Entry>) -> bool + Send) {
+    use std::sync::{
+        Condvar, Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
+    };
+    use std::time::{Duration, Instant};
+    // Slow mounts the search does not enter: the ones strictly below root. Inside a slow mount, the user asked
+    // for it: walk it, gently (two readers instead of one per core).
+    let skip: Vec<&PathBuf> = mounts.iter().filter(|m| m.starts_with(root) && m.as_path() != root).collect();
+    let root_slow = mounts.iter().any(|m| root.starts_with(m));
+    let threads = if root_slow { 2 } else { std::thread::available_parallelism().map_or(2, |n| n.get().clamp(2, 6)) };
+
+    struct Shared {
+        queue: std::collections::VecDeque<PathBuf>,
+        busy: usize,
+    }
+    let shared = Mutex::new(Shared { queue: std::collections::VecDeque::from([PathBuf::new()]), busy: 0 });
+    let wake = Condvar::new();
+    let emit = Mutex::new(emit);
+    let total = AtomicUsize::new(0);
+    let stop = AtomicBool::new(false);
+
+    let flush = |batch: &mut Vec<Entry>| {
+        if !batch.is_empty() && !(emit.lock().unwrap())(std::mem::take(batch)) {
+            stop.store(true, SeqCst);
+            wake.notify_all();
+        }
+    };
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            scope.spawn(|| {
+                let mut batch: Vec<Entry> = Vec::new();
+                let mut last = Instant::now();
+                loop {
+                    // Next folder; the walk is over when the queue is empty and no reader can add to it
+                    let rel = {
+                        let mut s = shared.lock().unwrap();
+                        loop {
+                            if stop.load(SeqCst) {
+                                break None;
+                            }
+                            if let Some(r) = s.queue.pop_front() {
+                                s.busy += 1;
+                                break Some(r);
+                            }
+                            if s.busy == 0 {
+                                wake.notify_all();
+                                break None;
+                            }
+                            s = wake.wait(s).unwrap();
+                        }
+                    };
+                    let Some(rel) = rel else { break };
+                    let dir = root.join(&rel);
+                    let mut subs = Vec::new();
+                    if let Ok(rd) = fs::read_dir(&dir) {
+                        for d in rd.flatten() {
+                            let name = d.file_name().to_string_lossy().into_owned();
+                            let sub = rel.join(&name);
+                            let full = root.join(&sub);
+                            let is_dir = d.file_type().is_ok_and(|t| t.is_dir());
+                            if is_dir && (hidden || !name.starts_with('.')) && !skipped_dir(&name, &dir) && !skip.iter().any(|m| m.as_path() == full) {
+                                subs.push(sub.clone());
+                            }
+                            batch.push(Entry {
+                                path: full.to_string_lossy().into_owned(),
+                                name: sub.to_string_lossy().into_owned(),
+                                is_dir,
+                                size: 0,
+                                mtime: 0,
+                                exec: false,
+                                created: 0,
+                                mode: 0,
+                                uid: 0,
+                                kind: String::new(),
+                            });
+                        }
+                    }
+                    let n = total.fetch_add(batch.len(), SeqCst) + batch.len();
+                    // The first results show quickly, then bigger batches
+                    if batch.len() >= 3000 || (!batch.is_empty() && last.elapsed() > Duration::from_millis(60)) {
+                        flush(&mut batch);
+                        last = Instant::now();
+                    }
+                    let mut s = shared.lock().unwrap();
+                    s.busy -= 1;
+                    if n >= cap {
+                        stop.store(true, SeqCst);
+                    } else {
+                        s.queue.extend(subs);
+                    }
+                    wake.notify_all();
+                }
+                flush(&mut batch);
             });
-            total += 1;
-            if batch.len() >= 3000 && !emit(std::mem::take(&mut batch)) {
-                return;
-            }
         }
-        if total >= cap {
-            break;
-        }
-    }
-    if !batch.is_empty() {
-        emit(batch);
-    }
+    });
 }
 
 fn digits(it: &mut std::iter::Peekable<std::str::Chars>) -> String {
@@ -508,6 +601,61 @@ mod walk_tests {
         let _ = fs::remove_dir_all(&root);
         let names: Vec<_> = all.iter().map(|e| e.name.clone()).collect();
         assert!(names.contains(&"a/b/c/d/target.txt".to_string()), "{names:?}");
+    }
+
+    fn tree(tag: &str, dirs: &[&str]) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("fili-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        for d in dirs {
+            fs::create_dir_all(root.join(d)).unwrap();
+            fs::write(root.join(d).join("f.txt"), "x").unwrap();
+        }
+        root
+    }
+
+    fn names(root: &Path, mounts: &[PathBuf]) -> Vec<String> {
+        let mut all = Vec::new();
+        walk_with(root, false, 100_000, mounts, |b| {
+            all.extend(b.into_iter().map(|e| e.name));
+            true
+        });
+        all.sort();
+        all
+    }
+
+    #[test]
+    fn walk_lists_but_does_not_enter_skipped_folders() {
+        let root = tree("skip", &["src", "node_modules/dep", "proj/target", "plain/target"]);
+        fs::write(root.join("proj/Cargo.toml"), "").unwrap();
+        let n = names(&root, &[]);
+        let _ = fs::remove_dir_all(&root);
+        assert!(n.contains(&"node_modules".to_string()) && !n.contains(&"node_modules/dep".to_string()), "{n:?}");
+        assert!(n.contains(&"proj/target".to_string()) && !n.contains(&"proj/target/f.txt".to_string()), "{n:?}");
+        assert!(n.contains(&"plain/target/f.txt".to_string()), "a target folder without Cargo.toml is walked: {n:?}");
+        assert!(n.contains(&"src/f.txt".to_string()));
+    }
+
+    #[test]
+    fn walk_does_not_enter_slow_mounts_below_the_root() {
+        let root = tree("mnt", &["cloud/deep", "local"]);
+        let mount = root.join("cloud");
+        let below = names(&root, std::slice::from_ref(&mount));
+        let inside = names(&mount, std::slice::from_ref(&mount));
+        let within = names(&root.join("cloud/deep"), std::slice::from_ref(&mount));
+        let _ = fs::remove_dir_all(&root);
+        assert!(below.contains(&"cloud".to_string()) && !below.contains(&"cloud/f.txt".to_string()), "{below:?}");
+        assert!(below.contains(&"local/f.txt".to_string()));
+        assert!(inside.contains(&"deep/f.txt".to_string()), "searching from the mount point itself walks it: {inside:?}");
+        assert!(within.contains(&"f.txt".to_string()), "{within:?}");
+    }
+
+    #[test]
+    fn slow_mounts_are_network_and_fuse() {
+        let info = "45 34 0:43 / /home/ana/iCloud rw - fuse.rclone icloud: rw\n\
+                    46 34 0:44 / /mnt/nas\\040share rw - cifs //nas/share rw\n\
+                    47 34 8:1 / /home rw - btrfs /dev/sda1 rw\n\
+                    48 34 0:45 / /srv/nfs rw - nfs4 host:/x rw\n";
+        assert_eq!(slow_mounts(info), vec![PathBuf::from("/home/ana/iCloud"), PathBuf::from("/mnt/nas share"), PathBuf::from("/srv/nfs")]);
     }
 }
 
