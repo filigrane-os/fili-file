@@ -1,5 +1,5 @@
 // PDF viewer of the Quick Look overlay (QtPdf): the pages stay put under the mouse (no dragging of the document),
-// a drag selects text, Ctrl+wheel and Ctrl+Plus / Minus / 0 zoom, the wheel scrolls. Zoom is centered on the viewport.
+// a drag selects text, a pinch, Ctrl+wheel and Ctrl+Plus / Minus / 0 zoom, the wheel scrolls. Zoom is centered on the viewport.
 import QtQuick
 import QtQuick.Pdf
 import QtQuick.Shapes
@@ -25,8 +25,10 @@ Item {
         flick.returnToBounds();
         Qt.callLater(() => { flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, ratio * flick.contentHeight - flick.height / 2)); });
     }
-    function selectAll() { if (activeSelection) activeSelection.selectAll(); }
-    function copySelection() { if (activeSelection && selectedText !== "") activeSelection.copyToClipboard(); }
+    // The page of the current selection, else the first one
+    function selectAll() { const p = activeSelection ?? pages.itemAt(0)?.selection; if (p) p.selectAll(); }
+    // Through the clipboard of Casier (wl-copy), like its other copies; PDF lines end in \r\n
+    function copySelection() { if (selectedText !== "") Fili.copyText(selectedText.replace(/\r\n/g, "\n")); }
     // Ctrl+Plus, Ctrl+Minus, Ctrl+0: true when the key was handled
     function handleKey(key) {
         if (key === Qt.Key_Plus || key === Qt.Key_Equal) zoomBy(1.2);
@@ -71,6 +73,15 @@ Item {
             }
         }
         KineticScroll { acceptedModifiers: Qt.NoModifier }
+        // Pinch on the touchpad (or a touch screen) zooms, like Ctrl + wheel
+        PinchHandler {
+            target: null
+            acceptedDevices: PointerDevice.TouchPad | PointerDevice.TouchScreen
+            rotationAxis.enabled: false
+            xAxis.enabled: false
+            yAxis.enabled: false
+            onScaleChanged: delta => { v.zoomed = true; v.zoomBy(delta); }
+        }
 
         Column {
             id: column
@@ -78,10 +89,12 @@ Item {
             y: 16
             spacing: 12
             Repeater {
+                id: pages
                 model: v.ready ? doc.pageCount : 0
                 Item {
                     id: paper
                     required property int index
+                    readonly property alias selection: selection
                     readonly property size pointSize: doc.pagePointSize(index)
                     width: pointSize.width * v.renderScale
                     height: pointSize.height * v.renderScale

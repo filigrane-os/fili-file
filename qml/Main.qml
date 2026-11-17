@@ -288,13 +288,14 @@ ApplicationWindow {
     Action { id: aQuit; text: Fili.tr("Quit"); shortcut: "Ctrl+Q"; onTriggered: win.quit() }
     Action { id: aUndo; text: Fili.tr("Undo"); shortcut: "Ctrl+Z"; enabled: win.canAct; onTriggered: folder.undo() }
     Action { id: aCut; text: Fili.tr("Cut"); shortcut: "Ctrl+X"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: folder.cut(files.targetsText()) }
-    Action { id: aCopy; text: Fili.tr("Copy"); shortcut: "Ctrl+C"; enabled: win.canAct && win.selCount > 0; onTriggered: folder.copy(files.targetsText()) }
+    // While Quick Look is open, Copy and Select All act on its text (PDF, text file, listing)
+    Action { id: aCopy; text: Fili.tr("Copy"); shortcut: "Ctrl+C"; enabled: quickLookCard.visible ? quickLookCard.selectable : win.canAct && win.selCount > 0; onTriggered: quickLookCard.visible ? quickLookCard.copySelection() : folder.copy(files.targetsText()) }
     Action { id: aPaste; text: Fili.tr("Paste"); shortcut: "Ctrl+V"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.paste() }
     Action { id: aDuplicate; text: Fili.tr("Duplicate"); shortcut: "Ctrl+D"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: folder.duplicate(files.targetsText()) }
     // F2: rename in place; with several items selected, bulk rename
     Action { id: aRename; text: Fili.tr("Rename"); shortcut: "F2"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: Object.keys(files.selected).length > 1 ? bulkBox.open() : files.startRename() }
     Action { id: aBulk; text: Fili.tr("Rename Items…"); enabled: win.canAct && !folder.inTrash && Object.keys(files.selected).length > 1; onTriggered: bulkBox.open() }
-    Action { id: aSelectAll; text: Fili.tr("Select All"); shortcut: "Ctrl+A"; enabled: win.canAct; onTriggered: files.selectAll() }
+    Action { id: aSelectAll; text: Fili.tr("Select All"); shortcut: "Ctrl+A"; enabled: quickLookCard.visible ? quickLookCard.selectable : win.canAct; onTriggered: quickLookCard.visible ? quickLookCard.selectAll() : files.selectAll() }
     Action { id: aInvert; text: Fili.tr("Invert Selection"); shortcut: "Ctrl+Shift+I"; enabled: win.canAct; onTriggered: files.invertSelection() }
     Action { id: aMatch; text: Fili.tr("Select Matching…"); shortcut: "Ctrl+Shift+M"; enabled: win.canAct && !win.picking; onTriggered: matchBox.open() }
     Action { id: aSameKind; text: Fili.tr("Select Same Kind"); enabled: win.canAct && win.selCount > 0; onTriggered: files.selectPaths(folder.sameKind(files.targetsText()).split("\n")) }

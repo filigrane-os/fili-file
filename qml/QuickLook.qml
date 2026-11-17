@@ -50,6 +50,16 @@ Rectangle {
         }
     }
     function close() { player.stop(); visible = false; closed(); }
+    // Copy and Select All of the window (Ctrl+C, Ctrl+A, menu bar) act on the text shown here while it is open:
+    // the shortcuts of the window come before the keys of the overlay
+    function copySelection() {
+        if (docKind === "pdf") pdfView.copySelection();
+        else if (docView.visible && docLabel.selectedText !== "") Fili.copyText(docLabel.selectedText);
+    }
+    function selectAll() {
+        if (docKind === "pdf") pdfView.selectAll();
+        else if (docView.visible) docLabel.selectAll();
+    }
     function sizeText(n) {
         if (n < 1024) return n + " B";
         if (n < 1048576) return Math.round(n / 1024) + " KB";
@@ -94,8 +104,6 @@ Rectangle {
     Keys.onPressed: e => {
         if (docKind === "pdf" && (e.modifiers & Qt.ControlModifier)) {
             if (pdfView.handleKey(e.key)) { pdfView.zoomed = true; e.accepted = true; return; }
-            if (e.key === Qt.Key_C) { pdfView.copySelection(); e.accepted = true; return; }
-            if (e.key === Qt.Key_A) { pdfView.selectAll(); e.accepted = true; return; }
         }
         if ([Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right, Qt.Key_Home, Qt.Key_End, Qt.Key_PageUp, Qt.Key_PageDown].indexOf(e.key) >= 0) {
             ql.navigate(e.key, e.modifiers);
