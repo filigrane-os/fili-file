@@ -158,7 +158,7 @@ elsewhere. A linker such as `mold` or `lld` makes linking much faster.
 
 | | Build | Run |
 |---|---|---|
-| Void | `qt6-base-devel qt6-declarative-devel qt6-svg-devel` | `qt6-declarative qt6-svg qt6-wayland wl-clipboard glib shared-mime-info adwaita-icon-theme util-linux` |
+| Void | `qt6-base-devel qt6-declarative-devel qt6-svg-devel qt6-multimedia-devel qt6-pdf-devel` | `qt6-declarative qt6-svg qt6-multimedia qt6-pdf qt6-wayland wl-clipboard glib shared-mime-info adwaita-icon-theme util-linux` |
 | Arch | `qt6-base qt6-declarative qt6-svg` | `qt6-wayland wl-clipboard glib2 shared-mime-info adwaita-icon-theme util-linux` |
 | Debian / Ubuntu | `qt6-base-dev qt6-declarative-dev libqt6svg6-dev` | `qt6-wayland wl-clipboard libglib2.0-bin shared-mime-info adwaita-icon-theme` |
 | Fedora | `qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel` | `qt6-qtwayland wl-clipboard glib2 shared-mime-info adwaita-icon-theme` |

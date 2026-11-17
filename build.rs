@@ -17,6 +17,8 @@ fn main() {
                 "qml/PathBar.qml",
                 "qml/FileList.qml",
                 "qml/Preview.qml",
+                "qml/QuickLook.qml",
+                "qml/PdfView.qml",
                 "qml/PreviewButton.qml",
                 "qml/IconButton.qml",
                 "qml/WindowGlyph.qml",
@@ -32,7 +34,9 @@ fn main() {
             .qml_file(QmlFile::from("qml/FiliTheme.qml").singleton(true))
             .qml_file(QmlFile::from("qml/DropMode.qml").singleton(true))
             .depend("QtQuick")
-            .depend("QtQuick.Controls"),
+            .depend("QtQuick.Controls")
+            .depend("QtMultimedia")
+            .depend("QtQuick.Pdf"),
     )
     // Fonts of the interface travel with the binary: the application looks the same on any distribution
     .qrc_resources(["fonts/Jost-Variable.ttf", "fonts/JetBrainsMono-Variable.ttf", "fonts/FiliIcons.ttf"])

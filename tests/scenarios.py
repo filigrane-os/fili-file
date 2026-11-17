@@ -588,19 +588,24 @@ def _():
     app.ok("dialog", "cancel")
 
 
-@test("quick look (Space): starts quicklook on the current item, disabled without an item")
+@test("quick look (Space): opens the overlay on the current item, closes with another folder, disabled without an item")
 def _():
-    log = T / "quicklook.log"
     d = make("ql", {"a.txt": "", "b.txt": ""})
     app.ok("goto", str(d))
     app.ok("select", stdin=f"{d}/b.txt\n")
+    acts = lambda: {a["name"]: a for a in app.ok("actions")["actions"]}
+    eq((acts()["quick-look"]["label"], acts()["quick-look"]["keys"], acts()["quick-look"]["enabled"]), ("Quick Look", "Space", True))
     app.ok("action", "quick-look")
-    app.wait(lambda: log.exists() and log.read_text().strip().splitlines()[-1] == str(d / "b.txt"), 3, "quicklook started on b.txt")
-    acts = {a["name"]: a for a in app.ok("actions")["actions"]}
-    eq((acts["quick-look"]["label"], acts["quick-look"]["keys"], acts["quick-look"]["enabled"]), ("Quick Look", "Space", True))
+    # The overlay is open: Space belongs to it (play, pause, close), the action is off
+    app.wait(lambda: not acts()["quick-look"]["enabled"], 3, "overlay open")
+    assert not (T / "quicklook.log").exists(), "the external quicklook script is not used any more"
+    # Another folder closes it
     e = make("ql-empty", {})
     app.ok("goto", str(e))
     app.fails("action", "quick-look", containing="disabled")
+    app.ok("goto", str(d))
+    app.ok("select", stdin=f"{d}/a.txt\n")
+    app.wait(lambda: acts()["quick-look"]["enabled"], 3, "overlay closed by the change of folder")
 
 
 @test("open an empty file (0 bytes): application of its type, not xdg-open")

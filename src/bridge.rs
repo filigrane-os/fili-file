@@ -441,6 +441,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "previewInfo"]
         fn preview_info(self: &Fili, path: &QString) -> QString;
+        // Content of the Quick Look overlay (pictures, videos and sounds are shown by the overlay itself): first line =
+        // kind (text, pdf, folder, other, none), rest = text, listing, or the facts of a file that cannot be shown
+        #[qinvokable]
+        #[cxx_name = "quickLookContent"]
+        fn quick_look_content(self: &Fili, path: &QString) -> QString;
         #[qinvokable]
         #[cxx_name = "pickCancel"]
         fn pick_cancel(self: &Fili);
@@ -848,6 +853,62 @@ fn preview(path: &str) -> String {
         }
     };
     format!("text\n{text}")
+}
+
+// Content of the Quick Look overlay: see `quickLookContent`. Text: 512 KiB at most. Folder: 500 entries at most, hidden ones left out.
+fn quick_look(path: &str) -> String {
+    use std::io::Read;
+    let p = Path::new(path);
+    let Ok(meta) = std::fs::metadata(p) else { return "none\n".into() };
+    if meta.is_dir() {
+        let Ok(rd) = std::fs::read_dir(p) else { return "none\n".into() };
+        let mut names: Vec<(bool, String)> = rd
+            .flatten()
+            .map(|e| (e.path().is_dir(), e.file_name().to_string_lossy().into_owned()))
+            .filter(|(_, n)| !n.starts_with('.'))
+            .collect();
+        let total = names.len();
+        names.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.to_lowercase().cmp(&b.1.to_lowercase())));
+        let mut out = String::from("folder\n");
+        for (d, n) in names.iter().take(500) {
+            out.push_str(n);
+            if *d {
+                out.push('/');
+            }
+            out.push('\n');
+        }
+        if total > 500 {
+            out.push_str(&format!("… {}\n", total - 500));
+        }
+        return out;
+    }
+    // PDF: read by the overlay itself (QtPdf, selectable text)
+    if path.to_lowercase().ends_with(".pdf") {
+        return "pdf\n".into();
+    } else {
+        let mut buf = Vec::new();
+        if std::fs::File::open(p).and_then(|f| f.take(512 << 10).read_to_end(&mut buf)).is_ok() && !buf.contains(&0) {
+            let cut = meta.len() > buf.len() as u64;
+            let text = match String::from_utf8(buf) {
+                Ok(t) => Some(t),
+                Err(e) => {
+                    // Cut in the middle of a character at the end: the valid beginning is kept
+                    let n = e.utf8_error().valid_up_to();
+                    if e.utf8_error().error_len().is_none() && n + 4 >= e.as_bytes().len() {
+                        Some(String::from_utf8_lossy(&e.as_bytes()[..n]).into_owned())
+                    } else {
+                        None
+                    }
+                }
+            };
+            if let Some(t) = text {
+                return format!("text\n{t}{}", if cut { "\n…" } else { "" });
+            }
+        }
+    }
+    // Cannot be shown: the facts of the file
+    let mime = Command::new("file").args(["-b", "--mime-type", "--"]).arg(path).stdin(Stdio::null()).output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+    format!("other\n{}\n{}", meta.len(), mime)
 }
 
 static THUMBING: AtomicBool = AtomicBool::new(false);
@@ -3254,6 +3315,10 @@ impl Fili {
 
     pub fn preview_info(&self, path: &QString) -> QString {
         QString::from(&preview(&path.to_string()))
+    }
+
+    pub fn quick_look_content(&self, path: &QString) -> QString {
+        QString::from(&quick_look(&path.to_string()))
     }
 
     pub fn pick_cancel(&self) {

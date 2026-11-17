@@ -371,6 +371,12 @@ Rectangle {
     property string typed: ""
     Timer { id: typedReset; interval: 1000; onTriggered: view.typed = "" }
 
+    // The arrow keys of the Quick Look overlay: the same movement as in the list (Left and Right act as Up and Down in the list view)
+    function navigate(key, modifiers) {
+        if (!tiles && key === Qt.Key_Left) key = Qt.Key_Up;
+        else if (!tiles && key === Qt.Key_Right) key = Qt.Key_Down;
+        handleKey({ key: key, modifiers: modifiers, text: "", accepted: false }, tiles ? grid.columns : 1);
+    }
     // Keys shared by both views; perRow: number of columns of the grid (1 in list view)
     function handleKey(e, perRow) {
         Fili.keyNav = true;

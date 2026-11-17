@@ -273,7 +273,7 @@ ApplicationWindow {
     Action { id: aOpen; text: Fili.tr("Open"); enabled: win.canAct && win.selCount === 1; onTriggered: win.show(folder.activate(files.currentIndex)) }
     // Space: quick look (quicklook script; started again on the same file, it closes). Disabled while typing the
     // beginning of a name on the keyboard ("my file"): the space is then a letter.
-    Action { id: aQuickLook; text: Fili.tr("Quick Look"); shortcut: "Space"; enabled: !win.typing && !win.nearby && files.typed === "" && win.selCount > 0; onTriggered: folder.quicklook(files.targets()[0]) }
+    Action { id: aQuickLook; text: Fili.tr("Quick Look"); shortcut: "Space"; enabled: !win.typing && !win.nearby && !quickLookCard.visible && files.typed === "" && win.selCount > 0; onTriggered: win.quickLook() }
     Action { id: aInfo; text: Fili.tr("Get Info"); shortcut: "Ctrl+I"; enabled: win.canAct; onTriggered: win.showInfo() }
     Action { id: aTrash; text: Fili.tr("Move to Trash"); shortcut: "Delete"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: win.trashSelection() }
     Action { id: aPutBack; text: Fili.tr("Put Back"); enabled: win.canAct && folder.inTrash && win.selCount > 0; onTriggered: win.putBack() }
@@ -3117,6 +3117,36 @@ ApplicationWindow {
                 }
             }
         }
+    }
+
+    // Quick Look: the overlay shows the current row of the list, like on the Mac; the arrow keys move the selection
+    // here and the overlay follows
+    function quickLook() {
+        if (files.currentIndex >= 0)
+            syncQuickLook();
+    }
+    function syncQuickLook() {
+        const i = files.currentIndex;
+        if (i >= 0 && i < files.active.count) {
+            quickLookFolder = folder.path;
+            quickLookCard.show(folder.pathAt(i), i + 1, files.active.count);
+        }
+    }
+    property string quickLookFolder: ""
+    Connections {
+        target: files
+        function onCurrentIndexChanged() { if (quickLookCard.visible) win.syncQuickLook(); }
+    }
+    // Another folder shown (go to, back, sidebar): the overlay closes, its file belongs to the previous one
+    Connections {
+        target: folder
+        function onChanged() { if (quickLookCard.visible && folder.path !== win.quickLookFolder) quickLookCard.close(); }
+    }
+    QuickLook {
+        id: quickLookCard
+        anchors.fill: parent
+        onNavigate: (key, modifiers) => files.navigate(key, modifiers)
+        onClosed: files.focusList()
     }
 
     // About Casier (display name of fili-file): icon, name, alias, version and the rest of the card
