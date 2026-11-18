@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.12.0
+
+- Quick Look in the window: Space opens an overlay on the current row instead of the external `quicklook` script. Pictures (animated ones too), videos and sounds play in it (Space plays or pauses), text, tables and folder listings show as selectable text, and PDF pages are drawn by QtPdf. Left / Right (and the other arrow keys) move through the folder and the overlay follows; Esc closes it, and so does a change of folder.
+- PDF in Quick Look: a drag selects text with the mouse or the touchpad, even when it starts in the margin or ends past the end of a line; Ctrl+C and Edit > Copy copy the selected text, Ctrl+A selects the page. A pinch on the touchpad, Ctrl + wheel and Ctrl+Plus / Minus / 0 zoom.
+- While Quick Look is open, Copy and Select All (shortcut and menu bar) act on the text it shows rather than on the files.
+- Quick Look is loaded the first time it opens: a window that never shows it does not load QtMultimedia, FFmpeg or QtPdf (about 25 MiB).
+- New runtime dependencies: `qt6-multimedia` and `qt6-pdf`.
+
 ## 1.11.0
 
 - Recursive search (Ctrl+F) no longer crawls slow mounts: network file systems and FUSE drives (cloud drives such as rclone, sshfs, gvfs, NFS, SMB) below the searched folder are listed but not entered, so a search from the home folder does not hang on them. Searching from inside such a mount still walks it, with two readers.

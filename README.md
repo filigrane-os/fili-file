@@ -72,6 +72,15 @@ scripts/measure.sh casier ~/Documents
 scripts/measure.sh thunar ~/Documents      # or nautilus, dolphin, pcmanfm...
 ```
 
+**From version to version.** Each release is measured the same way (`scripts/measure.sh fili-file ~/Documents`, a
+folder of a few dozen files with thumbnails, Qt 6.11, niri; CPU: the window left alone for 10 s after it settled), so a
+release that gets heavier shows here:
+
+| Version | CPU at rest | PSS | Private | RSS | Notes |
+|---|---|---|---|---|---|
+| 1.11.0 | < 0.5 % | 100 MiB | 81 MiB | 194 MiB | |
+| 1.12.0 | < 0.5 % | 100 MiB | 81 MiB | 194 MiB | Quick Look is loaded when it first opens: +22 MiB PSS, +35 MiB RSS with a PDF shown |
+
 **Resident mode (optional, off by default).** With `resident = true`, `fili-file --spare` keeps a copy of Casier loaded
 and hidden; opening Casier hands the launch to it, so the window appears in about 0.15 s instead of 0.4 s (measured, same
 machine), and a new copy loads for the next time. It costs about 35 MB of private memory while it is on (the Qt and Mesa

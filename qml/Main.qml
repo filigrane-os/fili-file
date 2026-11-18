@@ -273,7 +273,7 @@ ApplicationWindow {
     Action { id: aOpen; text: Fili.tr("Open"); enabled: win.canAct && win.selCount === 1; onTriggered: win.show(folder.activate(files.currentIndex)) }
     // Space: quick look (quicklook script; started again on the same file, it closes). Disabled while typing the
     // beginning of a name on the keyboard ("my file"): the space is then a letter.
-    Action { id: aQuickLook; text: Fili.tr("Quick Look"); shortcut: "Space"; enabled: !win.typing && !win.nearby && !quickLookCard.visible && files.typed === "" && win.selCount > 0; onTriggered: win.quickLook() }
+    Action { id: aQuickLook; text: Fili.tr("Quick Look"); shortcut: "Space"; enabled: !win.typing && !win.nearby && !win.quickLookOpen && files.typed === "" && win.selCount > 0; onTriggered: win.quickLook() }
     Action { id: aInfo; text: Fili.tr("Get Info"); shortcut: "Ctrl+I"; enabled: win.canAct; onTriggered: win.showInfo() }
     Action { id: aTrash; text: Fili.tr("Move to Trash"); shortcut: "Delete"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: win.trashSelection() }
     Action { id: aPutBack; text: Fili.tr("Put Back"); enabled: win.canAct && folder.inTrash && win.selCount > 0; onTriggered: win.putBack() }
@@ -289,13 +289,13 @@ ApplicationWindow {
     Action { id: aUndo; text: Fili.tr("Undo"); shortcut: "Ctrl+Z"; enabled: win.canAct; onTriggered: folder.undo() }
     Action { id: aCut; text: Fili.tr("Cut"); shortcut: "Ctrl+X"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: folder.cut(files.targetsText()) }
     // While Quick Look is open, Copy and Select All act on its text (PDF, text file, listing)
-    Action { id: aCopy; text: Fili.tr("Copy"); shortcut: "Ctrl+C"; enabled: quickLookCard.visible ? quickLookCard.selectable : win.canAct && win.selCount > 0; onTriggered: quickLookCard.visible ? quickLookCard.copySelection() : folder.copy(files.targetsText()) }
+    Action { id: aCopy; text: Fili.tr("Copy"); shortcut: "Ctrl+C"; enabled: win.quickLookOpen ? win.quickLookSelectable : win.canAct && win.selCount > 0; onTriggered: win.quickLookOpen ? quickLookLoader.item.copySelection() : folder.copy(files.targetsText()) }
     Action { id: aPaste; text: Fili.tr("Paste"); shortcut: "Ctrl+V"; enabled: win.canAct && !folder.inTrash; onTriggered: folder.paste() }
     Action { id: aDuplicate; text: Fili.tr("Duplicate"); shortcut: "Ctrl+D"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: folder.duplicate(files.targetsText()) }
     // F2: rename in place; with several items selected, bulk rename
     Action { id: aRename; text: Fili.tr("Rename"); shortcut: "F2"; enabled: win.canAct && !folder.inTrash && win.selCount > 0; onTriggered: Object.keys(files.selected).length > 1 ? bulkBox.open() : files.startRename() }
     Action { id: aBulk; text: Fili.tr("Rename Items…"); enabled: win.canAct && !folder.inTrash && Object.keys(files.selected).length > 1; onTriggered: bulkBox.open() }
-    Action { id: aSelectAll; text: Fili.tr("Select All"); shortcut: "Ctrl+A"; enabled: quickLookCard.visible ? quickLookCard.selectable : win.canAct; onTriggered: quickLookCard.visible ? quickLookCard.selectAll() : files.selectAll() }
+    Action { id: aSelectAll; text: Fili.tr("Select All"); shortcut: "Ctrl+A"; enabled: win.quickLookOpen ? win.quickLookSelectable : win.canAct; onTriggered: win.quickLookOpen ? quickLookLoader.item.selectAll() : files.selectAll() }
     Action { id: aInvert; text: Fili.tr("Invert Selection"); shortcut: "Ctrl+Shift+I"; enabled: win.canAct; onTriggered: files.invertSelection() }
     Action { id: aMatch; text: Fili.tr("Select Matching…"); shortcut: "Ctrl+Shift+M"; enabled: win.canAct && !win.picking; onTriggered: matchBox.open() }
     Action { id: aSameKind; text: Fili.tr("Select Same Kind"); enabled: win.canAct && win.selCount > 0; onTriggered: files.selectPaths(folder.sameKind(files.targetsText()).split("\n")) }
@@ -3130,25 +3130,35 @@ ApplicationWindow {
         const i = files.currentIndex;
         if (i >= 0 && i < files.active.count) {
             quickLookFolder = folder.path;
-            quickLookCard.show(folder.pathAt(i), i + 1, files.active.count);
+            quickLookLoader.active = true;
+            quickLookLoader.item.show(folder.pathAt(i), i + 1, files.active.count);
         }
     }
     property string quickLookFolder: ""
     Connections {
         target: files
-        function onCurrentIndexChanged() { if (quickLookCard.visible) win.syncQuickLook(); }
+        function onCurrentIndexChanged() { if (win.quickLookOpen) win.syncQuickLook(); }
     }
     // Another folder shown (go to, back, sidebar): the overlay closes, its file belongs to the previous one
     Connections {
         target: folder
-        function onChanged() { if (quickLookCard.visible && folder.path !== win.quickLookFolder) quickLookCard.close(); }
+        function onChanged() { if (win.quickLookOpen && folder.path !== win.quickLookFolder) quickLookLoader.item.close(); }
     }
-    QuickLook {
-        id: quickLookCard
+    // Created on first use, by URL rather than by type: QuickLook pulls in QtMultimedia (FFmpeg and its codecs) and QtPdf,
+    // about 25 MiB that a window never showing it does not load
+    Loader {
+        id: quickLookLoader
         anchors.fill: parent
-        onNavigate: (key, modifiers) => files.navigate(key, modifiers)
-        onClosed: files.focusList()
+        z: 220
+        active: false
+        source: "QuickLook.qml"
+        onLoaded: {
+            item.navigate.connect((key, modifiers) => files.navigate(key, modifiers));
+            item.closed.connect(() => files.focusList());
+        }
     }
+    readonly property bool quickLookOpen: quickLookLoader.item !== null && quickLookLoader.item.visible
+    readonly property bool quickLookSelectable: quickLookOpen && quickLookLoader.item.selectable
 
     // About Casier (display name of fili-file): icon, name, alias, version and the rest of the card
     function showAbout() {
