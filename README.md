@@ -80,6 +80,7 @@ release that gets heavier shows here:
 |---|---|---|---|---|---|
 | 1.11.0 | < 0.5 % | 100 MiB | 81 MiB | 194 MiB | |
 | 1.12.0 | < 0.5 % | 100 MiB | 81 MiB | 194 MiB | Quick Look is loaded when it first opens: +22 MiB PSS, +35 MiB RSS with a PDF shown |
+| 1.13.0 | < 0.5 % | 111 MiB | 77 MiB | 195 MiB | Debug panel and log: no measurable cost (PSS depends on how many Qt processes share the libraries) |
 
 **Resident mode (optional, off by default).** With `resident = true`, `fili-file --spare` keeps a copy of Casier loaded
 and hidden; opening Casier hands the launch to it, so the window appears in about 0.15 s instead of 0.4 s (measured, same

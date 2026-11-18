@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.13.0
 
 - Debug panel: View > Debug Logs (Ctrl+Shift+L) shows the log of the window in a band above the status bar, with selectable text, a filter (All / Warnings / Errors), Copy, Clear, Open file and Ask Rob. The log is also kept in `~/.local/state/filigrane/logs/fili-file.log` (rotated at 1 MB).
 - Incidents: a crash or a QML error is recorded in `~/.local/state/filigrane/incidents/` with the last log lines and reported by `fili-incident` (a notification, then Rob, who can file or +1 the issue in `filigrane-os/fili-file` with the user's agreement). Off with `[debug] incidents = "off"` in `fili-file.toml`.
