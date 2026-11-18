@@ -466,6 +466,23 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "copyText"]
         fn copy_text(self: &Fili, text: &QString);
+        // Debug panel (src/logs.rs): the log entries after number `since` as JSON {"seq": last number, "entries": [[level,
+        // text], ...]} (level 0 debug, 1 info, 2 warning, 3 error), the file of the log, a way to empty the panel, the file
+        // opened by its application, and "Ask Rob": records an incident and asks Rob to look at it (its id, "" on failure)
+        #[qinvokable]
+        fn logs(self: &Fili, since: i32) -> QString;
+        #[qinvokable]
+        #[cxx_name = "logFile"]
+        fn log_file(self: &Fili) -> QString;
+        #[qinvokable]
+        #[cxx_name = "clearLogs"]
+        fn clear_logs(self: &Fili);
+        #[qinvokable]
+        #[cxx_name = "openPath"]
+        fn open_path(self: &Fili, path: &QString);
+        #[qinvokable]
+        #[cxx_name = "reportProblem"]
+        fn report_problem(self: &Fili, text: &QString) -> QString;
         // Path suggestions for what the user types in the path field (JSON: [{name, path, dir}])
         #[qinvokable]
         #[cxx_name = "pathSuggest"]
@@ -3383,6 +3400,32 @@ impl Fili {
         if let Ok(mut child) = child {
             std::thread::spawn(move || child.wait());
         }
+    }
+
+    pub fn logs(&self, since: i32) -> QString {
+        let (seq, entries) = crate::logs::since(since.max(0) as u64);
+        QString::from(&serde_json::json!({ "seq": seq, "entries": entries }).to_string())
+    }
+
+    pub fn log_file(&self) -> QString {
+        QString::from(&crate::logs::path().display().to_string())
+    }
+
+    pub fn clear_logs(&self) {
+        crate::logs::clear();
+    }
+
+    pub fn open_path(&self, path: &QString) {
+        let child = Command::new("xdg-open").arg(path.to_string()).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+        if let Ok(mut child) = child {
+            std::thread::spawn(move || child.wait());
+        }
+    }
+
+    pub fn report_problem(&self, text: &QString) -> QString {
+        let said = text.to_string();
+        let message = if said.trim().is_empty() { "Problem reported from the Debug panel".to_string() } else { said };
+        QString::from(&crate::logs::incident("manual", &message, true).unwrap_or_default())
     }
 
     pub fn tint(&self, url: &QString, accent: &QString, light: bool) -> QString {

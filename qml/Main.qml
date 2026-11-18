@@ -308,6 +308,7 @@ ApplicationWindow {
     Action { id: aCopyParent; text: Fili.tr("Copy Parent Folder"); enabled: win.canAct && win.selCount > 0; onTriggered: win.copyAs("parent") }
     Action { id: aPreview; text: Fili.tr("Show Preview"); shortcut: "Ctrl+Shift+P"; checkable: true; checked: win.previewOn; enabled: !win.picking; onTriggered: win.togglePreview() }
     Action { id: aHeader; text: Fili.tr("Show Header"); checkable: true; checked: win.showHeader; onTriggered: win.showHeader = !win.showHeader }
+    Action { id: aDebug; text: Fili.tr("Debug Logs"); shortcut: "Ctrl+Shift+L"; onTriggered: debug.open = !debug.open }
     Action { id: aFooter; text: Fili.tr("Show Status Bar"); checkable: true; checked: win.showFooter; onTriggered: win.showFooter = !win.showFooter }
     Action { id: aWindowButtons; text: Fili.tr("Show Window Buttons"); checkable: true; checked: win.windowButtons; onTriggered: win.toggleWindowButtons() }
     Action { id: aWindowPanel; text: Fili.tr("Window Actions…"); shortcut: "Ctrl+Shift+W"; enabled: win.windowButtons && !win.typing; onTriggered: windowPanel.visible ? windowPanel.close() : windowPanel.open() }
@@ -332,7 +333,7 @@ ApplicationWindow {
     readonly property var menuActions: ({
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "put-back": aPutBack, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "detach-tab": aDetachTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "compress": aCompress, "extract": aExtract, "rename": aRename, "bulk-rename": aBulk,
-        "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "toggle-header": aHeader, "toggle-footer": aFooter, "toggle-window-buttons": aWindowButtons, "window-actions": aWindowPanel, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
+        "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "toggle-header": aHeader, "toggle-footer": aFooter, "debug": aDebug, "toggle-window-buttons": aWindowButtons, "window-actions": aWindowPanel, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
         "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
     })
     // Files of the selection that can be sent (folders are not sent as they are)
@@ -1175,7 +1176,7 @@ ApplicationWindow {
 
     Sidebar {
         id: sidebar
-        anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: parent.left }
+        anchors { top: toolbarLine.bottom; bottom: debug.top; left: parent.left }
         width: FiliTheme.sidebarWidth
         current: win.nearby && !win.picking ? "nearby:" : win.networkView ? "network:" : folder.shown
         onOpen: p => win.open(p)
@@ -1186,7 +1187,7 @@ ApplicationWindow {
     }
     Rectangle {
         id: sideLine
-        anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: sidebar.right }
+        anchors { top: toolbarLine.bottom; bottom: debug.top; left: sidebar.right }
         width: 1
         color: FiliTheme.border
     }
@@ -1364,7 +1365,7 @@ ApplicationWindow {
     }
     NearbyView {
         id: nearbyView
-        anchors { top: toolbarLine.bottom; bottom: pickbar.top; left: sideLine.right; right: parent.right }
+        anchors { top: toolbarLine.bottom; bottom: debug.top; left: sideLine.right; right: parent.right }
         visible: win.nearby && !win.picking
         z: 5
         onNotice: text => {
@@ -1375,7 +1376,7 @@ ApplicationWindow {
     }
     FileList {
         id: files
-        anchors { top: resultsBar.bottom; bottom: pickbar.top; left: sideLine.right; right: previewLine.left }
+        anchors { top: resultsBar.bottom; bottom: debug.top; left: sideLine.right; right: previewLine.left }
         folder: folder
         windowActive: win.active
         onOpenRow: row => win.openRow(row)
@@ -1386,7 +1387,7 @@ ApplicationWindow {
     }
     Rectangle {
         id: previewLine
-        anchors { top: toolbarLine.bottom; bottom: pickbar.top; right: preview.left }
+        anchors { top: toolbarLine.bottom; bottom: debug.top; right: preview.left }
         width: preview.visible ? 1 : 0
         color: FiliTheme.border
     }
@@ -1395,7 +1396,7 @@ ApplicationWindow {
         // Chosen width (300 by default); the list keeps at least 320 (below 160 the panel disappears)
         readonly property real room: win.width - FiliTheme.sidebarWidth - 1 - 320
         visible: win.previewOn && !win.picking && room >= 160
-        anchors { top: toolbarLine.bottom; bottom: pickbar.top; right: parent.right }
+        anchors { top: toolbarLine.bottom; bottom: debug.top; right: parent.right }
         width: visible ? Math.min(win.previewWidth, room) : 0
         path: {
             const keys = Object.keys(files.selected);
@@ -1408,7 +1409,7 @@ ApplicationWindow {
         visible: preview.visible
         property real startX: 0
         property real startWidth: 0
-        anchors { top: toolbarLine.bottom; bottom: pickbar.top; right: preview.left; rightMargin: -4 }
+        anchors { top: toolbarLine.bottom; bottom: debug.top; right: preview.left; rightMargin: -4 }
         width: 9
         cursorShape: Qt.SplitHCursor
         onPressed: e => {
@@ -1501,6 +1502,12 @@ ApplicationWindow {
                 onClicked: win.pickAccept()
             }
         }
+    }
+
+    // Debug panel (View > Debug Logs): the log of the window above the status bar, or at the bottom when it is hidden
+    DebugPanel {
+        id: debug
+        anchors { bottom: pickbar.top; left: parent.left; right: parent.right }
     }
 
     // Status bar: number of items and free space, or the error of the last action

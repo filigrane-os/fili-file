@@ -52,6 +52,12 @@ pub fn window_part(key: &str, args: &[String]) -> bool {
     window_layers(key, &read(global_path()), &read(path()), args)
 }
 
+// Incidents (src/logs.rs): a crash or a QML error is recorded and reported to the user, unless `[debug] incidents = "off"`
+pub fn incidents_on() -> bool {
+    let text = std::fs::read_to_string(path()).unwrap_or_default();
+    !matches!(parse_sections(&text).get("debug").and_then(|s| s.get("incidents")), Some(Val::Str(v)) if v == "off")
+}
+
 pub fn load() -> Config {
     parse(&std::fs::read_to_string(path()).unwrap_or_default())
 }

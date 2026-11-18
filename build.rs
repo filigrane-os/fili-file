@@ -30,6 +30,7 @@ fn main() {
                 "qml/FocusRing.qml",
                 "qml/FiliScrollBar.qml",
                 "qml/KineticScroll.qml",
+                "qml/DebugPanel.qml",
             ])
             .qml_file(QmlFile::from("qml/FiliTheme.qml").singleton(true))
             .qml_file(QmlFile::from("qml/DropMode.qml").singleton(true))

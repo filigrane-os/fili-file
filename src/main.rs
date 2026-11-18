@@ -14,6 +14,7 @@ mod icon_theme;
 #[allow(dead_code)]
 mod i18n;
 mod icons;
+mod logs;
 mod ops;
 mod pick;
 mod portal;
@@ -90,6 +91,10 @@ fn main() {
         // loads one a little later, not during this start; it does not depend on this window staying open
         spare::start_later(3);
     }
+    // The log of the window (Debug panel, View > Debug Logs): ~/.local/state/filigrane/logs/fili-file.log, panics and QML
+    // errors become incidents (fili-incident)
+    logs::init("fili-file", "filigrane-os/fili-file", option_env!("FILI_FILE_GIT").unwrap_or(env!("CARGO_PKG_VERSION")), config::incidents_on());
+    logs::capture_qt();
     let mut app = QGuiApplication::new();
     // Wayland app-id (niri rules, fili-file.desktop)
     QGuiApplication::set_desktop_file_name(&QString::from(if pick::get().is_some() { "fili-file-picker" } else { "fili-file" }));

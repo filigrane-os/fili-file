@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Debug panel: View > Debug Logs (Ctrl+Shift+L) shows the log of the window in a band above the status bar, with selectable text, a filter (All / Warnings / Errors), Copy, Clear, Open file and Ask Rob. The log is also kept in `~/.local/state/filigrane/logs/fili-file.log` (rotated at 1 MB).
+- Incidents: a crash or a QML error is recorded in `~/.local/state/filigrane/incidents/` with the last log lines and reported by `fili-incident` (a notification, then Rob, who can file or +1 the issue in `filigrane-os/fili-file` with the user's agreement). Off with `[debug] incidents = "off"` in `fili-file.toml`.
+
 ## 1.12.0
 
 - Quick Look in the window: Space opens an overlay on the current row instead of the external `quicklook` script. Pictures (animated ones too), videos and sounds play in it (Space plays or pauses), text, tables and folder listings show as selectable text, and PDF pages are drawn by QtPdf. Left / Right (and the other arrow keys) move through the folder and the overlay follows; Esc closes it, and so does a change of folder.
