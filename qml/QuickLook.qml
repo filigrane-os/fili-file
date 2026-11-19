@@ -111,12 +111,15 @@ Rectangle {
         }
     }
 
+    MediaDevices { id: outputs }
     MediaPlayer {
         id: player
         onMediaStatusChanged: if (mediaStatus === MediaPlayer.LoadedMedia && ql.autoplay && ql.visible) play()
         onErrorOccurred: (error, text) => ql.playerError = text
         videoOutput: video
-        audioOutput: AudioOutput { }
+        // Follows the default output of the system: this player lives as long as the window, so a fixed AudioOutput
+        // would keep the output found at launch after the default changed
+        audioOutput: AudioOutput { device: outputs.defaultAudioOutput }
     }
 
     // A click on the background closes it, except over text and PDF (a drag selects there). Always present: it keeps
