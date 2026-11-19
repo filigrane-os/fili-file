@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.0
+
+- Header: an Ask Rob button (speech bubble, left of the window button) shows Rob's small floating field for Casier (`fili-chat here`); it only shows where `fili-chat` is installed.
+- Quick Look follows the default audio output of the system instead of the one found when the window opened.
+- Context menu: the submenu state is reset before the items are swapped (fixes a TypeError when the menu is reopened, #1).
+
 ## 1.13.0
 
 - Debug panel: View > Debug Logs (Ctrl+Shift+L) shows the log of the window in a band above the status bar, with selectable text, a filter (All / Warnings / Errors), Copy, Clear, Open file and Ask Rob. The log is also kept in `~/.local/state/filigrane/logs/fili-file.log` (rotated at 1 MB).
