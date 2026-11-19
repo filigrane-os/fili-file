@@ -22,9 +22,10 @@ Item {
     readonly property int menuWidth: 220
 
     function open(x, y, list) {
-        items = list;
+        // Reset before swapping the list: the submenu binding would read the old index in the new list
         current = -1;
         subOpen = false;
+        items = list;
         panel.x = Math.max(FiliTheme.space1, Math.min(x, menu.width - menuWidth - FiliTheme.space1));
         // Height known in advance (the Repeater has not created its rows yet); too low: the menu opens upwards
         const h = list.reduce((a, i) => a + (i.separator ? 9 : menu.itemHeight), 0) + 2 * FiliTheme.space1;
@@ -179,7 +180,7 @@ Item {
     Panel {
         id: sub
         visible: menu.subOpen && menu.current >= 0
-        model: menu.subOpen && menu.current >= 0 ? menu.items[menu.current].children : []
+        model: menu.subOpen && menu.current >= 0 ? (menu.items[menu.current].children || []) : []
         cur: menu.subCurrent
         x: Math.min(panel.x + panel.width - 2, menu.width - width - FiliTheme.space1)
         y: Math.min(panel.y + FiliTheme.space1 + menu.current * menu.itemHeight, menu.height - height - FiliTheme.space1)
