@@ -33,7 +33,7 @@ jobs:
               xbps-install -Syu xbps || true
               xbps-install -Syu
               xbps-install -y bash cargo gcc make pkg-config python3 git qt6-base-devel qt6-declarative-devel qt6-svg-devel \
-                qt6-wayland qt6-multimedia qt6-pdf shared-mime-info glib adwaita-icon-theme util-linux tar gzip zip 7zip
+                qt6-wayland qt6-multimedia qt6-pdf shared-mime-info glib adwaita-icon-theme util-linux tar gzip zip 7zip xz zstd
               make check'
 
   release:
