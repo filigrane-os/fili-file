@@ -483,6 +483,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "reportProblem"]
         fn report_problem(self: &Fili, text: &QString) -> QString;
+        // "Ask Rob" button of the header: opens the chat session scoped to this application (`fili-chat here`)
+        #[qinvokable]
+        #[cxx_name = "askRob"]
+        fn ask_rob(self: &Fili);
         // Path suggestions for what the user types in the path field (JSON: [{name, path, dir}])
         #[qinvokable]
         #[cxx_name = "pathSuggest"]
@@ -3417,6 +3421,13 @@ impl Fili {
 
     pub fn open_path(&self, path: &QString) {
         let child = Command::new("xdg-open").arg(path.to_string()).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+        if let Ok(mut child) = child {
+            std::thread::spawn(move || child.wait());
+        }
+    }
+
+    pub fn ask_rob(&self) {
+        let child = Command::new("fili-chat").arg("here").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
         if let Ok(mut child) = child {
             std::thread::spawn(move || child.wait());
         }
