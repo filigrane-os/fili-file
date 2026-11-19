@@ -1083,9 +1083,15 @@ ApplicationWindow {
             Accessible.role: Accessible.Button
             Accessible.name: Fili.tr("Window")
         }
+        // Ask Rob about this application (the chat session scoped to it); only where the chat is installed
+        RobButton {
+            id: robButton
+            visible: Fili.hasTool("fili-chat")
+            anchors { right: windowButton.visible ? windowButton.left : closeButton.visible ? closeButton.left : parent.right; rightMargin: windowButton.visible || closeButton.visible ? FiliTheme.space1 : (toolbar.height - height) / 2; verticalCenter: parent.verticalCenter }
+        }
         Rectangle {
             id: search
-            anchors { right: windowButton.visible ? windowButton.left : closeButton.visible ? closeButton.left : parent.right; rightMargin: windowButton.visible || closeButton.visible ? FiliTheme.space3 : FiliTheme.margin; verticalCenter: parent.verticalCenter }
+            anchors { right: robButton.visible ? robButton.left : windowButton.visible ? windowButton.left : closeButton.visible ? closeButton.left : parent.right; rightMargin: robButton.visible || windowButton.visible || closeButton.visible ? FiliTheme.space3 : FiliTheme.margin; verticalCenter: parent.verticalCenter }
             width: 180
             height: 26
             radius: FiliTheme.radiusControl

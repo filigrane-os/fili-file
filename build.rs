@@ -21,6 +21,7 @@ fn main() {
                 "qml/PdfView.qml",
                 "qml/PreviewButton.qml",
                 "qml/IconButton.qml",
+                "qml/RobButton.qml",
                 "qml/WindowGlyph.qml",
                 "qml/WindowPanel.qml",
                 "qml/TextButton.qml",
