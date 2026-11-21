@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.15.0
+
+- Everything Casier brings to the desktop now lives in this repository and is installed with it (`make install`): besides the launchers, icons and portal, what the Filigrane shell reads, in `shell/`, instead of being kept in the distribution's repository: the fallback menu of the bar (`shell/appmenu/fili-file.json`) and the brief of Rob for this application (`shell/rob/fili-file.md`). The package puts it in `/usr/share/filigrane/shell/`, `fili-bar link-system` (run at login) links it into the menus; a menu or brief of your own with the same name wins.
+- New `make install-data` (everything but the program and its aliases). `scripts/check-shell-menu.py` (run by `make check`, so by the CI) checks that the bar menu has the same commands, labels and shortcuts as the application's menu (`menuActions` of `qml/Main.qml`), and that the brief of Rob exists.
+
 ## 1.14.0
 
 - Header: an Ask Rob button (speech bubble, left of the window button) shows Rob's small floating field for Casier (`fili-chat here`); it only shows where `fili-chat` is installed.

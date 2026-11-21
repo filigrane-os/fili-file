@@ -1,0 +1,95 @@
+{
+  "name": "Casier",
+  "app": [
+    { "label": "About Casier", "exec": "fili-file ctl --pid %pid action about" }
+  ],
+  "window": [
+    { "label": "Window Actions…", "keys": "Ctrl+Shift+W", "exec": "fili-file ctl --pid %pid action window-actions" },
+    { "label": "Show Window Buttons", "exec": "fili-file ctl --pid %pid action toggle-window-buttons" },
+    { "label": "Show Header", "exec": "fili-file ctl --pid %pid action toggle-header" },
+    { "label": "Show Status Bar", "exec": "fili-file ctl --pid %pid action toggle-footer" }
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "children": [
+        { "label": "New window", "exec": "fili-file" },
+        { "label": "New Tab", "keys": "Ctrl+T", "exec": "fili-file ctl --pid %pid action new-tab" },
+        { "label": "Move Tab to New Window", "exec": "fili-file ctl --pid %pid action detach-tab" },
+        { "label": "New Folder", "keys": "Ctrl+Shift+N", "exec": "fili-file ctl --pid %pid action new-folder" },
+        { "label": "Open", "exec": "fili-file ctl --pid %pid action open" },
+        { "label": "Get Info", "keys": "Ctrl+I", "exec": "fili-file ctl --pid %pid action info" },
+        { "label": "Quick Look", "keys": "Space", "exec": "fili-file ctl --pid %pid action quick-look" },
+        { "label": "Compress…", "exec": "fili-file ctl --pid %pid action compress" },
+        { "label": "Extract Here", "exec": "fili-file ctl --pid %pid action extract" },
+        { "label": "Share…", "exec": "fili-file ctl --pid %pid action share" },
+        { "label": "Nearby", "keys": "Ctrl+Shift+R", "exec": "fili-file ctl --pid %pid action nearby" },
+        { "sep": true },
+        { "label": "Move to Trash", "keys": "Delete", "exec": "fili-file ctl --pid %pid action trash" },
+        { "label": "Put Back", "exec": "fili-file ctl --pid %pid action put-back" },
+        { "label": "Empty Trash", "keys": "Ctrl+Shift+Delete", "exec": "fili-file ctl --pid %pid action empty-trash" },
+        { "sep": true },
+        { "label": "Settings…", "exec": "xdg-open ~/.config/filigrane/fili-file.toml" },
+        { "sep": true },
+        { "label": "Close", "keys": "Ctrl+W", "exec": "fili-file ctl --pid %pid action close" }
+      ]
+    },
+    {
+      "label": "Edit",
+      "children": [
+        { "label": "Undo", "keys": "Ctrl+Z", "exec": "fili-file ctl --pid %pid action undo" },
+        { "sep": true },
+        { "label": "Cut", "keys": "Ctrl+X", "exec": "fili-file ctl --pid %pid action cut" },
+        { "label": "Copy", "keys": "Ctrl+C", "exec": "fili-file ctl --pid %pid action copy" },
+        { "label": "Paste", "keys": "Ctrl+V", "exec": "fili-file ctl --pid %pid action paste" },
+        { "label": "Duplicate", "keys": "Ctrl+D", "exec": "fili-file ctl --pid %pid action duplicate" },
+        { "label": "Rename", "keys": "F2", "exec": "fili-file ctl --pid %pid action rename" },
+        { "label": "Rename Items…", "exec": "fili-file ctl --pid %pid action bulk-rename" },
+        { "sep": true },
+        { "label": "Copy Full Path", "keys": "Ctrl+Shift+C", "exec": "fili-file ctl --pid %pid action copy-path" },
+        { "label": "Copy Name", "keys": "Ctrl+Alt+C", "exec": "fili-file ctl --pid %pid action copy-name" },
+        { "label": "Copy Name Without Extension", "exec": "fili-file ctl --pid %pid action copy-stem" },
+        { "label": "Copy Parent Folder", "exec": "fili-file ctl --pid %pid action copy-parent" },
+        { "sep": true },
+        { "label": "Select All", "keys": "Ctrl+A", "exec": "fili-file ctl --pid %pid action select-all" },
+        { "label": "Invert Selection", "keys": "Ctrl+Shift+I", "exec": "fili-file ctl --pid %pid action invert-selection" },
+        { "label": "Select Matching…", "keys": "Ctrl+Shift+M", "exec": "fili-file ctl --pid %pid action select-matching" },
+        { "label": "Select Same Kind", "exec": "fili-file ctl --pid %pid action select-same-kind" }
+      ]
+    },
+    {
+      "label": "View",
+      "children": [
+        { "label": "View as List", "keys": "Ctrl+1", "exec": "fili-file ctl --pid %pid action view-list" },
+        { "label": "View as Icons", "keys": "Ctrl+2", "exec": "fili-file ctl --pid %pid action view-icons" },
+        { "label": "Show Preview", "keys": "Ctrl+Shift+P", "exec": "fili-file ctl --pid %pid action toggle-preview" },
+        { "label": "Show Hidden Files", "keys": "Ctrl+H", "exec": "fili-file ctl --pid %pid action toggle-hidden" },
+        { "sep": true },
+        { "label": "Reload", "keys": "F5", "exec": "fili-file ctl --pid %pid action reload" },
+        { "sep": true },
+        { "label": "Debug Logs", "keys": "Ctrl+Shift+L", "exec": "fili-file ctl --pid %pid action debug" }
+      ]
+    },
+    {
+      "label": "Go",
+      "children": [
+        { "label": "Back", "keys": "Alt+Left", "exec": "fili-file ctl --pid %pid action back" },
+        { "label": "Forward", "keys": "Alt+Right", "exec": "fili-file ctl --pid %pid action forward" },
+        { "label": "Enclosing Folder", "keys": "Alt+Up", "exec": "fili-file ctl --pid %pid action up" },
+        { "label": "Go to Folder…", "keys": "Ctrl+L", "exec": "fili-file ctl --pid %pid action path" },
+        { "label": "Connect to Server…", "keys": "Ctrl+K", "exec": "fili-file ctl --pid %pid action connect-server" },
+        { "label": "Search", "keys": "Ctrl+F", "exec": "fili-file ctl --pid %pid action search" },
+        { "sep": true },
+        { "label": "Home", "exec": "fili-file ctl --pid %pid goto \"$HOME\"" },
+        { "label": "Documents", "exec": "fili-file ctl --pid %pid goto \"$HOME/Documents\"" },
+        { "label": "Downloads", "exec": "fili-file ctl --pid %pid goto \"$HOME/Downloads\"" },
+        { "label": "Pictures", "exec": "fili-file ctl --pid %pid goto \"$HOME/Pictures\"" },
+        { "sep": true },
+        { "label": "Open Terminal Here", "keys": "Ctrl+Alt+T", "exec": "fili-file ctl --pid %pid action terminal" },
+        { "sep": true },
+        { "label": "Show Next Tab", "keys": "Ctrl+Tab", "exec": "fili-file ctl --pid %pid action next-tab" },
+        { "label": "Show Previous Tab", "keys": "Ctrl+Shift+Tab", "exec": "fili-file ctl --pid %pid action prev-tab" }
+      ]
+    }
+  ]
+}
