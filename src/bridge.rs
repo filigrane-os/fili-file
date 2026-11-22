@@ -483,7 +483,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "reportProblem"]
         fn report_problem(self: &Fili, text: &QString) -> QString;
-        // "Ask Rob" button of the header: opens the chat session scoped to this application (`fili-chat here`)
+        // "Ask Rob" button of the header: opens the chat session scoped to this application (`fili-ai here`)
         #[qinvokable]
         #[cxx_name = "askRob"]
         fn ask_rob(self: &Fili);
@@ -3427,7 +3427,7 @@ impl Fili {
     }
 
     pub fn ask_rob(&self) {
-        let child = Command::new("fili-chat").arg("here").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+        let child = Command::new("fili-ai").arg("here").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
         if let Ok(mut child) = child {
             std::thread::spawn(move || child.wait());
         }
