@@ -2,6 +2,7 @@
 // Follows the selection (a single item), with a short delay so as not to work while scrolling.
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 Rectangle {
     id: pane

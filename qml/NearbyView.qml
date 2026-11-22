@@ -4,6 +4,7 @@
 // (switches per protocol) and the last files received. Incoming requests arrive as notifications.
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 Rectangle {
     id: view
@@ -262,7 +263,7 @@ Rectangle {
                         font.pixelSize: FiliTheme.sizeList
                         color: modelData.on ? FiliTheme.accentColor : FiliTheme.textSecondary
                     }
-                    TextButton {
+                    FiliButton {
                         id: toggle
                         anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
                         visible: modelData.available

@@ -5,6 +5,7 @@
 // every row gets a gutter on the left for the check mark
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 Item {
     id: menu

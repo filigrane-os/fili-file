@@ -2,6 +2,7 @@
 // root). Ctrl+L turns it into an input field: Enter goes there, Esc cancels.
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 Item {
     id: bar

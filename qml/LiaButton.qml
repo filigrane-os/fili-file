@@ -4,6 +4,7 @@
 // application (reference: Casier).
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 Rectangle {
     id: b

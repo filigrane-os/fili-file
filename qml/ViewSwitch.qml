@@ -2,6 +2,7 @@
 // mode in surfaceHover with its pictogram in accentColor. Drawn pictograms (three bars, four squares).
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 Rectangle {
     id: sw

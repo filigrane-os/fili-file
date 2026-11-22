@@ -7,6 +7,7 @@
 import QtQuick
 import QtQuick.Window
 import Fili.Files
+import Fili.UI
 
 Item {
     id: panel

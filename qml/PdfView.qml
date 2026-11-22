@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Pdf
 import QtQuick.Shapes
 import Fili.Files
+import Fili.UI
 
 Item {
     id: v

@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Effects
 import Fili.Files
+import Fili.UI
 
 Rectangle {
     id: side

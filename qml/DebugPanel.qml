@@ -4,6 +4,7 @@
 // and Fili.openPath(), which every fili-* application gives the same way (agents/skills/filigrane-ui/references/app-window.md).
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 Rectangle {
     id: panel
@@ -137,7 +138,7 @@ Rectangle {
             spacing: FiliTheme.space1
             Repeater {
                 model: [Fili.tr("All"), Fili.tr("Warnings"), Fili.tr("Errors")]
-                TextButton {
+                FiliButton {
                     required property string modelData
                     required property int index
                     label: modelData
@@ -167,17 +168,17 @@ Rectangle {
                 color: FiliTheme.muted
                 rightPadding: FiliTheme.space2
             }
-            TextButton { label: Fili.tr("Ask Lia"); onClicked: panel.askLia() }
-            TextButton { label: Fili.tr("Copy"); onClicked: panel.copy() }
-            TextButton {
+            FiliButton { label: Fili.tr("Ask Lia"); onClicked: panel.askLia() }
+            FiliButton { label: Fili.tr("Copy"); onClicked: panel.copy() }
+            FiliButton {
                 label: Fili.tr("Clear")
                 onClicked: {
                     Fili.clearLogs();
                     panel.reset();
                 }
             }
-            TextButton { label: Fili.tr("Open file"); onClicked: Fili.openPath(Fili.logFile()) }
-            TextButton { label: "×"; onClicked: panel.open = false }
+            FiliButton { label: Fili.tr("Open file"); onClicked: Fili.openPath(Fili.logFile()) }
+            FiliButton { label: "×"; onClicked: panel.open = false }
         }
     }
 

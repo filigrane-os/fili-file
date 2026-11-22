@@ -2,6 +2,7 @@
 // a window whose right band is filled when the panel is open.
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 Rectangle {
     id: b

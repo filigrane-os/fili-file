@@ -2,6 +2,10 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
 fn main() {
+    // Tokens of the shared kit (Fili.UI), for the test that checks the FiliTheme.* names used in the QML
+    if let Ok(p) = std::env::var("DEP_FILI_UI_THEME_QML") {
+        println!("cargo::rustc-env=FILI_UI_THEME_QML={p}");
+    }
     // Version of the About card: tag or commit of the repository (absent outside a repository)
     if let Ok(o) = std::process::Command::new("git").args(["describe", "--tags", "--always", "--dirty"]).output() {
         if o.status.success() {
@@ -20,22 +24,16 @@ fn main() {
                 "qml/QuickLook.qml",
                 "qml/PdfView.qml",
                 "qml/PreviewButton.qml",
-                "qml/IconButton.qml",
                 "qml/LiaButton.qml",
-                "qml/WindowGlyph.qml",
                 "qml/WindowPanel.qml",
-                "qml/TextButton.qml",
                 "qml/ContextMenu.qml",
                 "qml/ViewSwitch.qml",
                 "qml/BandSelect.qml",
-                "qml/FocusRing.qml",
-                "qml/FiliScrollBar.qml",
-                "qml/KineticScroll.qml",
                 "qml/DebugPanel.qml",
             ])
-            .qml_file(QmlFile::from("qml/FiliTheme.qml").singleton(true))
             .qml_file(QmlFile::from("qml/DropMode.qml").singleton(true))
             .depend("QtQuick")
+            .depend("Fili.UI")
             .depend("QtQuick.Controls")
             .depend("QtMultimedia")
             .depend("QtQuick.Pdf"),

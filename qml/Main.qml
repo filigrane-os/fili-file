@@ -8,6 +8,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import Fili.Files
+import Fili.UI
 
 ApplicationWindow {
     id: win
@@ -19,6 +20,8 @@ ApplicationWindow {
     height: 560
     minimumWidth: 520
     minimumHeight: 300
+    // The kit reads the theme through the application's object
+    Binding { target: FiliHost; property: "backend"; value: Fili }
     // Resident mode: a loaded spare keeps its window hidden until a launch claims it (see spare.rs)
     property bool warm: Fili.isSpare()
     visible: !warm
@@ -1023,12 +1026,12 @@ ApplicationWindow {
             x: FiliTheme.margin + FiliTheme.space1 + 1
             anchors.verticalCenter: parent.verticalCenter
             spacing: FiliTheme.space1
-            IconButton {
+            FiliIconButton {
                 glyph: ""
                 enabledState: folder.canBack
                 onClicked: win.show(folder.back())
             }
-            IconButton {
+            FiliIconButton {
                 glyph: ""
                 enabledState: folder.canForward
                 onClicked: win.show(folder.forward())
@@ -1151,11 +1154,11 @@ ApplicationWindow {
             anchors { right: viewSwitch.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             spacing: 2
             visible: folder.inTrash
-            TextButton {
+            FiliButton {
                 label: Fili.tr("Put back")
                 onClicked: win.putBack()
             }
-            TextButton {
+            FiliButton {
                 label: Fili.tr("Empty Trash")
                 onClicked: win.askEmpty()
             }
@@ -1352,7 +1355,7 @@ ApplicationWindow {
             font.pixelSize: FiliTheme.sizeList
             color: FiliTheme.text
         }
-        TextButton {
+        FiliButton {
             id: closeResults
             anchors { right: parent.right; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             label: Fili.tr("Close results")
@@ -1485,7 +1488,7 @@ ApplicationWindow {
                 }
             }
         }
-        TextButton {
+        FiliButton {
             visible: win.pickFilters.length > 1
             anchors { left: parent.left; leftMargin: win.pickKind === "save" ? 300 + FiliTheme.margin : FiliTheme.margin - FiliTheme.space3; verticalCenter: parent.verticalCenter }
             height: 26
@@ -1495,12 +1498,12 @@ ApplicationWindow {
         Row {
             anchors { right: parent.right; rightMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
             spacing: FiliTheme.space2
-            TextButton {
+            FiliButton {
                 height: 26
                 label: Fili.tr("Cancel")
                 onClicked: Fili.pickCancel()
             }
-            TextButton {
+            FiliButton {
                 height: 26
                 primary: true
                 opacity: win.picked.length > 0 ? 1 : 0.4
@@ -1615,7 +1618,7 @@ ApplicationWindow {
                     color: FiliTheme.accentColor
                 }
             }
-            TextButton {
+            FiliButton {
                 label: Fili.tr("Cancel")
                 onClicked: folder.cancel()
             }
@@ -1853,7 +1856,7 @@ ApplicationWindow {
                     spacing: FiliTheme.space2
                     Repeater {
                         model: shareBox.protocols
-                        TextButton {
+                        FiliButton {
                             required property var modelData
                             label: modelData.label
                             primary: modelData.id === shareBox.proto
@@ -1908,7 +1911,7 @@ ApplicationWindow {
                 }
                 Row {
                     anchors.right: parent.right
-                    TextButton { label: Fili.tr("Cancel"); onClicked: shareBox.visible = false }
+                    FiliButton { label: Fili.tr("Cancel"); onClicked: shareBox.visible = false }
                 }
             }
         }
@@ -2069,8 +2072,8 @@ ApplicationWindow {
                 Row {
                     spacing: FiliTheme.space2
                     anchors.right: parent.right
-                    TextButton { label: Fili.tr("Cancel"); onClicked: connectBox.visible = false }
-                    TextButton { label: Fili.tr("Connect"); primary: true; onClicked: connectBox.apply() }
+                    FiliButton { label: Fili.tr("Cancel"); onClicked: connectBox.visible = false }
+                    FiliButton { label: Fili.tr("Connect"); primary: true; onClicked: connectBox.apply() }
                 }
             }
         }
@@ -2178,9 +2181,9 @@ ApplicationWindow {
                 }
                 Row {
                     spacing: FiliTheme.space2
-                    TextButton { label: Fili.tr("Replace Text"); primary: bulkBox.mode === "replace"; onClicked: { bulkBox.mode = "replace"; findField.forceFocus(); } }
-                    TextButton { label: Fili.tr("Number"); primary: bulkBox.mode === "number"; onClicked: { bulkBox.mode = "number"; patternField.forceFocus(); } }
-                    TextButton { label: Fili.tr("Change Case"); primary: bulkBox.mode === "case"; onClicked: bulkBox.mode = "case" }
+                    FiliButton { label: Fili.tr("Replace Text"); primary: bulkBox.mode === "replace"; onClicked: { bulkBox.mode = "replace"; findField.forceFocus(); } }
+                    FiliButton { label: Fili.tr("Number"); primary: bulkBox.mode === "number"; onClicked: { bulkBox.mode = "number"; patternField.forceFocus(); } }
+                    FiliButton { label: Fili.tr("Change Case"); primary: bulkBox.mode === "case"; onClicked: bulkBox.mode = "case" }
                 }
                 Column {
                     width: parent.width
@@ -2203,9 +2206,9 @@ ApplicationWindow {
                 Row {
                     visible: bulkBox.mode === "case"
                     spacing: FiliTheme.space2
-                    TextButton { label: Fili.tr("lowercase"); primary: bulkBox.caseMode === "lower"; onClicked: { bulkBox.caseMode = "lower"; bulkBox.refresh(); } }
-                    TextButton { label: Fili.tr("UPPERCASE"); primary: bulkBox.caseMode === "upper"; onClicked: { bulkBox.caseMode = "upper"; bulkBox.refresh(); } }
-                    TextButton { label: Fili.tr("Capitalize Words"); primary: bulkBox.caseMode === "title"; onClicked: { bulkBox.caseMode = "title"; bulkBox.refresh(); } }
+                    FiliButton { label: Fili.tr("lowercase"); primary: bulkBox.caseMode === "lower"; onClicked: { bulkBox.caseMode = "lower"; bulkBox.refresh(); } }
+                    FiliButton { label: Fili.tr("UPPERCASE"); primary: bulkBox.caseMode === "upper"; onClicked: { bulkBox.caseMode = "upper"; bulkBox.refresh(); } }
+                    FiliButton { label: Fili.tr("Capitalize Words"); primary: bulkBox.caseMode === "title"; onClicked: { bulkBox.caseMode = "title"; bulkBox.refresh(); } }
                 }
                 Rectangle {
                     width: parent.width
@@ -2267,8 +2270,8 @@ ApplicationWindow {
                 Row {
                     anchors.right: parent.right
                     spacing: FiliTheme.space2
-                    TextButton { label: Fili.tr("Cancel"); onClicked: bulkBox.visible = false }
-                    TextButton {
+                    FiliButton { label: Fili.tr("Cancel"); onClicked: bulkBox.visible = false }
+                    FiliButton {
                         label: Fili.tr("Rename")
                         primary: true
                         opacity: bulkBox.changed && bulkBox.valid ? 1 : 0.4
@@ -2350,19 +2353,19 @@ ApplicationWindow {
                 Row {
                     anchors.right: parent.right
                     spacing: FiliTheme.space2
-                    TextButton {
+                    FiliButton {
                         label: Fili.tr("Cancel")
                         onClicked: conflictBox.choose("cancel")
                     }
-                    TextButton {
+                    FiliButton {
                         label: conflictBox.many ? Fili.tr("Skip These") : Fili.tr("Skip")
                         onClicked: conflictBox.choose("skip")
                     }
-                    TextButton {
+                    FiliButton {
                         label: Fili.tr("Replace")
                         onClicked: conflictBox.choose("replace")
                     }
-                    TextButton {
+                    FiliButton {
                         label: Fili.tr("Keep Both")
                         primary: true
                         onClicked: conflictBox.choose("both")
@@ -2391,7 +2394,7 @@ ApplicationWindow {
             spacing: FiliTheme.space1
             Repeater {
                 model: options
-                TextButton {
+                FiliButton {
                     required property var modelData
                     label: modelData.label
                     primary: modelData.id === current
@@ -2520,8 +2523,8 @@ ApplicationWindow {
                 Row {
                     spacing: FiliTheme.space2
                     anchors.right: parent.right
-                    TextButton { label: Fili.tr("Cancel"); onClicked: passwordBox.visible = false }
-                    TextButton { label: Fili.tr("Extract"); primary: true; onClicked: passwordBox.apply() }
+                    FiliButton { label: Fili.tr("Cancel"); onClicked: passwordBox.visible = false }
+                    FiliButton { label: Fili.tr("Extract"); primary: true; onClicked: passwordBox.apply() }
                 }
             }
         }
@@ -2689,8 +2692,8 @@ ApplicationWindow {
                 Row {
                     spacing: FiliTheme.space2
                     anchors.right: parent.right
-                    TextButton { label: Fili.tr("Cancel"); onClicked: compressBox.visible = false }
-                    TextButton { label: Fili.tr("Compress"); primary: true; onClicked: compressBox.apply() }
+                    FiliButton { label: Fili.tr("Cancel"); onClicked: compressBox.visible = false }
+                    FiliButton { label: Fili.tr("Compress"); primary: true; onClicked: compressBox.apply() }
                 }
             }
         }
@@ -2884,8 +2887,8 @@ ApplicationWindow {
                 Row {
                     spacing: FiliTheme.space2
                     anchors.right: parent.right
-                    TextButton { label: Fili.tr("Cancel"); onClicked: openWithBox.visible = false }
-                    TextButton { label: openWithBox.edit ? Fili.tr("Edit") : Fili.tr("Open"); primary: true; onClicked: openWithBox.apply() }
+                    FiliButton { label: Fili.tr("Cancel"); onClicked: openWithBox.visible = false }
+                    FiliButton { label: openWithBox.edit ? Fili.tr("Edit") : Fili.tr("Open"); primary: true; onClicked: openWithBox.apply() }
                 }
             }
         }
@@ -2958,11 +2961,11 @@ ApplicationWindow {
                 Row {
                     anchors.right: parent.right
                     spacing: FiliTheme.space2
-                    TextButton {
+                    FiliButton {
                         label: Fili.tr("Cancel")
                         onClicked: confirm.visible = false
                     }
-                    TextButton {
+                    FiliButton {
                         label: confirm.label
                         primary: true
                         onClicked: {
@@ -3124,7 +3127,7 @@ ApplicationWindow {
             Row {
                 id: okRow
                 anchors { right: parent.right; bottom: parent.bottom; margins: FiliTheme.space4 }
-                TextButton {
+                FiliButton {
                     label: Fili.tr("OK")
                     primary: true
                     onClicked: infoCard.visible = false
@@ -3274,7 +3277,7 @@ ApplicationWindow {
                 Item {
                     width: parent.width
                     height: aboutOk.height
-                    TextButton {
+                    FiliButton {
                         id: aboutOk
                         anchors.right: parent.right
                         label: Fili.tr("OK")

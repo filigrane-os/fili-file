@@ -3,6 +3,7 @@
 // drawn above them.
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 MouseArea {
     id: band

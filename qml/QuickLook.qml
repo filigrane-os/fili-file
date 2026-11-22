@@ -5,6 +5,7 @@
 import QtQuick
 import QtMultimedia
 import Fili.Files
+import Fili.UI
 
 Rectangle {
     id: ql

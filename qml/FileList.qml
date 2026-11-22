@@ -7,6 +7,7 @@
 // selected rows: text/uri-list, droppable on a folder of the list, of the sidebar or in another window.
 import QtQuick
 import Fili.Files
+import Fili.UI
 
 Rectangle {
     id: view
