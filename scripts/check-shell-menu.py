@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The menu of fili-file in the fili-bar (shell/appmenu/fili-file.json) must stay the one of the application: for each
 entry `fili-file ctl ... action NAME`, the command NAME exists in qml/Main.qml (menuActions table) with the same label and
-the same shortcut; each command with a label of the Qt menu bar is offered in the bar; and the brief of Rob
-(shell/rob/fili-file.md) exists. Exit code 0 if everything agrees, 1 otherwise (each difference on one line).
+the same shortcut; each command with a label of the Qt menu bar is offered in the bar; and the brief of Lia
+(shell/lia/fili-file.md) exists. Exit code 0 if everything agrees, 1 otherwise (each difference on one line).
 Usage: scripts/check-shell-menu.py (from anywhere)."""
 import json
 import re
@@ -24,8 +24,8 @@ if not table_src:
 table = dict(re.findall(r'"([a-z-]+)":\s*(\w+)', table_src.group(1)))
 
 errors = []
-if not (root / "shell/rob/fili-file.md").is_file():
-    errors.append("brief of Rob missing: shell/rob/fili-file.md")
+if not (root / "shell/lia/fili-file.md").is_file():
+    errors.append("brief of Lia missing: shell/lia/fili-file.md")
 seen = set()
 for entries in [menu.get("app", []), menu.get("window", [])] + [top["children"] for top in menu["menus"]]:
     for e in entries:

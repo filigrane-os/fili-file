@@ -7,7 +7,7 @@
 #   make install-data PREFIX=~/.local         everything but the binary (launchers, icons, portal, licences, what the shell reads)
 #
 # Everything the application brings to the Filigrane desktop lives here and is installed together: the program, the launchers,
-# the icons, and shell/ (the fallback menu of the bar, the brief of Rob), which ends in $(DATADIR)/filigrane/shell/ where
+# the icons, and shell/ (the fallback menu of the bar, the brief of Lia), which ends in $(DATADIR)/filigrane/shell/ where
 # `fili-bar link-system` finds it.
 #
 # cxx-qt finds Qt through qmake. QMAKE overrides the search below (Qt 6 only), for example
@@ -71,4 +71,4 @@ uninstall:
 	rm -f $(DESTDIR)$(DATADIR)/dbus-1/services/org.freedesktop.impl.portal.desktop.filigrane.service
 	rm -f $(DESTDIR)$(DATADIR)/xdg-desktop-portal/portals/filigrane.portal
 	rm -rf $(DESTDIR)$(DATADIR)/licenses/fili-file
-	rm -f $(DESTDIR)$(DATADIR)/filigrane/shell/ctl/fili-file.json $(DESTDIR)$(DATADIR)/filigrane/shell/appmenu/fili-file.json $(DESTDIR)$(DATADIR)/filigrane/shell/rob/fili-file.md
+	rm -f $(DESTDIR)$(DATADIR)/filigrane/shell/ctl/fili-file.json $(DESTDIR)$(DATADIR)/filigrane/shell/appmenu/fili-file.json $(DESTDIR)$(DATADIR)/filigrane/shell/lia/fili-file.md

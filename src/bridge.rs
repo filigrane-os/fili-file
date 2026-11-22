@@ -468,7 +468,7 @@ pub mod qobject {
         fn copy_text(self: &Fili, text: &QString);
         // Debug panel (src/logs.rs): the log entries after number `since` as JSON {"seq": last number, "entries": [[level,
         // text], ...]} (level 0 debug, 1 info, 2 warning, 3 error), the file of the log, a way to empty the panel, the file
-        // opened by its application, and "Ask Rob": records an incident and asks Rob to look at it (its id, "" on failure)
+        // opened by its application, and "Ask Lia": records an incident and asks Lia to look at it (its id, "" on failure)
         #[qinvokable]
         fn logs(self: &Fili, since: i32) -> QString;
         #[qinvokable]
@@ -483,10 +483,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "reportProblem"]
         fn report_problem(self: &Fili, text: &QString) -> QString;
-        // "Ask Rob" button of the header: opens the chat session scoped to this application (`fili-ai here`)
+        // "Ask Lia" button of the header: opens the chat session scoped to this application (`fili-ai here`)
         #[qinvokable]
-        #[cxx_name = "askRob"]
-        fn ask_rob(self: &Fili);
+        #[cxx_name = "askLia"]
+        fn ask_lia(self: &Fili);
         // Path suggestions for what the user types in the path field (JSON: [{name, path, dir}])
         #[qinvokable]
         #[cxx_name = "pathSuggest"]
@@ -3426,7 +3426,7 @@ impl Fili {
         }
     }
 
-    pub fn ask_rob(&self) {
+    pub fn ask_lia(&self) {
         let child = Command::new("fili-ai").arg("here").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
         if let Ok(mut child) = child {
             std::thread::spawn(move || child.wait());

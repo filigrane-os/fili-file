@@ -21,7 +21,7 @@ Rectangle {
     property var entries: []
     property int seq: 0
     property int shown: 0
-    // Result of "Ask Rob", shown in the header for a few seconds
+    // Result of "Ask Lia", shown in the header for a few seconds
     property string note: ""
 
     function colorOf(level) {
@@ -66,10 +66,10 @@ Rectangle {
         if (atEnd)
             follow();
     }
-    // The problem: the lines selected in the panel, else the last ones; Rob is asked to look at it (fili-incident)
-    function askRob() {
+    // The problem: the lines selected in the panel, else the last ones; Lia is asked to look at it (fili-incident)
+    function askLia() {
         const id = Fili.reportProblem(edit.selectedText);
-        note = id !== "" ? Fili.tr("Rob was asked to look at it") : Fili.tr("Could not record the problem");
+        note = id !== "" ? Fili.tr("Lia was asked to look at it") : Fili.tr("Could not record the problem");
         noteTimer.restart();
     }
     Timer {
@@ -167,7 +167,7 @@ Rectangle {
                 color: FiliTheme.muted
                 rightPadding: FiliTheme.space2
             }
-            TextButton { label: Fili.tr("Ask Rob"); onClicked: panel.askRob() }
+            TextButton { label: Fili.tr("Ask Lia"); onClicked: panel.askLia() }
             TextButton { label: Fili.tr("Copy"); onClicked: panel.copy() }
             TextButton {
                 label: Fili.tr("Clear")
