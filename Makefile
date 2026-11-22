@@ -35,7 +35,7 @@ test:
 check: build test
 	python3 -I scripts/check-i18n.py
 	python3 -I scripts/check-shell-menu.py
-	python3 -I scripts/check-ctl-catalog.py
+	python3 -I scripts/fili-api-lint --app .
 	tests/run.sh
 	tests/archive.sh
 
