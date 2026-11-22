@@ -89,5 +89,238 @@
       "summary": "Width of a column or of the preview panel",
       "reads": false
     }
+  ],
+  "actions": [
+    {
+      "name": "new-folder",
+      "label": "New Folder",
+      "keys": "Ctrl+Shift+N"
+    },
+    {
+      "name": "open",
+      "label": "Open"
+    },
+    {
+      "name": "info",
+      "label": "Get Info",
+      "keys": "Ctrl+I"
+    },
+    {
+      "name": "quick-look",
+      "label": "Quick Look",
+      "keys": "Space"
+    },
+    {
+      "name": "share",
+      "label": "Share…"
+    },
+    {
+      "name": "nearby",
+      "label": "Nearby",
+      "keys": "Ctrl+Shift+R"
+    },
+    {
+      "name": "trash",
+      "label": "Move to Trash",
+      "keys": "Delete"
+    },
+    {
+      "name": "put-back",
+      "label": "Put Back"
+    },
+    {
+      "name": "empty-trash",
+      "label": "Empty Trash",
+      "keys": "Ctrl+Shift+Delete"
+    },
+    {
+      "name": "close",
+      "label": "Close",
+      "keys": "Ctrl+W"
+    },
+    {
+      "name": "new-tab",
+      "label": "New Tab",
+      "keys": "Ctrl+T"
+    },
+    {
+      "name": "detach-tab",
+      "label": "Move Tab to New Window"
+    },
+    {
+      "name": "next-tab",
+      "label": "Show Next Tab",
+      "keys": "Ctrl+Tab"
+    },
+    {
+      "name": "prev-tab",
+      "label": "Show Previous Tab",
+      "keys": "Ctrl+Shift+Tab"
+    },
+    {
+      "name": "about",
+      "label": "About Casier"
+    },
+    {
+      "name": "undo",
+      "label": "Undo",
+      "keys": "Ctrl+Z"
+    },
+    {
+      "name": "cut",
+      "label": "Cut",
+      "keys": "Ctrl+X"
+    },
+    {
+      "name": "copy",
+      "label": "Copy",
+      "keys": "Ctrl+C"
+    },
+    {
+      "name": "paste",
+      "label": "Paste",
+      "keys": "Ctrl+V"
+    },
+    {
+      "name": "duplicate",
+      "label": "Duplicate",
+      "keys": "Ctrl+D"
+    },
+    {
+      "name": "compress",
+      "label": "Compress…"
+    },
+    {
+      "name": "extract",
+      "label": "Extract Here"
+    },
+    {
+      "name": "rename",
+      "label": "Rename",
+      "keys": "F2"
+    },
+    {
+      "name": "bulk-rename",
+      "label": "Rename Items…"
+    },
+    {
+      "name": "select-all",
+      "label": "Select All",
+      "keys": "Ctrl+A"
+    },
+    {
+      "name": "invert-selection",
+      "label": "Invert Selection",
+      "keys": "Ctrl+Shift+I"
+    },
+    {
+      "name": "select-matching",
+      "label": "Select Matching…",
+      "keys": "Ctrl+Shift+M"
+    },
+    {
+      "name": "select-same-kind",
+      "label": "Select Same Kind"
+    },
+    {
+      "name": "terminal",
+      "label": "Open Terminal Here",
+      "keys": "Ctrl+Alt+T"
+    },
+    {
+      "name": "view-list",
+      "label": "View as List",
+      "keys": "Ctrl+1"
+    },
+    {
+      "name": "view-icons",
+      "label": "View as Icons",
+      "keys": "Ctrl+2"
+    },
+    {
+      "name": "toggle-hidden",
+      "label": "Show Hidden Files",
+      "keys": "Ctrl+H"
+    },
+    {
+      "name": "toggle-preview",
+      "label": "Show Preview",
+      "keys": "Ctrl+Shift+P"
+    },
+    {
+      "name": "toggle-header",
+      "label": "Show Header"
+    },
+    {
+      "name": "toggle-footer",
+      "label": "Show Status Bar"
+    },
+    {
+      "name": "debug",
+      "label": "Debug Logs",
+      "keys": "Ctrl+Shift+L"
+    },
+    {
+      "name": "toggle-window-buttons",
+      "label": "Show Window Buttons"
+    },
+    {
+      "name": "window-actions",
+      "label": "Window Actions…",
+      "keys": "Ctrl+Shift+W"
+    },
+    {
+      "name": "copy-path",
+      "label": "Copy Full Path",
+      "keys": "Ctrl+Shift+C"
+    },
+    {
+      "name": "copy-name",
+      "label": "Copy Name",
+      "keys": "Ctrl+Alt+C"
+    },
+    {
+      "name": "copy-stem",
+      "label": "Copy Name Without Extension"
+    },
+    {
+      "name": "copy-parent",
+      "label": "Copy Parent Folder"
+    },
+    {
+      "name": "reload",
+      "label": "Reload",
+      "keys": "F5"
+    },
+    {
+      "name": "back",
+      "label": "Back",
+      "keys": "Alt+Left"
+    },
+    {
+      "name": "forward",
+      "label": "Forward",
+      "keys": "Alt+Right"
+    },
+    {
+      "name": "up",
+      "label": "Enclosing Folder",
+      "keys": "Alt+Up"
+    },
+    {
+      "name": "path",
+      "label": "Go to Folder…",
+      "keys": "Ctrl+L"
+    },
+    {
+      "name": "connect-server",
+      "label": "Connect to Server…",
+      "keys": "Ctrl+K"
+    },
+    {
+      "name": "search",
+      "label": "Search",
+      "keys": "Ctrl+F"
+    }
   ]
 }
