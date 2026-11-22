@@ -1,6 +1,6 @@
 pragma Singleton
 // Tokens of the fili-shell (dotfiles/config/quickshell/FiliTheme.qml), without Quickshell: same names; default values
-// identical (theme.toml, checked by cargo test, tests::shell_parity_default_theme), customizable. Light mode followed live by Fili (fili-theme state).
+// identical (theme.toml, checked by tests/fili-shell/check-app-shell-parity.py of the Filigrane repository), customizable. Light mode followed live by Fili (fili-theme state).
 import QtQuick
 import Fili.Files
 
