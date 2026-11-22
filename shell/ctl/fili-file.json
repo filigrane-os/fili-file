@@ -1,0 +1,93 @@
+{
+  "v": 1,
+  "app_id": "fili-file",
+  "name": "Casier",
+  "program": "fili-file",
+  "ctl": "fili-file ctl --pid %pid",
+  "commands": [
+    {
+      "verb": "goto",
+      "args": "PATH|network:|nearby:",
+      "summary": "Open a folder or a place of the sidebar (starts a window if none is open)",
+      "reads": false
+    },
+    {
+      "verb": "reveal",
+      "args": "PATH",
+      "summary": "Open the parent folder with the item selected (starts a window if none is open)",
+      "reads": false
+    },
+    {
+      "verb": "show",
+      "args": "TITLE < paths",
+      "summary": "Show the paths read on the standard input as a list with the given title (starts a window if none is open)",
+      "reads": false
+    },
+    {
+      "verb": "action",
+      "args": "NAME [ARG]",
+      "summary": "Run a menu command of the window; the argument skips its dialog (rename, select-matching, compress...)",
+      "reads": false
+    },
+    {
+      "verb": "state",
+      "args": "",
+      "summary": "JSON of the state: tabs, folder, selection and running tasks",
+      "reads": true
+    },
+    {
+      "verb": "actions",
+      "args": "",
+      "summary": "JSON of the commands: label, shortcut and whether each is enabled",
+      "reads": true
+    },
+    {
+      "verb": "select",
+      "args": "[--add | --none | --pattern GLOB] < paths",
+      "summary": "Select the paths read on the standard input, add to the selection, clear it, or select by pattern",
+      "reads": false
+    },
+    {
+      "verb": "tab",
+      "args": "new [PATH] | close [N] | switch N | move FROM TO | detach [N]",
+      "summary": "Open, close, switch, move or detach a tab",
+      "reads": false
+    },
+    {
+      "verb": "view",
+      "args": "list|icons",
+      "summary": "Switch between the list and the icon view",
+      "reads": false
+    },
+    {
+      "verb": "hidden",
+      "args": "on|off",
+      "summary": "Show or hide hidden files",
+      "reads": false
+    },
+    {
+      "verb": "preview",
+      "args": "on|off",
+      "summary": "Show or hide the preview panel",
+      "reads": false
+    },
+    {
+      "verb": "sort",
+      "args": "COLUMN [asc|desc]",
+      "summary": "Sort by a column",
+      "reads": false
+    },
+    {
+      "verb": "dialog",
+      "args": "accept|cancel|replace|skip|both",
+      "summary": "Answer the dialog that is open (conflict of a copy, confirmation...)",
+      "reads": false
+    },
+    {
+      "verb": "width",
+      "args": "column NAME PX|reset | preview PX|reset",
+      "summary": "Width of a column or of the preview panel",
+      "reads": false
+    }
+  ]
+}

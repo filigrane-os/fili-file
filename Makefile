@@ -35,6 +35,7 @@ test:
 check: build test
 	python3 -I scripts/check-i18n.py
 	python3 -I scripts/check-shell-menu.py
+	python3 -I scripts/check-ctl-catalog.py
 	tests/run.sh
 	tests/archive.sh
 
@@ -70,4 +71,4 @@ uninstall:
 	rm -f $(DESTDIR)$(DATADIR)/dbus-1/services/org.freedesktop.impl.portal.desktop.filigrane.service
 	rm -f $(DESTDIR)$(DATADIR)/xdg-desktop-portal/portals/filigrane.portal
 	rm -rf $(DESTDIR)$(DATADIR)/licenses/fili-file
-	rm -f $(DESTDIR)$(DATADIR)/filigrane/shell/appmenu/fili-file.json $(DESTDIR)$(DATADIR)/filigrane/shell/rob/fili-file.md
+	rm -f $(DESTDIR)$(DATADIR)/filigrane/shell/ctl/fili-file.json $(DESTDIR)$(DATADIR)/filigrane/shell/appmenu/fili-file.json $(DESTDIR)$(DATADIR)/filigrane/shell/rob/fili-file.md
