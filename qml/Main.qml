@@ -1206,143 +1206,27 @@ ApplicationWindow {
         color: FiliTheme.border
     }
 
-    // Tabs (from two): folder name, × on hover; middle click closes. Look shared by every fili-* application
-    // (app-window.md of the filigrane-ui skill, after Facteur's tabs): band tabBarHeight, tabs tabHeight, current one
-    // on surfaceActive, line below
-    Rectangle {
+    // Tabs (from two): the fili-ui tab row, the same in every application: move (drag, Ctrl+Shift+Left / Right), close (× on hover,
+    // middle click, Delete), detach (drag far from the bar). Files dropped on a tab go into its folder
+    function tabPath(i) { return i === win.tabIndex ? folder.shown : win.tabs[i].path; }
+    function tabLabel(i) {
+        const p = tabPath(i);
+        return p === "/" ? "/" : p === Fili.home() ? Fili.home().split("/").pop() : p.split("/").pop();
+    }
+    FiliTabBar {
         id: tabBar
         anchors { top: toolbarLine.bottom; left: sideLine.right; right: previewLine.left }
         height: visible ? FiliTheme.tabBarHeight : 0
         visible: win.tabs.length > 1 && !win.picking
-        color: FiliTheme.background
-        Rectangle {
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-            height: FiliTheme.borderWidth
-            color: FiliTheme.border
-        }
-        Row {
-            anchors { left: parent.left; right: parent.right; leftMargin: FiliTheme.margin; verticalCenter: parent.verticalCenter }
-            height: FiliTheme.tabHeight
-            spacing: FiliTheme.space3
-            Repeater {
-                model: win.tabs
-                Rectangle {
-                    required property var modelData
-                    required property int index
-                    readonly property bool current: index === win.tabIndex
-                    readonly property string path: current ? folder.shown : modelData.path
-                    width: Math.max(80, Math.min(180, (tabBar.width - 2 * FiliTheme.margin) / win.tabs.length - FiliTheme.space3))
-                    height: parent.height
-                    radius: FiliTheme.radiusControl
-                    color: current ? FiliTheme.surfaceActive : tabArea.containsMouse || tabDrop.containsDrag ? FiliTheme.surfaceHover : "transparent"
-                    border.width: tabDrop.containsDrag ? 1 : 0
-                    border.color: FiliTheme.accentColor
-                    // Drag the tab to move it: it follows the cursor, the place is decided on release
-                    property real dragDx: 0
-                    property bool moving: false
-                    property bool leaving: false
-                    z: moving ? 10 : 0
-                    opacity: leaving ? 0.45 : moving ? 0.85 : 1
-                    transform: Translate { x: dragDx }
-                    // Files dropped on a tab: they go into its folder. Hovering it for a moment shows it (the target is then
-                    // chosen in the list). Not on the tab shown: that would be its own folder.
-                    DropArea {
-                        id: tabDrop
-                        anchors.fill: parent
-                        enabled: !current
-                        keys: ["text/uri-list"]
-                        onEntered: spring.restart()
-                        onExited: spring.stop()
-                        onDropped: d => {
-                            spring.stop();
-                            folder.dropItems(d.urls.map(u => u.toString()).join("\n"), path, DropMode.isCopy(d));
-                            d.acceptProposedAction();
-                        }
-                        Timer {
-                            id: spring
-                            interval: 700
-                            onTriggered: win.switchTab(index)
-                        }
-                    }
-                    Text {
-                        anchors { left: parent.left; leftMargin: FiliTheme.space4; right: closeX.left; rightMargin: FiliTheme.space1; verticalCenter: parent.verticalCenter }
-                        text: path === "/" ? "/" : path === Fili.home() ? Fili.home().split("/").pop() : path.split("/").pop()
-                        elide: Text.ElideRight
-                        font.family: FiliTheme.font
-                        font.pixelSize: FiliTheme.sizeList
-                        font.weight: current ? FiliTheme.weightAccent : Font.Normal
-                        color: current ? FiliTheme.text : FiliTheme.textSecondary
-                    }
-                    MouseArea {
-                        id: tabArea
-                        property real pressX: 0
-                        property bool wasDrag: false
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                        onPressed: e => {
-                            pressX = mapToItem(tabBar, e.x, 0).x;
-                            wasDrag = false;
-                        }
-                        onPositionChanged: e => {
-                            if (!pressed || win.tabs.length < 2)
-                                return;
-                            const dx = mapToItem(tabBar, e.x, 0).x - pressX;
-                            if (!moving && Math.abs(dx) < 8)
-                                return;
-                            moving = true;
-                            wasDrag = true;
-                            // Stays in the bar: from the first to the last tab
-                            const slot = parent.width + FiliTheme.space3;
-                            dragDx = Math.max(-index * slot, Math.min((win.tabs.length - 1 - index) * slot, dx));
-                            // Far from the bar: it will become a window (half transparent to say so)
-                            leaving = outside(e);
-                        }
-                        // Released far from the tab bar (above, below the bar or outside the window): the tab becomes a window
-                        function outside(e) {
-                            const p = mapToItem(null, e.x, e.y);
-                            return p.y < -24 || p.y > tabBar.y + tabBar.height + 48 || p.x < -24 || p.x > win.width + 24;
-                        }
-                        onReleased: e => {
-                            if (moving) {
-                                const out = outside(e);
-                                const to = Math.max(0, Math.min(win.tabs.length - 1, index + Math.round(dragDx / (parent.width + FiliTheme.space3))));
-                                moving = false;
-                                leaving = false;
-                                dragDx = 0;
-                                if (out)
-                                    win.detachTab(index);
-                                else
-                                    win.moveTab(index, to);
-                            }
-                        }
-                        onCanceled: {
-                            moving = false;
-                            leaving = false;
-                            dragDx = 0;
-                        }
-                        onClicked: e => {
-                            if (wasDrag)
-                                return;
-                            e.button === Qt.MiddleButton ? win.closeTab(index) : win.switchTab(index);
-                        }
-                    }
-                    Text {
-                        id: closeX
-                        visible: tabArea.containsMouse || xHit.containsMouse || current
-                        anchors { right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
-                        text: "×"
-                        font.pixelSize: 16
-                        color: xHit.containsMouse ? FiliTheme.danger : FiliTheme.muted
-                        MouseArea {
-                            id: xHit
-                            anchors { fill: parent; margins: -5 }
-                            hoverEnabled: true
-                            onClicked: win.closeTab(index)
-                        }
-                    }
-                }
-            }
+        model: win.tabs.map((t, i) => ({ label: win.tabLabel(i) }))
+        currentIndex: win.tabIndex
+        onTabClicked: i => win.switchTab(i)
+        onCloseRequested: i => win.closeTab(i)
+        onDetachRequested: i => win.detachTab(i)
+        onReordered: (from, to) => win.moveTab(from, to)
+        onTabDropped: (i, d) => {
+            folder.dropItems(d.urls.map(u => u.toString()).join("\n"), win.tabPath(i), DropMode.isCopy(d));
+            d.acceptProposedAction();
         }
     }
     // Results shown in place of the folder (search from the assistant)
