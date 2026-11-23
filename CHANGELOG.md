@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.17.0
+
+- The favorites of the sidebar can be reordered inside their section: drag one with the mouse (it follows the pointer, the row it would take is highlighted and a line shows where it lands), or use Alt+Shift+Up / Alt+Shift+Down on the row the keyboard is on (also in the Go menu and as `ctl` actions `move-favorite-up` / `move-favorite-down`). The order is kept as usage state; the GTK bookmarks file, shared with other programs, is not touched. Recents and Locations keep their automatic order.
+- The sidebar glyphs show again under software rendering (the Filigrane session): they are tinted in the file instead of by a shader effect, which draws nothing there.
+- The shared controls and theme tokens (focus ring, buttons, scroll bar, kinetic scrolling, window glyph) now come from the `fili-ui` crate (v0.1.0) instead of local copies, so every Filigrane application gets the same fix at once.
+- Usage state moves into its own folder, `~/.local/state/filigrane/fili-file/` (`ui`, `view`, `columns`, `visits`, `servers`, `favorites`), instead of `fili-file-<name>` files next to those of the other applications. Existing files are moved the first time they are read.
+
 ## 1.16.0
 
 - The assistant is now named Lia: the header button and the menu entry say "Ask Lia", and the hidden brief is `shell/lia/<app_id>.md` (the older `rob/` is still read).
