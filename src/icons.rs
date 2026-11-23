@@ -124,10 +124,10 @@ fn recolored(path: &str, color: &str) -> String {
     format!("file://{out}")
 }
 
-// Sidebar glyph, in white so that the QML tints it to the accent by colorization (which keeps the luminance: a black
-// glyph would stay black). In order: the theme's filled glyphs (X-Fili-GlyphDir), its "<name>-symbolic" icons
-// ("folder" when the name has none), else the plain icon as it is.
-pub fn symbolic(name: &str) -> String {
+// Sidebar glyph recolored to `color` ("#rrggbb"): software rendering (QT_QUICK_BACKEND=software, the Filigrane session) draws no
+// shader effect, so the tint is in the file itself, not a MultiEffect. In order: the theme's filled glyphs (X-Fili-GlyphDir),
+// its "<name>-symbolic" icons ("folder" when the name has none), else the plain icon as it is.
+pub fn symbolic(name: &str, color: &str) -> String {
     let base = if name == "user-trash-full" { "user-trash" } else { name };
     let themes = icon_theme::system();
     let theme = icon_theme::current();
@@ -137,7 +137,7 @@ pub fn symbolic(name: &str) -> String {
         .or_else(|| lookup(&format!("{base}-symbolic"), GLYPH_SIZE))
         .filter(|p| p.ends_with(".svg"));
     if let Some(p) = symbolic {
-        return recolored(&p, "#ffffff");
+        return recolored(&p, color);
     }
     lookup(name, GLYPH_SIZE).or_else(|| lookup(base, GLYPH_SIZE)).or_else(|| lookup("folder", GLYPH_SIZE)).map(|p| format!("file://{p}")).unwrap_or_default()
 }

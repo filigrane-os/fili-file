@@ -8,6 +8,11 @@ RUNNER="$(command -v qmltestrunner || ls /usr/lib/qt6/bin/qmltestrunner /usr/lib
 [ -n "$RUNNER" ] || { echo "not ok - qmltestrunner not found (package qt6-quick-test)" >&2; exit 1; }
 KIT="$(cd "$ROOT" && cargo metadata --format-version 1 --locked 2>/dev/null | python3 -I -c 'import json,sys; print(next(p["manifest_path"] for p in json.load(sys.stdin)["packages"] if p["name"] == "fili-ui"))')"
 [ -n "$KIT" ] || { echo "not ok - fili-ui not found by cargo metadata" >&2; exit 1; }
+# The Filigrane session renders Qt Quick in software (QT_QUICK_BACKEND=software): a shader effect (MultiEffect, ShaderEffect...)
+# draws nothing there. Glyphs are tinted in the file instead (src/icons.rs).
+if grep -nE "MultiEffect|ShaderEffect|ColorOverlay|DropShadow|layer\.effect" "$ROOT"/qml/*.qml; then
+  echo "not ok - a QML file uses a shader effect: invisible with software rendering" >&2; exit 1
+fi
 W="$(mktemp -d)"
 trap 'find "$W" -mindepth 1 -delete 2>/dev/null; rmdir "$W" 2>/dev/null' EXIT
 cp -r "$ROOT/tests/sidebar-drag/Fili" "$ROOT/tests/sidebar-drag/tst_dnd.qml" "$W/"

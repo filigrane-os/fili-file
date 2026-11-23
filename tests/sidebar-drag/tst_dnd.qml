@@ -48,6 +48,9 @@ Item {
             mouseMove(side, c.x, c.y);
             verify(side.dragFrom === 0, "drag started on row 0, dragFrom=" + side.dragFrom);
             compare(side.dragTo, 2);
+            // What is picked up follows the pointer
+            compare(side.dragName, "a");
+            verify(Math.abs(side.dragY - c.y) < 2, "the dragged row is drawn at the pointer, dragY=" + side.dragY + " pointer=" + c.y);
             mouseRelease(side, c.x, c.y);
             compare(Fili.favs.join(","), "/b,/c,/a,/d");
             compare(side.dragFrom, -1);

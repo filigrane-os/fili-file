@@ -583,7 +583,7 @@ pub mod qobject {
         fn about_logo(self: &Fili, light: bool) -> QString;
         // Places of the sidebar, as JSON: [{section, name, path, icon}]
         #[qinvokable]
-        fn places(self: &Fili) -> QString;
+        fn places(self: &Fili, color: &QString, bright: &QString) -> QString;
         // First command-line argument (folder, file or file:// URL), else the home folder
         #[qinvokable]
         #[cxx_name = "startPath"]
@@ -3553,7 +3553,10 @@ impl Fili {
         QString::from(i18n::tr(&text.to_string()))
     }
 
-    pub fn places(&self) -> QString {
+    // `color` and `bright`: the accent colors ('#rrggbb') the glyphs are drawn in, normal and selected row
+    pub fn places(&self, color: &QString, bright: &QString) -> QString {
+        let hex = |c: &QString| Some(c.to_string()).filter(|c| c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|d| d.is_ascii_hexdigit())).unwrap_or_else(|| "#ffffff".into());
+        let (color, bright) = (hex(color), hex(bright));
         let home = home();
         let (places, devices) = (i18n::tr("Favorites"), i18n::tr("Locations"));
         let name = |p: &str| volumes::display_name(p);
@@ -3631,7 +3634,7 @@ impl Fili {
             .iter()
             .map(|(s, n, p, i, dev)| {
                 format!(
-                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"removable\":{},\"indent\":{},\"mono\":{},\"full\":{}}}",
+                    "{{\"section\":{},\"name\":{},\"path\":{},\"dev\":{},\"removable\":{},\"indent\":{},\"mono\":{},\"monoBright\":{},\"full\":{}}}",
                     json(s),
                     json(n),
                     json(p),
@@ -3639,7 +3642,8 @@ impl Fili {
                     removable.contains(p),
                     // Only the share rows under a server (they have a volume): the same folder in Recents stays flat
                     !dev.is_empty() && indented.contains(p),
-                    json(&icons::symbolic(i)),
+                    json(&icons::symbolic(i, &color)),
+                    json(&icons::symbolic(i, &bright)),
                     *i == "user-trash-full"
                 )
             })

@@ -8,9 +8,9 @@ QtObject {
     property var calls: []
     signal placesChanged()
     function tr(s) { return s; }
-    function places() {
-        const out = f.favs.map(p => ({ section: "Favorites", name: p.slice(1), path: p, dev: "", removable: false, indent: false, mono: "", full: false }));
-        out.push({ section: "Locations", name: "Computer", path: "/", dev: "", removable: false, indent: false, mono: "", full: false });
+    function places(color, bright) {
+        const out = f.favs.map(p => ({ section: "Favorites", name: p.slice(1), path: p, dev: "", removable: false, indent: false, mono: "", monoBright: "", full: false }));
+        out.push({ section: "Locations", name: "Computer", path: "/", dev: "", removable: false, indent: false, mono: "", monoBright: "", full: false });
         return JSON.stringify(out);
     }
     function moveFavoriteTo(path, index) {

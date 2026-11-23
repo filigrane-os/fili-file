@@ -2,7 +2,6 @@
 // in sections with headings (11 px DemiBold muted, no capitals), monochrome glyphs tinted accentColor. The place
 // shown is selected (surfaceHover background, accentColor text). To be validated: rows of 28, headings 11 DemiBold.
 import QtQuick
-import QtQuick.Effects
 import Fili.Files
 import Fili.UI
 
@@ -35,6 +34,10 @@ Rectangle {
     // Drag of a favorite with the mouse: the row picked up and the row it would take the place of (-1: no drag)
     property int dragFrom: -1
     property int dragTo: -1
+    // What follows the pointer while a favorite is dragged: its name, its glyph and the pointer's y in the sidebar
+    property string dragName: ""
+    property string dragGlyph: ""
+    property real dragY: 0
     function firstFavorite() {
         for (let i = 0; i < places.count; ++i)
             if (places.get(i).section === favoritesSection)
@@ -75,7 +78,7 @@ Rectangle {
     }
     function reload() {
         places.clear();
-        JSON.parse(Fili.places()).forEach(p => places.append(p));
+        JSON.parse(Fili.places(FiliTheme.accentColor.toString(), FiliTheme.accentBright.toString())).forEach(p => places.append(p));
     }
     Component.onCompleted: reload()
     Connections {
@@ -83,6 +86,12 @@ Rectangle {
         function onPlacesChanged() {
             side.reload();
         }
+    }
+    // The glyphs are drawn in the accent colors: a new accent needs new files
+    Connections {
+        target: FiliTheme
+        function onAccentColorChanged() { side.reload(); }
+        function onAccentBrightChanged() { side.reload(); }
     }
 
     ListView {
@@ -157,7 +166,7 @@ Rectangle {
         delegate: Item {
             id: row
             // The favorite being dragged
-            opacity: side.dragFrom === index ? 0.5 : 1
+            opacity: side.dragFrom === index ? 0.35 : 1
             required property string name
             required property string path
             required property string dev
@@ -165,6 +174,7 @@ Rectangle {
             required property bool indent
             required property string section
             required property string mono
+            required property string monoBright
             required property bool full
             required property int index
             readonly property bool sel: path !== "" && path === side.current
@@ -175,7 +185,7 @@ Rectangle {
             Rectangle {
                 anchors { fill: parent; topMargin: 1; bottomMargin: 1 }
                 radius: FiliTheme.radiusControl
-                color: row.sel || area.containsMouse || drop.containsDrag ? FiliTheme.surfaceHover : "transparent"
+                color: row.sel || area.containsMouse || drop.containsDrag || (side.dragFrom >= 0 && side.dragTo === row.index && side.dragTo !== side.dragFrom) ? FiliTheme.surfaceHover : "transparent"
                 border.width: drop.containsDrag || (list.activeFocus && Fili.keyNav && row.ListView.isCurrentItem) ? 1 : 0
                 border.color: FiliTheme.accentColor
             }
@@ -188,12 +198,7 @@ Rectangle {
                 width: 16
                 height: 16
                 sourceSize: Qt.size(32, 32)
-                source: row.mono
-                layer.enabled: true
-                layer.effect: MultiEffect {
-                    colorization: 1.0
-                    colorizationColor: row.sel ? FiliTheme.accentBright : FiliTheme.accentColor
-                }
+                source: row.sel ? row.monoBright : row.mono
             }
             // Full trash: badge on the glyph (the full glyph is hardly distinguishable at 16 px)
             Rectangle {
@@ -273,8 +278,11 @@ Rectangle {
                     if (!reordering && Math.abs(p.y - pressY) > 6) {
                         reordering = true;
                         side.dragFrom = row.index;
+                        side.dragName = row.name;
+                        side.dragGlyph = row.monoBright;
                     }
                     if (reordering) {
+                        side.dragY = area.mapToItem(side, e.x, e.y).y;
                         const i = list.indexAt(p.x, p.y);
                         // Only inside the section: the position over a heading or another section stays at its end
                         side.dragTo = i < 0 ? (p.y < pressY ? side.firstFavorite() : side.lastFavorite()) : Math.max(side.firstFavorite(), Math.min(side.lastFavorite(), i));
@@ -359,5 +367,35 @@ Rectangle {
     FiliScrollBar {
         flick: list
         anchors { top: list.top; bottom: list.bottom; right: list.right }
+    }
+    // The favorite being dragged, under the pointer, over the list
+    Rectangle {
+        visible: side.dragFrom >= 0
+        z: 100
+        x: list.inset
+        width: side.width - 2 * list.inset
+        height: FiliTheme.sideRowHeight
+        y: Math.max(0, Math.min(side.height - height, side.dragY - height / 2))
+        radius: FiliTheme.radiusControl
+        color: FiliTheme.surfaceActive
+        border.width: FiliTheme.borderWidth
+        border.color: FiliTheme.accentColor
+        opacity: 0.95
+        Image {
+            x: FiliTheme.margin - list.inset
+            anchors.verticalCenter: parent.verticalCenter
+            width: 16
+            height: 16
+            sourceSize: Qt.size(32, 32)
+            source: side.dragGlyph
+        }
+        Text {
+            anchors { left: parent.left; leftMargin: FiliTheme.margin - list.inset + 16 + FiliTheme.space2 + 2; right: parent.right; rightMargin: FiliTheme.space2; verticalCenter: parent.verticalCenter }
+            text: side.dragName
+            elide: Text.ElideRight
+            font.family: FiliTheme.font
+            font.pixelSize: FiliTheme.size
+            color: FiliTheme.accentColor
+        }
     }
 }
