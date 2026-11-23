@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.18.0
+
+- The tabs are the same in every Filigrane application now, and a tab can always be moved, closed and detached: drag it sideways (the others make room; Ctrl+Shift+Left / Right on the keyboard), close it with the × that shows on hover and on the current tab, a middle click or Delete, detach it by dragging it far from the bar (it turns half transparent, then becomes a window). Files dropped on a tab still go into its folder. The row is the `fili-ui` one (v0.3.0) instead of a copy.
+- The context menu, the view switch (list / icons), the window actions panel, the log panel and the "Ask Lia" button also come from `fili-ui` (v0.3.0): same look and behaviour as in the other applications. The context menu is now as wide as its longest entry instead of a fixed 220 pixels.
+- `make check` reads the texts of the shared components when it checks the translation catalog.
+
 ## 1.17.0
 
 - The favorites of the sidebar can be reordered inside their section: drag one with the mouse (it follows the pointer, the row it would take is highlighted and a line shows where it lands), or use Alt+Shift+Up / Alt+Shift+Down on the row the keyboard is on (also in the Go menu and as `ctl` actions `move-favorite-up` / `move-favorite-down`). The order is kept as usage state; the GTK bookmarks file, shared with other programs, is not touched. Recents and Locations keep their automatic order.
