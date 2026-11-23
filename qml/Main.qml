@@ -322,6 +322,10 @@ ApplicationWindow {
     Action { id: aBack; text: Fili.tr("Back"); shortcut: "Alt+Left"; enabled: folder.canBack; onTriggered: win.show(folder.back()) }
     Action { id: aForward; text: Fili.tr("Forward"); shortcut: "Alt+Right"; enabled: folder.canForward; onTriggered: win.show(folder.forward()) }
     Action { id: aUp; text: Fili.tr("Enclosing Folder"); shortcut: "Alt+Up"; onTriggered: win.show(folder.up()) }
+    // A favorite moves inside its section of the sidebar. The shortcut only acts while the sidebar has the focus; the menu
+    // of the bar (the window is then not active) and `ctl` act on the row the keyboard cursor was left on
+    Action { id: aFavUp; text: Fili.tr("Move Favorite Up"); shortcut: "Alt+Shift+Up"; enabled: sidebar.canMoveCurrent(-1) && (sidebar.hasFocus || !win.active); onTriggered: sidebar.moveCurrent(-1) }
+    Action { id: aFavDown; text: Fili.tr("Move Favorite Down"); shortcut: "Alt+Shift+Down"; enabled: sidebar.canMoveCurrent(1) && (sidebar.hasFocus || !win.active); onTriggered: sidebar.moveCurrent(1) }
     Action { id: aShare; text: Fili.tr("Share…"); enabled: win.hasShare && win.canAct && !folder.inTrash && !win.picking && win.shareable().length > 0; onTriggered: shareBox.open() }
     Action { id: aNearby; text: Fili.tr("Nearby"); shortcut: "Ctrl+Shift+R"; enabled: win.hasShare && !win.picking; onTriggered: win.open("nearby:") }
     Action { id: aPath; text: Fili.tr("Go to Folder…"); shortcut: "Ctrl+L"; onTriggered: pathBar.edit() }
@@ -338,7 +342,7 @@ ApplicationWindow {
         "new-folder": aNewFolder, "open": aOpen, "info": aInfo, "quick-look": aQuickLook, "share": aShare, "nearby": aNearby, "trash": aTrash, "put-back": aPutBack, "empty-trash": aEmpty, "close": aClose, "new-tab": aNewTab, "detach-tab": aDetachTab, "next-tab": aNextTab, "prev-tab": aPrevTab, "about": aAbout,
         "undo": aUndo, "cut": aCut, "copy": aCopy, "paste": aPaste, "duplicate": aDuplicate, "compress": aCompress, "extract": aExtract, "rename": aRename, "bulk-rename": aBulk,
         "select-all": aSelectAll, "invert-selection": aInvert, "select-matching": aMatch, "select-same-kind": aSameKind, "terminal": aTerminal, "view-list": aList, "view-icons": aGrid, "toggle-hidden": aHidden, "toggle-preview": aPreview, "toggle-header": aHeader, "toggle-footer": aFooter, "debug": aDebug, "toggle-window-buttons": aWindowButtons, "window-actions": aWindowPanel, "copy-path": aCopyPath, "copy-name": aCopyName, "copy-stem": aCopyStem, "copy-parent": aCopyParent,
-        "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "path": aPath, "connect-server": aConnect, "search": aSearch
+        "reload": aRefresh, "back": aBack, "forward": aForward, "up": aUp, "move-favorite-up": aFavUp, "move-favorite-down": aFavDown, "path": aPath, "connect-server": aConnect, "search": aSearch
     })
     // Files of the selection that can be sent (folders are not sent as they are)
     function shareable() {

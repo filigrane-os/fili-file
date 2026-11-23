@@ -76,6 +76,8 @@
         { "label": "Back", "keys": "Alt+Left", "exec": "fili-file ctl --pid %pid action back" },
         { "label": "Forward", "keys": "Alt+Right", "exec": "fili-file ctl --pid %pid action forward" },
         { "label": "Enclosing Folder", "keys": "Alt+Up", "exec": "fili-file ctl --pid %pid action up" },
+        { "label": "Move Favorite Up", "keys": "Alt+Shift+Up", "exec": "fili-file ctl --pid %pid action move-favorite-up" },
+        { "label": "Move Favorite Down", "keys": "Alt+Shift+Down", "exec": "fili-file ctl --pid %pid action move-favorite-down" },
         { "label": "Go to Folder…", "keys": "Ctrl+L", "exec": "fili-file ctl --pid %pid action path" },
         { "label": "Connect to Server…", "keys": "Ctrl+K", "exec": "fili-file ctl --pid %pid action connect-server" },
         { "label": "Search", "keys": "Ctrl+F", "exec": "fili-file ctl --pid %pid action search" },

@@ -31,6 +31,32 @@ Rectangle {
     }
 
     ListModel { id: places }
+
+    // Favorites can be reordered inside their section (Alt+Shift+Up / Down, menu Go): the row the keyboard cursor is on
+    // moves one step. The Recents (sorted by use) and the Locations (devices, servers) are not the user's to arrange.
+    readonly property bool hasFocus: list.activeFocus
+    function canMoveCurrent(delta) {
+        const i = list.currentIndex, n = i + delta;
+        if (i < 0 || n < 0 || n >= places.count)
+            return false;
+        const section = places.get(i).section;
+        return section === Fili.tr("Favorites") && places.get(n).section === section;
+    }
+    function moveCurrent(delta) {
+        if (!canMoveCurrent(delta))
+            return false;
+        const path = places.get(list.currentIndex).path, section = places.get(list.currentIndex).section;
+        // moveFavorite signals placesChanged: the model is read again before it returns
+        if (!Fili.moveFavorite(path, delta))
+            return false;
+        for (let i = 0; i < places.count; ++i) {
+            if (places.get(i).path === path && places.get(i).section === section) {
+                list.currentIndex = i;
+                break;
+            }
+        }
+        return true;
+    }
     function reload() {
         places.clear();
         JSON.parse(Fili.places()).forEach(p => places.append(p));

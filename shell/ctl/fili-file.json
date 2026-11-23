@@ -311,6 +311,16 @@
       "keys": "Alt+Up"
     },
     {
+      "name": "move-favorite-up",
+      "label": "Move Favorite Up",
+      "keys": "Alt+Shift+Up"
+    },
+    {
+      "name": "move-favorite-down",
+      "label": "Move Favorite Down",
+      "keys": "Alt+Shift+Down"
+    },
+    {
       "name": "path",
       "label": "Go to Folder…",
       "keys": "Ctrl+L",

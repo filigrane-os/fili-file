@@ -456,6 +456,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "removeFavorite"]
         fn remove_favorite(self: Pin<&mut Fili>, path: &QString);
+        // Moves a favorite one step up (-1) or down (1) inside the Favorites section; true when it moved
+        #[qinvokable]
+        #[cxx_name = "moveFavorite"]
+        fn move_favorite(self: Pin<&mut Fili>, path: &QString, delta: i32) -> bool;
         // The trash contains something (full or empty icon of the sidebar)
         #[qinvokable]
         #[cxx_name = "trashFull"]
@@ -712,6 +716,50 @@ fn write_bookmarks(list: &[(String, String)]) -> std::io::Result<()> {
         text.push_str(&format!("file://{}{}{}\n", ops::encode(p), if label.is_empty() { "" } else { " " }, label));
     }
     std::fs::write(file, text)
+}
+
+// Order the user gave to the Favorites section: paths, one per line. Usage state, not configuration; the GTK bookmarks
+// file is shared with other programs and keeps its own order
+fn favorites_order_file() -> PathBuf {
+    let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
+    PathBuf::from(state).join("filigrane/fili-file-favorites")
+}
+
+// Paths sorted by the saved order; the ones it does not know (new favorites) keep their order, after the known ones
+fn order_by_saved<T>(items: &mut [T], path_of: impl Fn(&T) -> &str, saved: &[String]) {
+    items.sort_by_key(|i| saved.iter().position(|s| s == path_of(i)).unwrap_or(usize::MAX));
+}
+
+// Moves `path` one step (delta -1 up, 1 down) inside `paths`; false when it is absent or already at that end
+fn shift_path(paths: &mut [String], path: &str, delta: i32) -> bool {
+    let Some(i) = paths.iter().position(|p| p == path) else { return false };
+    let j = i as i64 + i64::from(delta.signum());
+    if j < 0 || j >= paths.len() as i64 {
+        return false;
+    }
+    paths.swap(i, j as usize);
+    true
+}
+
+// (label, path, icon name, added by the user) of the Favorites section, in the user's order: the defaults of the Finder
+// (Applications, Desktop, Documents, Downloads, home, Pictures, Music, Videos), then the GTK bookmarks
+fn favorite_items() -> Vec<(String, String, &'static str, bool)> {
+    let mut out: Vec<(String, String, &'static str, bool)> = Vec::new();
+    for (p, icon) in default_favorites() {
+        out.push((volumes::display_name(&p), p, icon, false));
+    }
+    for (p, label) in bookmarks() {
+        // A folder of a network share stays a favorite while the share is not mounted: a click reconnects it
+        if out.iter().any(|(_, o, _, _)| *o == p) || (!Path::new(&p).is_dir() && volumes::unmounted_share_uri(&p).is_none()) {
+            continue;
+        }
+        let label = if label.is_empty() { volumes::display_name(&p) } else { label };
+        let icon = if label.to_lowercase().contains("icloud") { "folder-cloud" } else { "folder" };
+        out.push((label, p, icon, true));
+    }
+    let saved: Vec<String> = std::fs::read_to_string(favorites_order_file()).unwrap_or_default().lines().map(String::from).collect();
+    order_by_saved(&mut out, |i| &i.1, &saved);
+    out
 }
 
 use ops::decode as percent_decode;
@@ -3366,6 +3414,19 @@ impl Fili {
         }
     }
 
+    pub fn move_favorite(mut self: Pin<&mut Self>, path: &QString, delta: i32) -> bool {
+        let mut paths: Vec<String> = favorite_items().into_iter().map(|(_, p, _, _)| p).collect();
+        if !shift_path(&mut paths, &path.to_string(), delta) {
+            return false;
+        }
+        let file = favorites_order_file();
+        let written = file.parent().is_none_or(|d| std::fs::create_dir_all(d).is_ok()) && std::fs::write(&file, paths.join("\n") + "\n").is_ok();
+        if written {
+            self.as_mut().places_changed();
+        }
+        written
+    }
+
     pub fn open_window(&self, path: &QString) {
         let Ok(exe) = env::current_exe() else { return };
         spawn_detached(Command::new(exe).arg(path.to_string()).current_dir("/"));
@@ -3478,22 +3539,13 @@ impl Fili {
         // (section, name, path, icon name, volume)
         let mut items: Vec<(&str, String, String, &str, String)> = Vec::new();
         let mut seen: Vec<String> = Vec::new();
-        for (p, icon) in default_favorites() {
-            let label = if p == home { name(&home) } else { name(&p) };
-            items.push((places, label, p.clone(), icon, String::new()));
-            seen.push(p);
-        }
-        // Favorites added by the user (removable)
+        // Favorites added by the user are removable
         let mut removable: Vec<String> = Vec::new();
-        for (p, label) in bookmarks() {
-            // A folder of a network share stays a favorite while the share is not mounted: a click reconnects it
-            if seen.contains(&p) || (!Path::new(&p).is_dir() && volumes::unmounted_share_uri(&p).is_none()) {
-                continue;
-            }
-            let label = if label.is_empty() { name(&p) } else { label };
-            let icon = if label.to_lowercase().contains("icloud") { "folder-cloud" } else { "folder" };
+        for (label, p, icon, user) in favorite_items() {
             items.push((places, label, p.clone(), icon, String::new()));
-            removable.push(p.clone());
+            if user {
+                removable.push(p.clone());
+            }
             seen.push(p);
         }
         // Folders often opened recently (outside favorites, home folder and root), 5 at most
@@ -3612,6 +3664,28 @@ impl Fili {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn favorites_follow_the_saved_order() {
+        let mut v = vec!["/a".to_string(), "/b".into(), "/c".into(), "/d".into()];
+        // /c and /a are known (c first); /b and /d are new and keep their order after them
+        order_by_saved(&mut v, |p| p, &["/c".to_string(), "/a".into()]);
+        assert_eq!(v, ["/c", "/a", "/b", "/d"]);
+    }
+
+    #[test]
+    fn a_favorite_moves_one_step_and_stops_at_the_ends() {
+        let mut v = vec!["/a".to_string(), "/b".into(), "/c".into()];
+        assert!(shift_path(&mut v, "/b", -1));
+        assert_eq!(v, ["/b", "/a", "/c"]);
+        assert!(!shift_path(&mut v, "/b", -1), "already first");
+        assert!(shift_path(&mut v, "/b", 1));
+        assert_eq!(v, ["/a", "/b", "/c"]);
+        assert!(shift_path(&mut v, "/c", -1));
+        assert_eq!(v, ["/a", "/c", "/b"]);
+        assert!(!shift_path(&mut v, "/b", 1), "already last");
+        assert!(!shift_path(&mut v, "/zz", 1), "unknown path");
+    }
 
     #[test]
     fn ui_state_file() {
