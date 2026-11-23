@@ -24,12 +24,7 @@ fn main() {
                 "qml/QuickLook.qml",
                 "qml/PdfView.qml",
                 "qml/PreviewButton.qml",
-                "qml/LiaButton.qml",
-                "qml/WindowPanel.qml",
-                "qml/ContextMenu.qml",
-                "qml/ViewSwitch.qml",
                 "qml/BandSelect.qml",
-                "qml/DebugPanel.qml",
             ])
             .qml_file(QmlFile::from("qml/DropMode.qml").singleton(true))
             .depend("QtQuick")

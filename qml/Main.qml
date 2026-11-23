@@ -1092,7 +1092,7 @@ ApplicationWindow {
             Accessible.name: Fili.tr("Window")
         }
         // Ask Lia about this application (the chat session scoped to it); only where the chat is installed
-        LiaButton {
+        FiliLiaButton {
             id: liaButton
             visible: Fili.hasTool("fili-ai-daemon")
             anchors { right: windowButton.visible ? windowButton.left : closeButton.visible ? closeButton.left : parent.right; rightMargin: windowButton.visible || closeButton.visible ? FiliTheme.space1 : (toolbar.height - height) / 2; verticalCenter: parent.verticalCenter }
@@ -1148,7 +1148,7 @@ ApplicationWindow {
             on: win.previewOn
             onClicked: win.togglePreview()
         }
-        ViewSwitch {
+        FiliViewSwitch {
             id: viewSwitch
             anchors { right: win.picking ? search.left : previewButton.left; rightMargin: FiliTheme.space3; verticalCenter: parent.verticalCenter }
             mode: files.viewMode
@@ -1437,11 +1437,11 @@ ApplicationWindow {
         onReleased: Fili.setUiState("preview", String(Math.round(win.previewWidth)))
         onDoubleClicked: win.setPreviewWidth(0)
     }
-    ContextMenu {
+    FiliMenu {
         id: menu
         onActivated: id => win.menuAction(id)
     }
-    WindowPanel {
+    FiliWindowPanel {
         id: windowPanel
         anchorRight: width - (toolbar.height - closeButton.height) / 2
         anchorTop: toolbar.height + 1
@@ -1519,7 +1519,7 @@ ApplicationWindow {
     }
 
     // Debug panel (View > Debug Logs): the log of the window above the status bar, or at the bottom when it is hidden
-    DebugPanel {
+    FiliDebugPanel {
         id: debug
         anchors { bottom: pickbar.top; left: parent.left; right: parent.right }
     }
