@@ -1,0 +1,4 @@
+module Fili.Files
+singleton Fili 1.0 Fili.qml
+singleton DropMode 1.0 DropMode.qml
+Sidebar 1.0 Sidebar.qml

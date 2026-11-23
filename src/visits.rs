@@ -1,5 +1,5 @@
 // Visited folders, ranked by "recent frequency" (like zoxide): each visit counts, old ones weigh less.
-// File ~/.local/state/filigrane/fili-file-visits: "count<TAB>last visit (s)<TAB>path", 200 folders at most.
+// File ~/.local/state/filigrane/fili-file/visits: "count<TAB>last visit (s)<TAB>path", 200 folders at most.
 // Without Qt: tested by cargo test.
 use std::{
     env,
@@ -17,9 +17,7 @@ pub struct Visit {
 const KEEP: usize = 200;
 
 fn file() -> PathBuf {
-    let home = env::var("HOME").unwrap_or_default();
-    let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{home}/.local/state"));
-    PathBuf::from(state).join("filigrane/fili-file-visits")
+    crate::state::file("visits")
 }
 
 pub fn now() -> i64 {

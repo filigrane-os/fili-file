@@ -31,6 +31,22 @@ Rectangle {
     }
 
     ListModel { id: places }
+    readonly property string favoritesSection: Fili.tr("Favorites")
+    // Drag of a favorite with the mouse: the row picked up and the row it would take the place of (-1: no drag)
+    property int dragFrom: -1
+    property int dragTo: -1
+    function firstFavorite() {
+        for (let i = 0; i < places.count; ++i)
+            if (places.get(i).section === favoritesSection)
+                return i;
+        return -1;
+    }
+    function lastFavorite() {
+        for (let i = places.count - 1; i >= 0; --i)
+            if (places.get(i).section === favoritesSection)
+                return i;
+        return -1;
+    }
 
     // Favorites can be reordered inside their section (Alt+Shift+Up / Down, menu Go): the row the keyboard cursor is on
     // moves one step. The Recents (sorted by use) and the Locations (devices, servers) are not the user's to arrange.
@@ -140,6 +156,8 @@ Rectangle {
         // between rows, the background of the current place does not touch the hover one); a folded row has no height
         delegate: Item {
             id: row
+            // The favorite being dragged
+            opacity: side.dragFrom === index ? 0.5 : 1
             required property string name
             required property string path
             required property string dev
@@ -223,12 +241,74 @@ Rectangle {
                     d.acceptProposedAction();
                 }
             }
+            // Where the dragged favorite would land: a line on the edge it would be inserted against
+            Rectangle {
+                visible: side.dragFrom >= 0 && side.dragTo === row.index && side.dragTo !== side.dragFrom
+                z: 3
+                height: 2
+                radius: 1
+                color: FiliTheme.accentColor
+                anchors { left: parent.left; right: parent.right; top: side.dragTo < side.dragFrom ? parent.top : undefined; bottom: side.dragTo > side.dragFrom ? parent.bottom : undefined }
+            }
             MouseArea {
                 id: area
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
+                // A favorite is picked up after a few pixels of vertical movement; the list must not scroll with it
+                property bool reordering: false
+                property bool dragged: false
+                property real pressY: 0
+                preventStealing: reordering
+                cursorShape: reordering ? Qt.ClosedHandCursor : Qt.ArrowCursor
+                onPressed: e => {
+                    reordering = false;
+                    dragged = false;
+                    pressY = area.mapToItem(list.contentItem, e.x, e.y).y;
+                }
+                onPositionChanged: e => {
+                    if (!pressed || row.section !== side.favoritesSection)
+                        return;
+                    const p = area.mapToItem(list.contentItem, e.x, e.y);
+                    if (!reordering && Math.abs(p.y - pressY) > 6) {
+                        reordering = true;
+                        side.dragFrom = row.index;
+                    }
+                    if (reordering) {
+                        const i = list.indexAt(p.x, p.y);
+                        // Only inside the section: the position over a heading or another section stays at its end
+                        side.dragTo = i < 0 ? (p.y < pressY ? side.firstFavorite() : side.lastFavorite()) : Math.max(side.firstFavorite(), Math.min(side.lastFavorite(), i));
+                    }
+                }
+                onReleased: {
+                    if (reordering) {
+                        dragged = true;
+                        const to = side.dragTo - side.firstFavorite();
+                        const from = side.dragFrom;
+                        reordering = false;
+                        side.dragFrom = -1;
+                        side.dragTo = -1;
+                        if (to >= 0 && Fili.moveFavoriteTo(row.path, to)) {
+                            // The model was read again: the row follows the favorite
+                            for (let i = 0; i < places.count; ++i)
+                                if (places.get(i).path === row.path && places.get(i).section === side.favoritesSection) {
+                                    list.currentIndex = i;
+                                    break;
+                                }
+                        }
+                    }
+                }
+                onCanceled: {
+                    reordering = false;
+                    side.dragFrom = -1;
+                    side.dragTo = -1;
+                }
                 onClicked: e => {
+                    // The release that ends a drag is not a click on the place
+                    if (dragged) {
+                        dragged = false;
+                        return;
+                    }
                     if (e.button === Qt.RightButton) {
                         if (row.path !== "" && row.path !== "nearby:" && row.path !== "network:") {
                             const p = area.mapToItem(null, e.x, e.y);

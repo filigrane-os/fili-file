@@ -241,7 +241,7 @@ def _():
 def _():
     global app
     app.ok("hidden", "on")
-    ui = T / "home" / ".local" / "state" / "filigrane" / "fili-file-ui"
+    ui = T / "home" / ".local" / "state" / "filigrane" / "fili-file" / "ui"
     assert "hidden=1" in ui.read_text().split(), ui.read_text()
     app.proc.terminate()
     app.proc.wait(10)
@@ -698,7 +698,7 @@ def _():
     global app
     app.ok("width", "column", "size", "180")
     app.ok("width", "preview", "380")
-    ui = T / "home" / ".local" / "state" / "filigrane" / "fili-file-ui"
+    ui = T / "home" / ".local" / "state" / "filigrane" / "fili-file" / "ui"
     widths = lambda: sorted(l for l in ui.read_text().split() if l.startswith(("col.", "preview=")))
     eq(widths(), ["col.kind=600", "col.modified=56", "col.size=180", "preview=380"], "state file")
     app.proc.terminate()

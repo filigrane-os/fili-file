@@ -460,6 +460,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "moveFavorite"]
         fn move_favorite(self: Pin<&mut Fili>, path: &QString, delta: i32) -> bool;
+        // Drops a favorite at a position of the Favorites section (0 = first), as a drag with the mouse does
+        #[qinvokable]
+        #[cxx_name = "moveFavoriteTo"]
+        fn move_favorite_to(self: Pin<&mut Fili>, path: &QString, index: i32) -> bool;
         // The trash contains something (full or empty icon of the sidebar)
         #[qinvokable]
         #[cxx_name = "trashFull"]
@@ -721,8 +725,7 @@ fn write_bookmarks(list: &[(String, String)]) -> std::io::Result<()> {
 // Order the user gave to the Favorites section: paths, one per line. Usage state, not configuration; the GTK bookmarks
 // file is shared with other programs and keeps its own order
 fn favorites_order_file() -> PathBuf {
-    let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
-    PathBuf::from(state).join("filigrane/fili-file-favorites")
+    crate::state::file("favorites")
 }
 
 // Paths sorted by the saved order; the ones it does not know (new favorites) keep their order, after the known ones
@@ -738,6 +741,18 @@ fn shift_path(paths: &mut [String], path: &str, delta: i32) -> bool {
         return false;
     }
     paths.swap(i, j as usize);
+    true
+}
+
+// Puts `path` at `index` (clamped) in `paths`; false when it is absent or already there
+fn place_path(paths: &mut Vec<String>, path: &str, index: i32) -> bool {
+    let Some(i) = paths.iter().position(|p| p == path) else { return false };
+    let j = (index.max(0) as usize).min(paths.len() - 1);
+    if i == j {
+        return false;
+    }
+    let p = paths.remove(i);
+    paths.insert(j, p);
     true
 }
 
@@ -2831,13 +2846,11 @@ pub fn set_spare_listener(l: std::os::unix::net::UnixListener) {
 }
 
 fn view_file() -> PathBuf {
-    let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
-    PathBuf::from(state).join("filigrane/fili-file-view")
+    crate::state::file("view")
 }
 
 pub(crate) fn ui_file() -> PathBuf {
-    let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
-    PathBuf::from(state).join("filigrane/fili-file-ui")
+    crate::state::file("ui")
 }
 
 // State file "key=value" (one per line): reading of a key
@@ -2868,8 +2881,7 @@ pub(crate) fn ui_store(key: &str, value: &str) {
 }
 
 fn columns_file() -> PathBuf {
-    let state = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home()));
-    PathBuf::from(state).join("filigrane/fili-file-columns")
+    crate::state::file("columns")
 }
 
 impl qobject::Fili {
@@ -3367,11 +3379,11 @@ impl Fili {
     }
 
     pub fn preview_shown(&self) -> bool {
-        view_file().with_file_name("fili-file-preview").exists()
+        crate::state::file("preview").exists()
     }
 
     pub fn set_preview_shown(&self, on: bool) {
-        let f = view_file().with_file_name("fili-file-preview");
+        let f = crate::state::file("preview");
         if on {
             if let Some(dir) = f.parent() {
                 let _ = std::fs::create_dir_all(dir);
@@ -3414,9 +3426,18 @@ impl Fili {
         }
     }
 
-    pub fn move_favorite(mut self: Pin<&mut Self>, path: &QString, delta: i32) -> bool {
+    pub fn move_favorite(self: Pin<&mut Self>, path: &QString, delta: i32) -> bool {
+        self.rearrange_favorites(|paths| shift_path(paths, &path.to_string(), delta))
+    }
+
+    pub fn move_favorite_to(self: Pin<&mut Self>, path: &QString, index: i32) -> bool {
+        self.rearrange_favorites(|paths| place_path(paths, &path.to_string(), index))
+    }
+
+    // Applies `change` to the favorites in their current order and keeps the result as the order of the section
+    fn rearrange_favorites(mut self: Pin<&mut Self>, change: impl FnOnce(&mut Vec<String>) -> bool) -> bool {
         let mut paths: Vec<String> = favorite_items().into_iter().map(|(_, p, _, _)| p).collect();
-        if !shift_path(&mut paths, &path.to_string(), delta) {
+        if !change(&mut paths) {
             return false;
         }
         let file = favorites_order_file();
@@ -3685,6 +3706,19 @@ mod tests {
         assert_eq!(v, ["/a", "/c", "/b"]);
         assert!(!shift_path(&mut v, "/b", 1), "already last");
         assert!(!shift_path(&mut v, "/zz", 1), "unknown path");
+    }
+
+    #[test]
+    fn a_favorite_dropped_at_a_position() {
+        let mut v = vec!["/a".to_string(), "/b".into(), "/c".into(), "/d".into()];
+        assert!(place_path(&mut v, "/a", 2));
+        assert_eq!(v, ["/b", "/c", "/a", "/d"]);
+        assert!(place_path(&mut v, "/d", 0));
+        assert_eq!(v, ["/d", "/b", "/c", "/a"]);
+        assert!(place_path(&mut v, "/d", 99), "past the end: last");
+        assert_eq!(v, ["/b", "/c", "/a", "/d"]);
+        assert!(!place_path(&mut v, "/d", 3), "already there");
+        assert!(!place_path(&mut v, "/zz", 1));
     }
 
     #[test]

@@ -38,6 +38,7 @@ check: build test
 	python3 -I scripts/fili-api-lint --app .
 	tests/run.sh
 	tests/archive.sh
+	tests/sidebar-drag.sh
 
 install: build install-data
 	install -Dm755 $(TARGET_DIR)/release/fili-file $(DESTDIR)$(BINDIR)/fili-file

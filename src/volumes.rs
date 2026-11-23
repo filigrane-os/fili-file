@@ -569,12 +569,10 @@ fn connect_shares(root: &str, user: &str, password: &str) -> Result<String, Stri
 }
 
 // ---- remembered servers ---------------------------------------------------------------------------------
-// ~/.local/state/filigrane/fili-file-servers: one address per line, the most recent first, 10 at most. Never a password
+// ~/.local/state/filigrane/fili-file/servers: one address per line, the most recent first, 10 at most. Never a password
 // (gvfs keeps its own in the session keyring).
 fn servers_file() -> std::path::PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let state = std::env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{home}/.local/state"));
-    std::path::PathBuf::from(state).join("filigrane/fili-file-servers")
+    crate::state::file("servers")
 }
 
 fn read_servers() -> Vec<String> {
