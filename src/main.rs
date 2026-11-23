@@ -103,8 +103,16 @@ fn main() {
     // Wayland app-id (niri rules, fili-file.desktop)
     QGuiApplication::set_desktop_file_name(&QString::from(if pick::get().is_some() { "fili-file-picker" } else { "fili-file" }));
     let mut engine = QQmlApplicationEngine::new();
-    if let Some(engine) = engine.as_mut() {
-        engine.load(&QUrl::from("qrc:/qt/qml/Fili/Files/qml/Main.qml"));
+    if let Some(mut engine) = engine.as_mut() {
+        // Development (`make run`): the QML is read from the source folders instead of the binary, so a change of a .qml file
+        // needs no build. FILI_QML_DIR holds Main.qml; FILI_UI_QML the kit's folder, searched before the compiled-in Fili.UI.
+        if let Ok(dir) = std::env::var("FILI_UI_QML") {
+            engine.as_mut().add_import_path(&QString::from(&dir));
+        }
+        match std::env::var("FILI_QML_DIR") {
+            Ok(dir) => engine.load(&QUrl::from(&format!("file://{dir}/Main.qml"))),
+            Err(_) => engine.load(&QUrl::from("qrc:/qt/qml/Fili/Files/qml/Main.qml")),
+        }
     }
     if let Some(app) = app.as_mut() {
         std::process::exit(app.exec());
