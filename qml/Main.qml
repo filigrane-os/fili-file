@@ -12,6 +12,9 @@ import Fili.UI
 
 ApplicationWindow {
     id: win
+    // The kit reads the theme through the application's object. Evaluated first: a ListView does not move again when its
+    // leftMargin changes after creation, so the tokens must be right from the first binding
+    readonly property bool kitReady: { FiliHost.backend = Fili; return true; }
     // Fonts embedded in the binary (fonts/, licenses/): same look on every distribution
     FontLoader { id: fontText; source: "qrc:/qt/qml/Fili/Files/fonts/Jost-Variable.ttf" }
     FontLoader { id: fontMono; source: "qrc:/qt/qml/Fili/Files/fonts/JetBrainsMono-Variable.ttf" }
@@ -20,8 +23,6 @@ ApplicationWindow {
     height: 560
     minimumWidth: 520
     minimumHeight: 300
-    // The kit reads the theme through the application's object
-    Binding { target: FiliHost; property: "backend"; value: Fili }
     // Resident mode: a loaded spare keeps its window hidden until a launch claims it (see spare.rs)
     property bool warm: Fili.isSpare()
     visible: !warm
