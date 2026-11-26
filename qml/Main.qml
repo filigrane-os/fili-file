@@ -1068,28 +1068,11 @@ ApplicationWindow {
             Accessible.role: Accessible.Button
             Accessible.name: Fili.tr("Close window")
         }
-        Rectangle {
+        FiliWindowButton {
             id: windowButton
             visible: win.windowButtons
+            panel: windowPanel
             anchors { right: closeButton.left; rightMargin: FiliTheme.space1; verticalCenter: parent.verticalCenter }
-            width: 28
-            height: 24
-            radius: FiliTheme.radiusControl
-            color: windowArea.pressed ? FiliTheme.surfaceActive : windowArea.containsMouse || windowPanel.visible ? FiliTheme.surfaceHover : "transparent"
-            WindowGlyph {
-                anchors.centerIn: parent
-                kind: "window"
-                width: 16
-                height: 16
-            }
-            MouseArea {
-                id: windowArea
-                anchors.fill: parent
-                hoverEnabled: true
-                onClicked: windowPanel.visible ? windowPanel.close() : windowPanel.open()
-            }
-            Accessible.role: Accessible.Button
-            Accessible.name: Fili.tr("Window")
         }
         // Ask Lia about this application (the chat session scoped to it); only where the chat is installed
         FiliLiaButton {

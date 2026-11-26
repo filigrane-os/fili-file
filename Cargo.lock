@@ -525,7 +525,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "fili-file"
-version = "1.18.0"
+version = "1.19.0"
 dependencies = [
  "cxx",
  "cxx-qt",
@@ -541,8 +541,8 @@ dependencies = [
 
 [[package]]
 name = "fili-ui"
-version = "0.3.0"
-source = "git+https://github.com/filigrane-os/fili-ui?tag=v0.3.0#0e4762db0ec7e9a5b852668e9324ed38fe7aa55d"
+version = "0.6.0"
+source = "git+https://github.com/filigrane-os/fili-ui?tag=v0.6.0#70402724d1f0109b4558d295d1c231fae1d4e411"
 dependencies = [
  "cxx",
  "cxx-qt",

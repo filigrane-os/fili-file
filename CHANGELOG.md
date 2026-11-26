@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.0
+
+- The Window button of the header is the kit's (`fili-ui` v0.6.0): a click maximizes the column (niri's Mod+F) or gives it back its
+  width, and its picture shows which; resting the pointer on it for a second opens the window panel, a right click opens it at once.
+- A softer selection from the kit: the current tab, the selected sidebar row and selected text are a translucent wash of the accent
+  instead of grey steps; the kit's dialogs have a × at the top right.
+
 ## 1.18.0
 
 - The tabs are the same in every Filigrane application now, and a tab can always be moved, closed and detached: drag it sideways (the others make room; Ctrl+Shift+Left / Right on the keyboard), close it with the × that shows on hover and on the current tab, a middle click or Delete, detach it by dragging it far from the bar (it turns half transparent, then becomes a window). Files dropped on a tab still go into its folder. The row is the `fili-ui` one (v0.3.0) instead of a copy.
