@@ -78,6 +78,7 @@ release that gets heavier shows here:
 
 | Version | CPU at rest | PSS | Private | RSS | Notes |
 |---|---|---|---|---|---|
+| 1.19.0 | 0 % | | | 140 MiB | 2026-11-26, the spare window (kit fili-ui 0.7.1); the portal process 23 MiB RSS; PSS not measured |
 | 1.11.0 | < 0.5 % | 100 MiB | 81 MiB | 194 MiB | |
 | 1.12.0 | < 0.5 % | 100 MiB | 81 MiB | 194 MiB | Quick Look is loaded when it first opens: +22 MiB PSS, +35 MiB RSS with a PDF shown |
 | 1.13.0 | < 0.5 % | 111 MiB | 77 MiB | 195 MiB | Debug panel and log: no measurable cost (PSS depends on how many Qt processes share the libraries) |
