@@ -259,6 +259,8 @@
  "Visible as “%1”. Each transfer asks for your approval.": "Visible sous le nom « %1 ». Chaque envoi demande ton accord.",
  "Where": "Emplacement",
  "Window": "Fenêtre",
+ "Maximize the column": "Maximiser la colonne",
+ "Restore the width": "Rétablir la largeur",
  "Window Actions…": "Actions de fenêtre…",
  "Windowed fullscreen": "Plein écran fenêtré",
  "Workspace above": "Espace au-dessus",
